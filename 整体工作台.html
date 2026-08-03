@@ -139,6 +139,36 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   .ov-pet .pm{font-size:13px;color:var(--sub);margin-top:4px}
   .ov-pet .pb{height:8px;border-radius:5px;background:#f1ece6;margin-top:8px;overflow:hidden}
   .ov-pet .pb i{display:block;height:100%;background:linear-gradient(90deg,#f6a623,#f6c453)}
+  /* ===== 人生概览（仪表盘首页） ===== */
+  .life{max-width:920px;margin:0 auto}
+  .life-top{display:flex;gap:14px;align-items:stretch;margin-bottom:16px}
+  .life-pet{flex:0 0 300px;display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,#FFE4D0,#FFCDB0);border-radius:24px;padding:18px 22px;box-shadow:0 4px 14px rgba(255,142,114,.12);cursor:pointer;height:188px}
+  .life-pet .lp-arc{width:86px;height:86px;flex:0 0 86px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#fff,#ffe3bd);display:flex;align-items:center;justify-content:center;font-size:46px;box-shadow:0 4px 12px rgba(246,166,35,.28);animation:bob 3s ease-in-out infinite}
+  .life-pet .lp-i{flex:1;min-width:0}
+  .life-pet .lp-n{font-size:20px;font-weight:800;color:var(--ink)}
+  .life-pet .lp-m{font-size:13px;color:#A86A4F;margin-top:3px}
+  .life-pet .lp-l{font-size:12px;color:#fff;background:var(--brand);border-radius:20px;padding:3px 12px;font-weight:700;display:inline-block;margin-top:8px;box-shadow:0 2px 6px rgba(255,142,114,.3)}
+  .life-cal{flex:1;background:#FFFDFA;border:1px solid var(--line);border-radius:24px;padding:14px 16px;box-shadow:0 2px 8px rgba(212,165,116,.06);height:188px;display:flex;flex-direction:column;overflow:hidden}
+  .cal-h{font-size:14px;font-weight:800;color:var(--ink);margin-bottom:8px}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center}
+  .cal-head{font-size:11px;color:var(--sub);margin-bottom:4px}
+  .cal-grid span{font-size:12px;color:var(--ink);padding:2px 0;border-radius:6px}
+  .cal-e{visibility:hidden}
+  .cal-d.on{background:var(--brand);color:#fff;font-weight:800}
+  .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+  .life .kpi{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 4px 14px rgba(245,200,150,.10)}
+  .life .kpi .ic{font-size:20px}
+  .life .kpi .v{font-size:30px;font-weight:800;margin:6px 0 2px;letter-spacing:-.5px}
+  .life .kpi .v small{font-size:14px;font-weight:600;color:var(--sub)}
+  .life .kpi .l{font-size:13px;color:var(--sub)}
+  .life .kpi .d{font-size:12px;margin-top:6px;color:#3E9D6B;font-weight:600}
+  .dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .life .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 18px;box-shadow:0 4px 14px rgba(245,200,150,.10)}
+  .life .card h3{margin:0 0 4px;font-size:15px}
+  .life .card .cs{color:var(--sub);font-size:12px;margin:0 0 12px}
+  body.m .life-top, body.force-mobile .life-top{flex-direction:column}
+  body.m .life-pet, body.force-mobile .life-pet{height:auto;flex:none}
+  body.m .life-cal, body.force-mobile .life-cal{height:auto}
   /* 浮动陪伴宠物：紧凑小药丸，只显示名字+等级，不挡内容 */
   .pet-float{position:fixed;right:16px;bottom:14px;z-index:45;cursor:pointer;user-select:none;display:flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--line);border-radius:30px;padding:5px 12px 5px 9px;box-shadow:0 6px 16px rgba(0,0,0,.12);transition:transform .2s}
   .pet-float:hover{transform:scale(1.05)}
@@ -438,7 +468,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   <header class="appbar">
     <button class="hamb" aria-label="菜单" onclick="openDrawer()">☰</button>
     <div class="appbar-c">
-      <div class="appbar-title" id="pgTitle">今日概览</div>
+      <div class="appbar-title" id="pgTitle">人生概览</div>
     </div>
     <div class="appbar-date" id="appDate"></div>
     <button class="appbar-add" aria-label="搜索" onclick="toggleGlobalSearch()">🔍</button>
@@ -455,7 +485,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   <!-- 右侧主区（桌面含顶栏+内容；手机态顶栏隐藏，内容直接显示） -->
   <div class="main">
     <header class="topbar">
-      <h1 id="topTitle">今日概览</h1>
+      <h1 id="topTitle">人生概览</h1>
       <div class="sub" id="topDate"></div>
       <div class="spacer"></div>
       <button class="appbar-add topbar-add" aria-label="搜索" onclick="toggleGlobalSearch()">🔍</button>
@@ -576,7 +606,7 @@ const GAME_KEY = "workbench_game_v1";
 
 // 默认导航（顺序即展示顺序）
 const DEFAULT_NAV = [
-  {key:"overview", label:"今日概览", icon:"🏠", type:"native"},
+  {key:"overview", label:"人生概览", icon:"🏠", type:"native"},
   {key:"todo", label:"每日待办", icon:"✅", type:"native"},
   {key:"yuedu", label:"阅读手帐", icon:"📚", type:"iframe", src:"阅读手帐.html"},
   {key:"dianying", label:"电影手帐", icon:"🎬", type:"iframe", src:"电影手帐.html"},
@@ -698,46 +728,149 @@ function toggleMobilePreview(){
   if(document.body.classList.contains("force-mobile")) window.scrollTo(0,0);
 }
 
-/* ============ 今日概览 ============ */
+/* ============ 人生概览（仪表盘首页） ============ */
+function kpiCard(id, ic){ return '<div class="kpi" id="'+id+'"><div class="ic">'+ic+'</div><div class="v">0<small> </small></div><div class="l">…</div><div class="d"></div></div>'; }
+function setKpi(id, v, unit, label, delta){
+  const c=document.getElementById(id); if(!c) return;
+  const vv=c.querySelector(".v"); if(vv) vv.innerHTML=v+'<small> '+unit+'</small>';
+  const ll=c.querySelector(".l"); if(ll) ll.textContent=label;
+  const dd=c.querySelector(".d"); if(dd) dd.textContent=delta;
+}
+function pad2(n){ return (n<10?"0":"")+n; }
+function renderLifeCalendar(){
+  const box=$("lifeCal"); if(!box) return;
+  const now=new Date(); const y=now.getFullYear(), m=now.getMonth(), t=now.getDate();
+  const first=new Date(y,m,1).getDay(); const days=new Date(y,m+1,0).getDate();
+  let h='<div class="cal-h">'+y+'年'+(m+1)+'月</div>';
+  h+='<div class="cal-grid cal-head">';
+  ["日","一","二","三","四","五","六"].forEach(function(w){ h+='<span>'+w+'</span>'; });
+  h+='</div><div class="cal-grid">';
+  for(let i=0;i<first;i++) h+='<span class="cal-e"></span>';
+  for(let d=1;d<=days;d++){ h+='<span class="cal-d'+(d===t?' on':'')+'">'+d+'</span>'; }
+  h+='</div>';
+  box.innerHTML=h;
+}
+function lifeBar(host, vals, labels){
+  const max=Math.max.apply(null, vals.concat([1]));
+  const W=380,H=170,pad=24; const bw=(W-pad*2)/vals.length*0.6;
+  let s='<svg viewBox="0 0 '+W+' '+H+'" width="100%">';
+  vals.forEach(function(v,i){
+    const x=pad+(W-pad*2)/vals.length*i+((W-pad*2)/vals.length-bw)/2;
+    const h=(v/max)*(H-pad*2); const y=H-pad-h;
+    s+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+h+'" rx="6" fill="#FF8E72"/>';
+    s+='<text x="'+(x+bw/2)+'" y="'+(y-6)+'" text-anchor="middle" font-size="12" fill="#2b2620">'+v+'</text>';
+    s+='<text x="'+(x+bw/2)+'" y="'+(H-6)+'" text-anchor="middle" font-size="11" fill="#8a8178">'+labels[i]+'</text>';
+  });
+  s+='<line x1="'+pad+'" y1="'+(H-pad)+'" x2="'+(W-pad)+'" y2="'+(H-pad)+'" stroke="#ece7e0"/>';
+  s+='</svg>';
+  const el=document.getElementById(host); if(el) el.innerHTML=s;
+}
+function lifeLine(host, vals, color, opts){
+  opts=opts||{};
+  if(!vals||vals.length<2){ const e=document.getElementById(host); if(e) e.innerHTML='<div class="empty" style="padding:24px">数据不足</div>'; return; }
+  const W=380,H=170,pad=26; const max=Math.max.apply(null,vals), min=Math.min.apply(null,vals);
+  const span=(max-min)||1; const stepX=(W-pad*2)/(vals.length-1);
+  const pts=vals.map(function(v,i){ const x=pad+stepX*i; const y=pad+(1-(v-min)/span)*(H-pad*2); return [x,y]; });
+  let s='<svg viewBox="0 0 '+W+' '+H+'" width="100%">';
+  if(opts.area){ let area='M'+pts[0][0]+','+(H-pad)+' '+pts.map(function(p){return 'L'+p[0]+','+p[1];}).join(' ')+' L'+pts[pts.length-1][0]+','+(H-pad)+' Z'; s+='<path d="'+area+'" fill="'+color+'22"/>'; }
+  s+='<polyline points="'+pts.map(function(p){return p[0]+','+p[1];}).join(' ')+'" fill="none" stroke="'+color+'" stroke-width="2.5" stroke-linejoin="round"/>';
+  pts.forEach(function(p,i){ s+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="3" fill="#fff" stroke="'+color+'" stroke-width="2"/>';
+    if(opts.labels&&i%2===0) s+='<text x="'+p[0]+'" y="'+(H-6)+'" text-anchor="middle" font-size="10" fill="#8a8178">'+opts.labels[i]+'</text>'; });
+  s+='</svg>';
+  const el=document.getElementById(host); if(el) el.innerHTML=s;
+}
+function renderLifeGoals(g){
+  const items=[
+    ["本月短篇 "+g.exM+"/14 篇", Math.min(100,Math.round(g.exM/14*100))],
+    ["待办完成率 "+g.todoRate+"%", g.todoRate],
+    ["读完书 "+g.doneM+"/4 本", Math.min(100,Math.round(g.doneM/4*100))],
+    ["减重 "+g.lost+"/4 KG", Math.min(100,Math.round(g.lost/4*100))]
+  ];
+  let h="";
+  items.forEach(function(it){
+    h+='<div style="margin:10px 0"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px"><span>'+it[0]+'</span><b>'+it[1]+'%</b></div><div style="height:9px;background:#f1ece6;border-radius:6px;overflow:hidden"><i style="display:block;height:100%;width:'+it[1]+'%;background:linear-gradient(90deg,#FF8E72,#FFB199)"></i></div></div>';
+  });
+  const el=document.getElementById("lifeGoals"); if(el) el.innerHTML=h;
+}
+function last14Rates(hist){
+  const vals=[], labels=[]; const now=new Date();
+  for(let i=13;i>=0;i--){ const d=new Date(now); d.setDate(now.getDate()-i); const k=d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); const e=hist[k]; vals.push(e&&typeof e.rate==="number"?e.rate:0); labels.push((i%2===0)?((d.getMonth()+1)+"/"+d.getDate()):""); }
+  return {vals:vals, labels:labels};
+}
+function readDuanpianExamples(cb){
+  try{
+    const req=indexedDB.open("dp_idb_v1",1);
+    req.onsuccess=function(e){ const db=e.target.result;
+      try{ const tx=db.transaction("state","readonly"); const st=tx.objectStore("state"); const g=st.get("duanpian_full");
+        g.onsuccess=function(ev){ const r=ev.target.result; cb(r&&r.examples?r.examples:[]); };
+        g.onerror=function(){ cb([]); };
+      }catch(err){ cb([]); }
+    };
+    req.onerror=function(){ cb([]); };
+  }catch(e){ cb([]); }
+}
+function fillLifeStats(){
+  const now=new Date(); const y=now.getFullYear(), m=now.getMonth();
+  const inM=function(ts){ if(!ts) return false; const d=new Date(ts); return d.getFullYear()===y && d.getMonth()===m; };
+  readDuanpianExamples(function(exs){
+    exs=exs||[];
+    const exM=exs.filter(function(e){ return inM(e.createdAt); }).length;
+    const prevM=(m===0?11:m-1), prevY=(m===0?y-1:y);
+    const exLM=exs.filter(function(e){ if(!e.createdAt) return false; const d=new Date(e.createdAt); return d.getFullYear()===prevY && d.getMonth()===prevM; }).length;
+    const exTotal=exs.length;
+    const nowTs=Date.now(), wkMs=7*86400000; const wk=[0,0,0,0];
+    exs.forEach(function(e){ if(!e.createdAt) return; const diff=nowTs-e.createdAt; if(diff>=0 && diff<wkMs*4){ const idx=Math.floor(diff/wkMs); if(idx<4) wk[3-idx]++; } });
+    const hist=loadHistory(); let todoDoneM=0, todoTotalM=0, rateSum=0, rateN=0;
+    Object.keys(hist).forEach(function(k){ const d=new Date(k); if(d.getFullYear()===y && d.getMonth()===m){ const e=hist[k]; todoDoneM+=(e.done||0); todoTotalM+=(e.total||0); if(typeof e.rate==="number"){ rateSum+=e.rate; rateN++; } } });
+    const todoRate = todoTotalM ? Math.round(todoDoneM/todoTotalM*100) : (rateN?Math.round(rateSum/rateN):0);
+    let books=[]; try{ const o=JSON.parse(localStorage.getItem("yuedu_shouzhang_v1")); books=(o&&o.books)||[]; }catch(e){}
+    const doneM=books.filter(function(b){ return b.status==="done" && inM(b.finishedAt); }).length;
+    const doneAll=books.filter(function(b){ return b.status==="done"; }).length;
+    let weights=[]; try{ const o=JSON.parse(localStorage.getItem("jianfei_v1")); weights=(o&&o.weights)||[]; }catch(e){}
+    weights=weights.slice().sort(function(a,b){ return new Date(a.date)-new Date(b.date); });
+    const monthStart=new Date(y,m,1);
+    const wTM=weights.filter(function(w){ return new Date(w.date)>=monthStart; });
+    let lost=0, startW=null, latestW=null;
+    if(weights.length){ latestW=weights[weights.length-1].value; const sr=wTM.length?wTM[0]:weights[0]; startW=sr.value; lost=Math.max(0,+(startW-latestW).toFixed(1)); }
+    setKpi("kpiDuanpian", exM, "篇", "本月短篇数", (exM-exLM)>=0?("▲ 累计 "+exTotal+" 篇"):("▼ 较上月 "+(exM-exLM)));
+    setKpi("kpiTodo", todoDoneM, "/ "+todoTotalM, "本月待办完成", "完成率 "+todoRate+"%");
+    setKpi("kpiYuedu", doneM, " 本", "本月读完书", "累计 "+doneAll+" 本");
+    setKpi("kpiJianfei", lost, " KG", "本月减重", (startW!=null?("起 "+startW+"→"+latestW+"kg"):"目标 4 KG"));
+    lifeBar("barWeek", wk, ["4周前","3周前","2周前","本周"]);
+    lifeLine("lineWeight", weights.map(function(w){return w.value;}), "#5bb98c", {area:true, labels:weights.map(function(w){return new Date(w.date).getDate();})});
+    const dr=last14Rates(hist); lifeLine("lineTodo", dr.vals, "#6aa9e9", {area:true, labels:dr.labels});
+    renderLifeGoals({exM:exM, todoRate:todoRate, doneM:doneM, lost:lost});
+  });
+}
 function loadOverview(){
   const box = $("native-overview");
-  const todoDone = store.todo.filter(t=>t.done && t.date && t.date<=todayStr()).length;
-  const todoTotal = store.todo.length;
-  const todoRemain = todoTotal - todoDone;
-  const todoPct = todoTotal? Math.round(todoDone/todoTotal*100):0;
-  const pinned = store.todo.find(t=>t.pinned && !t.done) || store.todo.find(t=>t.pinned);
   box.innerHTML =
-    '<div class="ov2">'+
-      // 宠物大卡
-      '<div class="ov-pet" onclick="go(\'game\')">'+
-        '<div class="pe" id="ovPetEm">🥚</div>'+
-        '<div class="pi"><div class="pn" id="ovPetName">毛球</div>'+
-        '<div class="pm" id="ovPetMood">陪伴你成长中…</div>'+
-        '<div class="pl" id="ovPetLv">Lv.1</div></div>'+
+    '<div class="life">'+
+      // 顶部：宠物圆弧框 + 当月小月历（等高）
+      '<div class="life-top">'+
+        '<div class="life-pet" onclick="go(\'game\')">'+
+          '<div class="lp-arc"><span class="lp-em" id="ovPetEm">🥚</span></div>'+
+          '<div class="lp-i"><div class="lp-n" id="ovPetName">毛球</div>'+
+          '<div class="lp-m" id="ovPetMood">陪伴你成长中…</div>'+
+          '<div class="lp-l" id="ovPetLv">Lv.1</div></div>'+
+        '</div>'+
+        '<div class="life-cal" id="lifeCal"></div>'+
       '</div>'+
-      // 每日一句
-      '<div class="ov-quote"><span class="ql">每日一句</span><span class="qt" id="ovQuote"></span></div>'+
-      // 4 圈进度（去掉体重，更接近参考图风）
-      '<div class="rings">'+
-        ringCell("todo","待办",todoPct,todoRemain+" / "+todoTotal+" 剩","#FF9170")+
-        ringCell("yuedu","阅读",0,"加载中…","#FFAB8E")+
-        ringCell("duanpian","短篇",0,"加载中…","#FF9E80")+
-        ringCell("game","宠物",0,"加载中…","#F4A261")+
+      // 统计仪表盘（无标题，紧跟宠物/月历）
+      '<div class="kpi-row">'+
+        kpiCard("kpiDuanpian","✒️")+ kpiCard("kpiTodo","✅")+ kpiCard("kpiYuedu","📚")+ kpiCard("kpiJianfei","⚖️")+
       '</div>'+
-      // 今日主任务（今日待办先于趋势图）
-      '<div class="ov-main" id="ovMain" onclick="go(\'todo\')" style="cursor:pointer">'+(pinned?
-        ('<div class="mh">📌 今日主任务</div>'+
-         '<div class="mt">'+esc(pinned.task||"")+'</div>'+
-         (pinned.done?'<div class="ms">✅ 已完成</div>':(pinned.sub&&pinned.sub.length?('<div class="mbar"><i style="width:'+mainPct(pinned)+'%"></i></div><div class="ms">进度 '+mainPct(pinned)+'%</div>'):'<div class="ms">未完成 · 点我去完成</div>')))
-        :'<div class="mh">📌 今日主任务</div><div class="ms">还没有主任务，去「每日待办」里点 📌 钉一个吧</div>')+
+      '<div class="dash-grid">'+
+        '<div class="card"><h3>📝 近 4 周短篇产出</h3><p class="cs">每周完成篇数</p><div id="barWeek"></div></div>'+
+        '<div class="card"><h3>⚖️ 减重趋势（KG）</h3><p class="cs">越往下越轻，离目标越近</p><div id="lineWeight"></div></div>'+
+        '<div class="card"><h3>✅ 待办完成率趋势</h3><p class="cs">近 14 天每日完成率</p><div id="lineTodo"></div></div>'+
+        '<div class="card"><h3>🎯 本月目标进度</h3><p class="cs">四项核心目标完成度</p><div id="lifeGoals"></div></div>'+
       '</div>'+
-      // 趋势（移到今日待办下面）
-      '<div class="ov-trend"><div class="th">📈 近 14 天待办完成率</div><div id="ovChart"></div></div>'+
     '</div>';
-  const q=$("ovQuote"); if(q) q.textContent=dailyQuote();
+  renderLifeCalendar();
   setAppDate();
-  renderRateChart("ovChart");
   loadAllSummaries();
+  fillLifeStats();
 }
 /* 圆圈进度辅助 */
 function ringColor(mk){ const m={todo:"#FF8E72",yuedu:"#FFAB8E",duanpian:"#FF9E80",jianfei:"#F87C60",game:"#F4A261"}; return m[mk]||"#FF8E72"; }
@@ -830,6 +963,8 @@ function ovGame(){
   return '<div class="big">Lv'+gameLevel()+'</div><div class="row"><span>今日经验 <b>'+todayXP()+'</b></span><span>连续 <b>'+store.game.streak+'</b> 天</span></div>';
 }
 function fillSummary(mk, p){
+  // 宠物全局同步（不再依赖首页圆环存在）
+  if(mk==="game" && p && p.pet){ updateOvPet(p.pet, (p.level||1)); }
   // 更新首页 5 圈进度
   const ring=document.getElementById("ring-"+mk);
   if(ring){
