@@ -430,6 +430,40 @@
       </div>
       <div class="row">
         <div class="field">
+          <label>观看时间（具体日期 + 时刻）</label>
+          <input type="datetime-local" id="fWatchAt">
+        </div>
+        <div class="field">
+          <label>观看平台</label>
+          <select id="fWatchPlace">
+            <option value="">未填写</option>
+            <option value="cinema">🎬 电影院</option>
+            <option value="online">📺 线上</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" id="fWatchPlatformRow" style="display:none">
+        <div class="field">
+          <label>线上具体平台</label>
+          <select id="fWatchPlatform">
+            <option value="">未选</option>
+            <option value="爱奇艺">爱奇艺</option>
+            <option value="腾讯视频">腾讯视频</option>
+            <option value="优酷">优酷</option>
+            <option value="哔哩哔哩">哔哩哔哩</option>
+            <option value="芒果TV">芒果TV</option>
+            <option value="Netflix">Netflix</option>
+            <option value="YouTube">YouTube</option>
+            <option value="其他">其他</option>
+          </select>
+        </div>
+        <div class="field" id="fWatchPlatformCustomRow" style="display:none">
+          <label>其他平台（手填）</label>
+          <input type="text" id="fWatchPlatformCustom" placeholder="如：HBO / Disney+">
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
           <label>状态</label>
           <select id="fStatus">
             <option value="">未设定</option>
@@ -657,6 +691,13 @@
     var info = '<div class="binfo">';
     info += '<div class="l1">导演：'+esc(b.director||"未知")+'</div>';
     info += '<div class="l2">题材：'+esc(b.genre||"—")+(b.country?(" · "+esc(b.country)):"")+'</div>';
+    if(b.watchAt || b.watchPlace){
+      var wp="";
+      if(b.watchPlace==="cinema") wp="🎬 电影院";
+      else if(b.watchPlace==="online") wp = b.watchPlatform ? ("📺 " + esc(b.watchPlatform)) : "📺 线上";
+      var at = b.watchAt ? b.watchAt.replace("T"," ") : "";
+      info += '<div class="l2" style="color:var(--sub);font-size:12px">'+esc(at)+(wp?(" · "+wp):"")+'</div>';
+    }
     if(sec==="watching" && pct!=null){
       info += '<div class="progress"><i style="width:'+pct+'%"></i></div>';
       info += '<div class="pct">进度 '+b.currentMin+' / '+b.totalMin+' 分钟 ('+pct+'%)</div>';
@@ -718,11 +759,25 @@
     $("fPEnd").value = b&&b.period?(b.period.end||""):"";
     $("fQuotes").value = b?(b.quotes||[]).join("\n"):"";
     $("fFeeling").value = b?b.feeling:"";
+    $("fWatchAt").value = b?(b.watchAt||""):"";
+    $("fWatchPlace").value = b?(b.watchPlace||""):"";
+    $("fWatchPlatform").value = (b&&b.watchPlatform && b.watchPlatform!=="其他") ? b.watchPlatform : "";
+    $("fWatchPlatformCustom").value = (b&&b.watchPlatform && b.watchPlatform!=="其他" && !["爱奇艺","腾讯视频","优酷","哔哩哔哩","芒果TV","Netflix","YouTube"].includes(b.watchPlatform)) ? b.watchPlatform : "";
     $("fStatus").value = b?b.status:"";
     $("btnMovieDelete").style.display = b?"block":"none";
     $("matchList").innerHTML="";
     refreshDatalists();
+    togglePlatformRow();
     openMask("maskMovie");
+  }
+
+  function togglePlatformRow(){
+    var place=$("fWatchPlace").value;
+    var row=$("fWatchPlatformRow");
+    if(row) row.style.display = (place==="online") ? "flex" : "none";
+    var sel=$("fWatchPlatform").value;
+    var customRow=$("fWatchPlatformCustomRow");
+    if(customRow) customRow.style.display = (sel==="其他") ? "flex" : "none";
   }
 
   function refreshDatalists(){
@@ -744,6 +799,15 @@
     b.period={start:$("fPStart").value||null, end:$("fPEnd").value||null};
     b.quotes=$("fQuotes").value.split("\n").map(function(s){return s.trim();}).filter(Boolean);
     b.feeling=$("fFeeling").value.trim();
+    b.watchAt=$("fWatchAt").value||"";
+    b.watchPlace=$("fWatchPlace").value||"";
+    if(b.watchPlace==="online"){
+      var sel=$("fWatchPlatform").value;
+      if(sel==="其他"){ b.watchPlatform=($("fWatchPlatformCustom").value||"").trim()||"其他"; }
+      else { b.watchPlatform=sel||""; }
+    } else {
+      b.watchPlatform="";
+    }
     var st=$("fStatus").value; b.status = st||null;
     if(st==="done" && !b.finishedAt) b.finishedAt=Date.now();
     if(b.genre && state.genres.indexOf(b.genre)<0) state.genres.push(b.genre);
@@ -865,6 +929,14 @@
     var meta='<div class="detail-meta">'+statusBadge+(b.director?'<span>导演：'+esc(b.director)+'</span>':'')+(b.genre?'<span>题材：'+esc(b.genre)+'</span>':'')+(b.country?'<span>'+esc(b.country)+'</span>':'')+'</div>';
     var period="";
     if(b.period&&(b.period.start||b.period.end)) period='<div class="detail-meta" style="margin-top:4px">观看时段：'+(b.period.start||"?")+' → '+(b.period.end||"至今")+'</div>';
+    var watchInfo="";
+    if(b.watchAt || b.watchPlace){
+      var wlabel="";
+      if(b.watchPlace==="cinema") wlabel="🎬 电影院";
+      else if(b.watchPlace==="online") wlabel = b.watchPlatform ? ("📺 线上 · "+esc(b.watchPlatform)) : "📺 线上";
+      var wat = b.watchAt ? b.watchAt.replace("T"," ") : "时间未填";
+      watchInfo='<div class="detail-meta" style="margin-top:4px">🕓 观看时间：'+esc(wat)+(wlabel?(" · "+wlabel):"")+'</div>';
+    }
     var prog="";
     if(b.status==="watching" && b.totalMin && b.currentMin!=null){
       var pct=Math.min(100,Math.round(b.currentMin/b.totalMin*100));
@@ -880,7 +952,7 @@
     if(b.feeling){
       feel='<div class="detail-sec"><h4>观后感</h4><div class="detail-feel">'+esc(b.feeling)+'</div></div>';
     }
-    $("detailBody").innerHTML='<div class="detail-head">'+cover+'<div class="detail-t"><h2>'+esc(b.title)+'</h2>'+meta+period+prog+'</div></div>'+quotes+feel;
+    $("detailBody").innerHTML='<div class="detail-head">'+cover+'<div class="detail-t"><h2>'+esc(b.title)+'</h2>'+meta+period+watchInfo+prog+'</div></div>'+quotes+feel;
     openMask("maskDetail");
   }
 
@@ -919,6 +991,18 @@
     var byMonth={}; for(var m=1;m<=12;m++) byMonth[m+"月"]=0;
     doneY.forEach(function(b){ var d=new Date(b.finishedAt); if(d.getFullYear()===year) byMonth[d.getMonth()+1+"月"]++; });
     html+=barBlock("今年每月看完", byMonth);
+    var byPlace={ "电影院":0, "线上-爱奇艺":0, "线上-腾讯视频":0, "线上-优酷":0, "线上-哔哩哔哩":0, "线上-芒果TV":0, "线上-Netflix":0, "线上-YouTube":0, "线上-其他":0 };
+    doneY.forEach(function(b){
+      if(b.watchPlace==="cinema"){ byPlace["电影院"]++; }
+      else if(b.watchPlace==="online"){
+        var p=b.watchPlatform||"";
+        var key="线上-"+(["爱奇艺","腾讯视频","优酷","哔哩哔哩","芒果TV","Netflix","YouTube"].indexOf(p)>=0 ? p : "其他");
+        byPlace[key]=(byPlace[key]||0)+1;
+      }
+    });
+    var filteredPlace={};
+    Object.keys(byPlace).forEach(function(k){ if(byPlace[k]>0) filteredPlace[k]=byPlace[k]; });
+    html+=barBlock("今年看完 · 观看平台", filteredPlace);
     $("statsBox").innerHTML=html;
     var hint=$("hint-stats"); if(hint) hint.textContent="统计年份："+year;
   }
@@ -1032,6 +1116,8 @@
     });
     $("btnMatch").onclick=function(){ var q=$("matchInput").value.trim(); if(q) doMatch(q); };
     $("matchInput").addEventListener("input", onMatchInput);
+    $("fWatchPlace").addEventListener("change", togglePlatformRow);
+    $("fWatchPlatform").addEventListener("change", togglePlatformRow);
     $("btnMovieSave").onclick=saveMovie;
     $("btnMovieCancel").onclick=function(){ closeMask("maskMovie"); };
     $("btnMovieDelete").onclick=function(){ if(confirm("确定删除这部影片？")) deleteMovie(); };
