@@ -476,6 +476,11 @@
         <button class="mtab on" id="miscTabManual">📝 手工输入</button>
         <button class="mtab" id="miscTabAi">🤖 AI 自动归类</button>
       </div>
+      <div class="misc-gen" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 12px">
+        <button class="btn sm primary" id="btnGenName">✨ 一键起名</button>
+        <button class="btn sm primary" id="btnGenDeath">💔 一键心死名场面</button>
+        <span class="hint">本地离线生成，结果存进下方对应大项，可随时改</span>
+      </div>
       <div id="miscList"></div>
     </section>
 
@@ -1589,6 +1594,53 @@ function renderMisc(){
 /* ---------- 杂项分类 · AI 自动归类（按字段汇总所有例文的分析内容） ---------- */
 $("#miscTabManual").onclick=()=>{ miscZone="manual"; $("#miscTabManual").classList.add("on"); $("#miscTabAi").classList.remove("on"); renderMisc(); };
 $("#miscTabAi").onclick=()=>{ miscZone="ai"; $("#miscTabAi").classList.add("on"); $("#miscTabManual").classList.remove("on"); renderMisc(); };
+/* ===== 杂项·一键起名 / 一键心死名场面（本地离线生成，无需联网/密钥） ===== */
+const DP_NAME_POOL={
+  "男主":{s:["薄","厉","陆","顾","沈","傅","霍","司","战","裴","靳","贺","祁"],g:["景行","庭深","宴辞","斯年","寒州","妄之","承胤","惊蛰","疏野","砚辞","聿珩","清晏","执"],hint:"前期冷漠/自私，把她的好当理所当然；后期追妻火葬场"},
+  "女主":{s:["沈","林","温","姜","乔","许","阮","叶","苏","纪","池"],g:["晚星","知意","清欢","以沫","念纾","昭","宁","未晞","听澜","挽","疏桐","宛","可"],hint:"一次次失望后彻底心死，温柔但有骨气，离开得干脆"},
+  "白月光":{s:["白","苏","陈","宋","江"],g:["皎","鹭","棠","微","苒","乔","夕"],hint:"他心头的一抹白月光，未必多好，只是他没得到"},
+  "深情男二":{s:["陆","江","程","宋","谢","卫","晏"],g:["照","怀瑾","渡","时砚","听舟","斯远","行止","屿"],hint:"一直默默守着她，在她最狼狈时接住她"}
+};
+function dpPick(a){ return a[Math.floor(Math.random()*a.length)]; }
+function genName(){
+  const roles=Object.keys(DP_NAME_POOL);
+  const role=dpPick(roles);
+  const p=DP_NAME_POOL[role];
+  const name=p.s[Math.floor(Math.random()*p.s.length)]+p.g[Math.floor(Math.random()*p.g.length)];
+  return {name, roleLabel:role, persona:p.hint};
+}
+const DP_DEATH_TPL=[
+  "雨夜她提着行李站在门口，他说：「你又要闹哪出？」她没闹，只把钥匙放在玄关：『{line}』",
+  "她发烧到39度，给他打了七个电话，他正陪{red}在{place}。第二天她自己挂的号，从此不再拨那个号码。",
+  "婚礼请柬摆在他桌上，新娘不是她。他笑着撕了：『幼稚。』后来他在她婚礼上，红了眼。",
+  "他习惯性回头想喊她的名字，身后空无一人——她搬走那天，没留新地址。",
+  "她把聊天记录里他说的「我忙」存了满满一相册，最后一条是：『{line}』她设置了不再接收。",
+  "他应酬到凌晨回家，灯还亮着，饭在桌上凉透。她坐在沙发上轻声说：『{line}』然后关了灯。",
+  "她把备孕的单子折好塞进他外套口袋，他随手扔进公司垃圾桶。后来他在垃圾桶旁站了一整晚。"
+];
+const DP_DEATH_FILL={red:["白月光","客户","兄弟","前任"],place:["酒局","球场","医院","外地"],line:["我走了，别找","这次不闹了，是真的","钥匙还你，人也还你","我们到此为止","我累了，放过彼此吧"]};
+const DP_HOOK=[
+  "后来他学做她爱吃的菜，却再没人坐那张椅子；朋友笑他「以前不是最烦下厨」，他夹着烟没说话。",
+  "他翻遍通讯录用尽借口找她，她只回：『先生，我们好像不熟。』",
+  "他在她公司楼下等了三天，保安都认得他了，她从另一扇门离开。",
+  "他终于读懂她写的每篇日记，最后一页写着：『到此为止，祝好。』",
+  "他捧着她最爱的那束花站在雨里，路人问他等谁，他说：「等我太太。」可她早不是了。",
+  "他学会了对别人温柔，唯独弄丢了那个教会他温柔的人。"
+];
+function genDeathScene(){
+  const tpl=dpPick(DP_DEATH_TPL);
+  const body=tpl.replace("{red}",dpPick(DP_DEATH_FILL.red)).replace("{place}",dpPick(DP_DEATH_FILL.place)).replace("{line}",dpPick(DP_DEATH_FILL.line));
+  const titles=["雨夜的行李箱","第七个未接电话","不是新娘的请柬","身后空无一人","相册里的「我忙」","凉透的晚饭","口袋里的备孕单"];
+  return {title:dpPick(titles), body, hook:dpPick(DP_HOOK)};
+}
+function dpEnsureCat(name){ let c=state.misc.find(m=>m.name===name); if(!c){ c={id:uid(),name,items:[]}; state.misc.push(c);} miscActive=c.id; return c; }
+$("#btnGenName").onclick=()=>{ const n=genName(); const c=dpEnsureCat("💡 起名库"); c.items.push({id:uid(),text:n.name+"（"+n.roleLabel+"）",intro:n.persona}); save(); renderMisc(); toast("已生成起名："+n.name); };
+$("#btnGenDeath").onclick=()=>{ const s=genDeathScene(); const c=dpEnsureCat("💔 心死名场面"); c.items.push({id:uid(),text:s.title,intro:s.body+"\n\n🔁 追妻反差："+s.hook}); save(); renderMisc(); toast("已生成心死名场面"); };
+/* 供主页「灵感速记」跨 iframe 调用：直接写入当前内存并保存（与三端同步一致） */
+window.__dpQuickAddMaterial=function(title,idea){
+  state.materials.push({id:uid(),type:"text",title:title||"灵感速记",idea:idea||"",tags:[],createdAt:Date.now()});
+  save(); if(typeof renderMaterials==="function") renderMaterials(); toast("已存入素材 ✓");
+};
 function renderMiscAi(){
   const box=$("#miscList"); box.innerHTML="";
   const hasAny=state.examples.some(e=>aiHasContent(e.ai));
