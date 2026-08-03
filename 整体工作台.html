@@ -432,7 +432,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   <aside class="shell-side">
     <div class="shell-logo"><span class="d"></span>🌟 崛起吧人生</div>
     <nav class="snav" id="snav"></nav>
-    <div class="shell-foot">数据全本地 · 不上传<br>三端自动同步<br><a href="./duanpian-collab.html" target="_blank" rel="noopener" style="color:var(--brand);text-decoration:none;font-weight:600;display:inline-block;margin-top:6px">🔗 短篇协作版（和好友共享入口）</a></div>
+    <div class="shell-foot">数据全本地 · 不上传<br>三端自动同步</div>
   </aside>
   <!-- 手机顶栏（手机态显示） -->
   <header class="appbar">
@@ -558,10 +558,12 @@ const DEFAULT_NAV = [
   {key:"health", label:"健康状况", icon:"🩺", type:"iframe", src:"健康板块.html"},
   {key:"checkin", label:"签到记录", icon:"📅", type:"native"},
   {key:"duanpian", label:"短篇", icon:"✒️", type:"iframe", src:"短篇工作台.html"},
+  {key:"collab", label:"协作短篇", icon:"🔗", type:"iframe", src:"duanpian-collab.html"},
   {key:"game", label:"游戏人生", icon:"🎮", type:"iframe", src:"游戏人生.html"},
   {key:"settings", label:"设置", icon:"⚙️", type:"native"}
 ];
 let navCfg = load(SHELL_KEY, DEFAULT_NAV.slice());
+if(!navCfg.some(x=>x.key==="collab")){ navCfg.push({key:"collab", label:"协作短篇", icon:"🔗", type:"iframe", src:"duanpian-collab.html"}); try{persist(SHELL_KEY,navCfg);}catch(e){} }
 
 function load(k, def){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):def; }catch(e){ return def; } }
 function persist(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){ alert("保存失败，本地存储可能已满"); } }
