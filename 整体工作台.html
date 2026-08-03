@@ -115,7 +115,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}
   .empty{text-align:center;color:var(--sub);padding:50px 20px}
   .empty .big{font-size:42px;margin-bottom:8px}
-  /* 今日概览 */
+  /* 人生概览旧卡片（兼容） */
   .ov-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px}
   .ov-card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:18px;position:relative;overflow:hidden;cursor:pointer;transition:.18s;box-shadow:0 4px 14px rgba(245,200,150,.12);font-family:var(--font-cute)}
   .ov-card::before{content:"";position:absolute;left:0;top:0;width:100%;height:4px;background:linear-gradient(90deg,var(--brand),var(--brand2))}
@@ -148,11 +148,12 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   .life-pet .lp-n{font-size:20px;font-weight:800;color:var(--ink)}
   .life-pet .lp-m{font-size:13px;color:#A86A4F;margin-top:3px}
   .life-pet .lp-l{font-size:12px;color:#fff;background:var(--brand);border-radius:20px;padding:3px 12px;font-weight:700;display:inline-block;margin-top:8px;box-shadow:0 2px 6px rgba(255,142,114,.3)}
-  .life-cal{flex:1;background:#FFFDFA;border:1px solid var(--line);border-radius:24px;padding:14px 16px;box-shadow:0 2px 8px rgba(212,165,116,.06);height:188px;display:flex;flex-direction:column;overflow:hidden}
-  .cal-h{font-size:14px;font-weight:800;color:var(--ink);margin-bottom:8px}
-  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center}
-  .cal-head{font-size:11px;color:var(--sub);margin-bottom:4px}
-  .cal-grid span{font-size:12px;color:var(--ink);padding:2px 0;border-radius:6px}
+  .life-cal{flex:1;background:#FFFDFA;border:1px solid var(--line);border-radius:24px;padding:10px 12px;box-shadow:0 2px 8px rgba(212,165,116,.06);height:188px;display:flex;flex-direction:column}
+  .cal-h{font-size:11px;font-weight:800;color:var(--ink);margin-bottom:4px;flex:none}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;text-align:center}
+  .cal-head{font-size:9px;color:var(--sub);margin-bottom:2px;flex:none}
+  .cal-body{flex:1;min-height:0;align-content:stretch}
+  .cal-grid span{font-size:10px;color:var(--ink);padding:0;border-radius:4px;display:flex;align-items:center;justify-content:center;line-height:1}
   .cal-e{visibility:hidden}
   .cal-d.on{background:var(--brand);color:#fff;font-weight:800}
   .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
@@ -744,7 +745,7 @@ function renderLifeCalendar(){
   let h='<div class="cal-h">'+y+'年'+(m+1)+'月</div>';
   h+='<div class="cal-grid cal-head">';
   ["日","一","二","三","四","五","六"].forEach(function(w){ h+='<span>'+w+'</span>'; });
-  h+='</div><div class="cal-grid">';
+  h+='</div><div class="cal-grid cal-body">';
   for(let i=0;i<first;i++) h+='<span class="cal-e"></span>';
   for(let d=1;d<=days;d++){ h+='<span class="cal-d'+(d===t?' on':'')+'">'+d+'</span>'; }
   h+='</div>';
