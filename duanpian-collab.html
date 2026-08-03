@@ -340,7 +340,7 @@ async function sbGet(vid){ const url=SB_URL.replace(/\/$/,"")+"/rest/v1/sync_vau
 <div class="mask" id="maskLogin" style="z-index:999">
   <div class="modal" style="max-width:440px">
     <h3>🔗 短篇协作版</h3>
-    <div class="sub">和好友共用例文 / 导语 / 素材 / 杂项 / 元素；各自保留脑洞想法、想法拓展、抓取收藏。共享内容用「协作空间口令」加密；你的私人内容用「我的私有口令」加密，好友算不出、也读不到。</div>
+    <div class="sub">和好友共用例文 / 导语 / 素材 / 杂项 / 元素；各自的脑洞想法、想法拓展、抓取收藏则独立保存，互不覆盖。共享内容用「协作空间口令」打开；私人内容用「我的私有口令」打开，只在你当前设备上解密。</div>
     <div class="field"><label>协作空间口令（两人约定同一个词）</label><input id="collabShare" type="password" placeholder="例如 rose2026" /></div>
     <div class="field"><label>我的私有口令（只有你自己知道）</label><input id="collabPriv" type="password" placeholder="例如 my-rose-88" /></div>
     <label class="up-batch"><input type="checkbox" id="collabRemember" /> <span>记住口令（仅存本机浏览器，方便下次直接进）</span></label>
