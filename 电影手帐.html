@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>电影手帐 · 写作工作台</title>
+<style>
+  :root{
+    --bg:#FBF6EC; --panel:#ffffff; --ink:#4A3528; --sub:#8a7a6c;
+    --line:#F0E6D8; --brand:#FF8E72; --brand2:#FFB394; --chip:#FFE9DC;
+    --chipOn:#FF8E72; --soft:#FFF1E8; --danger:#E85F4A; --ok:#5e8c6a;
+    --shadow:0 1px 3px rgba(60,45,30,.08),0 6px 18px rgba(60,45,30,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.6; -webkit-text-size-adjust:100%;
+  }
+  header.top{
+    position:sticky; top:0; z-index:30; background:rgba(247,244,238,.92);
+    backdrop-filter:saturate(140%) blur(8px); border-bottom:1px solid var(--line);
+    padding:10px 16px;
+  }
+  .top-row{display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+  .logo{font-size:20px; font-weight:700; letter-spacing:1px; color:var(--brand)}
+  .logo small{font-weight:400; color:var(--sub); font-size:12px; margin-left:6px; letter-spacing:0}
+  body.embedded .logo{display:none}
+  .spacer{flex:1}
+  .btn{
+    border:1px solid var(--line); background:var(--panel); color:var(--ink);
+    border-radius:10px; padding:7px 12px; font-size:13px; cursor:pointer; transition:.15s;
+  }
+  .btn:hover{border-color:var(--brand2)}
+  .btn.primary{background:var(--brand); color:#fff; border-color:var(--brand)}
+  .btn.primary:hover{background:var(--brand2)}
+  .btn.ghost{background:transparent}
+  .btn.soft{background:var(--soft); color:var(--brand); border-color:#e6dccf}
+  .btn.soft:hover{background:#efe6d8}
+  .btn.sm{padding:4px 9px; font-size:12px; border-radius:8px}
+  .btn.sm.active{background:var(--brand); color:#fff; border-color:var(--brand)}
+  .btn.danger{color:var(--danger); border-color:#e8cfc7}
+  .btn.danger:hover{background:#fbeeea}
+
+  .layout{display:flex; gap:0; align-items:stretch}
+  nav.side{
+    width:172px; flex:0 0 172px; border-right:1px solid var(--line);
+    padding:14px 10px; position:sticky; top:64px; align-self:flex-start; height:calc(100vh - 64px);
+    overflow:auto; background:var(--bg);
+  }
+  nav.side .navitem{
+    display:block; width:100%; text-align:left; border:0; background:transparent;
+    padding:10px 12px; border-radius:10px; cursor:pointer; color:var(--ink); font-size:14px; margin-bottom:4px;
+  }
+  nav.side .navitem:hover{background:var(--soft)}
+  nav.side .navitem.on{background:var(--brand); color:#fff}
+  nav.side .navitem b{font-weight:600}
+  nav.side .navitem span{display:block; font-size:11px; color:var(--sub); margin-top:2px}
+  nav.side .navitem.on span{color:rgba(255,255,255,.8)}
+  .nav-count{float:right; font-size:12px; color:var(--brand); font-weight:600}
+  nav.side .navitem.on .nav-count{color:#fff}
+
+  main{flex:1; padding:18px 20px 80px; min-width:0}
+  .sec{display:none}
+  .sec.on{display:block}
+  .sec-head{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px}
+  .sec-head h2{margin:0; font-size:19px}
+  .sec-head .hint{color:var(--sub); font-size:12.5px}
+
+  .grid{display:grid; gap:14px; grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px;
+    box-shadow:var(--shadow); cursor:pointer; transition:.15s; position:relative;
+  }
+  .card:hover{transform:translateY(-2px); border-color:var(--brand2)}
+  .card .cno{display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:20px; padding:0 6px;
+    background:var(--chipOn); color:#fff; border-radius:6px; font-size:11px; font-weight:600; margin-right:6px}
+  .card .ctime{font-size:11px; color:var(--sub); margin-left:auto}
+  .card .chead{display:flex; align-items:center; margin-bottom:8px}
+  .card .chead h3{margin:0; font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0}
+  .brow{display:flex; gap:12px; margin-top:4px}
+  .cover{width:62px; height:84px; flex:0 0 62px; object-fit:cover; border-radius:8px; background:var(--soft); border:1px solid var(--line)}
+  .cover-ph{width:62px; height:84px; flex:0 0 62px; border-radius:8px; background:var(--soft); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center; font-size:22px; color:var(--brand); font-weight:700}
+  .binfo{flex:1; min-width:0; font-size:13px}
+  .binfo .l1{color:var(--sub); font-size:12px}
+  .binfo .l2{margin:2px 0; color:var(--ink)}
+  .progress{height:7px; background:var(--chip); border-radius:99px; overflow:hidden; margin-top:7px}
+  .progress>i{display:block; height:100%; background:var(--brand); border-radius:99px}
+  .pct{font-size:11px; color:var(--sub); margin-top:2px}
+  .card .meta{display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:10px}
+  .tagmini{display:inline-block; background:var(--chip); color:var(--ink); border-radius:999px; padding:1px 8px; font-size:11px}
+  .badge-status{font-size:11px; padding:1px 8px; border-radius:999px; font-weight:600}
+  .badge-reading{background:#eaf3ee; color:#3c8c5e}
+  .badge-done{background:#efe9f7; color:#7a52b3}
+  .badge-wish{background:#fdf0e6; color:#c47a3a}
+  .card .acts{display:flex; gap:6px; flex-wrap:wrap; margin-top:10px}
+  .card .acts .btn{flex:1 1 auto; text-align:center}
+
+  .empty{color:var(--sub); text-align:center; padding:40px 12px; border:1px dashed var(--line); border-radius:14px; background:var(--panel)}
+
+  .form{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:var(--shadow); max-width:680px}
+  .field{margin-bottom:12px}
+  .field label{display:block; font-size:13px; color:var(--sub); margin-bottom:5px}
+  .field input[type=text],.field input[type=number],.field input[type=date],.field input[type=url],.field textarea,.field select{
+    width:100%; border:1px solid var(--line); border-radius:10px; padding:9px 11px; font-size:14px;
+    font-family:inherit; background:#fff; color:var(--ink);
+  }
+  .field textarea{min-height:72px; resize:vertical}
+  .row{display:flex; gap:10px; flex-wrap:wrap}
+  .row>*{flex:1; min-width:130px}
+  .match-box{border:1px solid var(--line); border-radius:12px; padding:10px; background:var(--soft); margin-bottom:12px}
+  .match-box .ttl{font-size:12px; color:var(--sub); margin-bottom:6px}
+  .match-list{display:flex; flex-direction:column; gap:6px; max-height:230px; overflow:auto}
+  .match-item{display:flex; gap:10px; align-items:center; background:#fff; border:1px solid var(--line); border-radius:10px; padding:8px; cursor:pointer}
+  .match-item:hover{border-color:var(--brand2)}
+  .match-item img{width:38px; height:52px; object-fit:cover; border-radius:5px; background:var(--soft); flex:0 0 38px}
+  .match-item .mt{font-weight:600; font-size:13.5px}
+  .match-item .ma{font-size:12px; color:var(--sub)}
+  .match-loading,.match-empty{font-size:12.5px; color:var(--sub); padding:6px}
+
+  .mask{position:fixed; inset:0; background:rgba(40,32,24,.42); z-index:60; display:none; align-items:flex-start; justify-content:center; padding:24px 14px; overflow:auto}
+  .mask.on{display:flex}
+  .modal{background:var(--panel); border-radius:16px; width:100%; max-width:720px; padding:18px; box-shadow:0 20px 60px rgba(0,0,0,.25); max-height:92vh; overflow:auto}
+  .modal h3{margin:0 0 4px; font-size:18px}
+  .modal .sub{color:var(--sub); font-size:12.5px; margin-bottom:12px}
+  .modal-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:16px; flex-wrap:wrap}
+
+  /* 设置页 */
+  .set-sec{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px; box-shadow:var(--shadow); max-width:680px}
+  .set-sec h3{margin:0 0 10px; font-size:16px}
+  .tag-manage{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px}
+  .tag-manage .t{display:inline-flex; align-items:center; gap:6px; background:var(--chip); border-radius:999px; padding:4px 6px 4px 12px; font-size:13px}
+  .tag-manage .t button{border:0; background:var(--danger); color:#fff; width:18px; height:18px; border-radius:50%; cursor:pointer; font-size:11px; line-height:1; padding:0}
+  .set-row{display:flex; gap:8px; align-items:center}
+  .set-row input{flex:1; border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:14px; font-family:inherit}
+  .set-note{font-size:12px; color:var(--sub); margin-top:8px}
+
+  /* 筛选弹窗 */
+  .filter-grid{display:flex; flex-direction:column; gap:12px}
+  .filter-field label{display:block; font-size:13px; color:var(--sub); margin-bottom:5px}
+  .filter-field select,.filter-field input{width:100%; border:1px solid var(--line); border-radius:10px; padding:9px 11px; font-size:14px; font-family:inherit; background:#fff}
+  .filter-field .two{display:flex; gap:8px}
+  .filter-chip-row{display:flex; flex-wrap:wrap; gap:6px; max-height:160px; overflow:auto}
+  .chip{border:1px solid var(--line); background:var(--chip); color:var(--ink); border-radius:999px; padding:4px 11px; font-size:12.5px; cursor:pointer; user-select:none}
+  .chip.on{background:var(--chipOn); color:#fff; border-color:var(--chipOn)}
+
+  .ocr-cands{display:flex; flex-direction:column; gap:6px; margin-top:10px}
+  .ocr-cands .c{border:1px solid var(--line); background:var(--soft); border-radius:9px; padding:8px 10px; cursor:pointer; font-size:14px}
+  .ocr-cands .c:hover{border-color:var(--brand2)}
+
+  .hidden-file{display:none}
+  .toast{position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:10px 16px; border-radius:10px; font-size:13px; z-index:80; opacity:0; transition:.25s; pointer-events:none; max-width:90vw; text-align:center}
+  .toast.on{opacity:.95}
+
+  .drop-zone{border:2px dashed var(--line); border-radius:12px; padding:18px 14px; text-align:center; cursor:pointer; background:var(--bg); transition:.15s; color:var(--sub)}
+  .drop-zone:hover{border-color:var(--brand2)}
+  .drop-zone .dz-icon{font-size:24px; margin-bottom:4px}
+
+  /* 影片详情弹窗 */
+  .detail-head{display:flex; gap:16px; margin-bottom:14px}
+  .detail-cover{width:96px; height:132px; flex:0 0 96px; object-fit:cover; border-radius:10px; background:var(--soft); border:1px solid var(--line)}
+  .detail-cover-ph{width:96px; height:132px; flex:0 0 96px; border-radius:10px; background:var(--soft); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:34px; color:var(--brand); font-weight:700}
+  .detail-t h2{margin:0 0 6px; font-size:21px; line-height:1.35}
+  .detail-meta{font-size:13px; color:var(--sub); display:flex; flex-wrap:wrap; gap:6px; align-items:center}
+  .detail-sec{margin-top:14px}
+  .detail-sec h4{margin:0 0 6px; font-size:13px; color:var(--brand); border-left:3px solid var(--brand); padding-left:8px}
+  .detail-quote{border-left:3px solid var(--chipOn); padding:4px 0 4px 12px; margin:6px 0; color:var(--ink); font-size:14px; line-height:1.7}
+  .detail-feel{white-space:pre-wrap; color:#4a443c; font-size:14px; line-height:1.8}
+  .detail-prog{height:8px; background:var(--chip); border-radius:99px; overflow:hidden; margin:8px 0}
+  .detail-prog>i{display:block; height:100%; background:var(--brand)}
+  /* 观影统计 */
+  .stats-grid{display:grid; gap:14px; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); margin-bottom:16px}
+  .stat-card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:var(--shadow); text-align:center}
+  .stat-card .num{font-size:30px; font-weight:700; color:var(--brand)}
+  .stat-card .lab{font-size:12.5px; color:var(--sub); margin-top:4px}
+  .stat-block{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:var(--shadow); margin-bottom:14px; max-width:680px}
+  .stat-block h3{margin:0 0 12px; font-size:15px}
+  .bar-row{display:flex; align-items:center; gap:8px; margin:5px 0; font-size:13px}
+  .bar-row .bl{width:92px; flex:0 0 92px; color:var(--sub); text-align:right}
+  .bar-row .bb{flex:1; height:14px; background:var(--chip); border-radius:99px; overflow:hidden}
+  .bar-row .bb>i{display:block; height:100%; background:var(--brand2)}
+  .bar-row .bv{width:54px; flex:0 0 54px; color:var(--ink)}
+
+  @media (max-width:600px){
+    nav.side{position:sticky; top:auto; width:100%; height:auto; flex:auto; border-right:0; border-bottom:1px solid var(--line);
+      display:flex; gap:6px; overflow-x:auto; padding:8px 10px; white-space:nowrap; background:var(--panel)}
+    nav.side .navitem{width:auto; margin:0; flex:0 0 auto; padding:8px 12px}
+    nav.side .navitem span{display:none}
+    nav.side .nav-count{float:none; display:inline; margin-left:4px}
+    .layout{flex-direction:column}
+    main{padding:14px 14px 70px}
+    .grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+  }
+  @media (max-width:560px){
+    .grid{grid-template-columns:1fr}
+    .modal{max-width:none}
+    main{padding:12px 12px 76px}
+    .row{flex-direction:column}
+    .row>*{min-width:0}
+  }  /* 嵌入工作台：模块内导航改为精致顶部分段标签栏 */
+  body.embedded .layout{flex-direction:column}
+  body.embedded nav.side{position:sticky;top:0;left:auto;width:auto;height:auto;flex:0 0 auto;flex-direction:row;align-items:center;gap:8px;overflow-x:auto;overflow-y:hidden;padding:10px 14px;margin:0;border-right:0;border-bottom:1px solid var(--line);background:var(--bg,#f6f7f9);z-index:20;scrollbar-width:thin}
+  body.embedded nav.side::-webkit-scrollbar{height:4px}
+  body.embedded nav.side::-webkit-scrollbar-thumb{background:var(--line,#e3e6ea);border-radius:4px}
+  body.embedded nav.side .logo,body.embedded nav.side .sidefoot{display:none}
+  body.embedded nav.side .navitem{display:inline-flex;flex-direction:row;align-items:center;gap:6px;width:auto;flex:0 0 auto;margin:0;padding:8px 15px;border-radius:999px;border:1px solid transparent;background:var(--soft,#eef0f3);color:var(--ink,#222);font-size:13px;font-weight:500;white-space:nowrap;cursor:pointer;transition:.15s;position:relative;line-height:1}
+  body.embedded nav.side .navitem:hover{background:var(--line,#e3e6ea)}
+  body.embedded nav.side .navitem.on{background:var(--brand,#3b82f6);color:#fff;font-weight:600}
+  body.embedded nav.side .navitem b{font-weight:inherit}
+  body.embedded nav.side .navitem span{display:none}
+  body.embedded nav.side .navitem .badge{position:static;margin-left:2px;min-width:18px;height:18px;border-radius:9px;background:rgba(0,0,0,.06);color:var(--sub,#666);font-size:11px;font-weight:600}
+  body.embedded nav.side .navitem.on .badge{background:rgba(255,255,255,.25);color:#fff}
+  body.embedded nav.side .navitem .nav-count{float:none;display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;margin-left:2px;border-radius:9px;background:rgba(0,0,0,.06);color:var(--sub,#666);font-size:11px;font-weight:600}
+  body.embedded nav.side .navitem.on .nav-count{background:rgba(255,255,255,.25);color:#fff}
+  body.embedded main{padding:16px 18px 70px}
+</style>
+</head>
+<body>
+<script>if(window.self!==window.top && !/[?&]ipad=/.test(location.search)){document.body.className+=" embedded";}</script>
+<script>
+(function(){
+  var MOD="dianying", LSKEY="dianying_shouzhang_v1";
+  function tsToDate(ts){ if(!ts) return null; var d=new Date(ts); return d.getFullYear()+"-"+(String(d.getMonth()+1).padStart(2,"0"))+"-"+(String(d.getDate()).padStart(2,"0")); }
+  function summarize(){
+    var t=new Date(); var today=t.getFullYear()+"-"+(String(t.getMonth()+1).padStart(2,"0"))+"-"+(String(t.getDate()).padStart(2,"0"));
+    var out={module:MOD,total:0,today:{}};
+    try{
+      if(MOD==="yuedu"||MOD==="dianying"){
+        var arr=(MOD==="yuedu"?state.books:state.movies)||[];
+        out.total=arr.length;
+        out.reading=arr.filter(function(x){return x.status===(MOD==="yuedu"?"reading":"watching");}).length;
+        out.done=arr.filter(function(x){return x.status==="done";}).length;
+        out.wish=arr.filter(function(x){return x.status==="wish";}).length;
+        out.todayAdded=arr.filter(function(x){return x.addedAt && tsToDate(x.addedAt)===today;}).length;
+      } else if(MOD==="jianfei"){
+        out.todayMeals=(state.meals||[]).filter(function(x){return x.date===today;}).length;
+        out.todayExerciseDone=Object.keys(state.done&&state.done[today]?state.done[today]:{}).length;
+        out.weights=(state.weights||[]).length;
+      } else if(MOD==="health"){
+        out.conditions=(state.conditions||[]).length;
+        out.sleep=(state.sleep||[]).length;
+        out.mood=(state.mood||[]).length;
+        out.todaySleep=(state.sleep||[]).filter(function(x){return x.date===today;}).length;
+        out.todayMood=(state.mood||[]).filter(function(x){return x.date===today;}).length;
+      } else if(MOD==="duanpian"){
+        out.examples=(state.examples||[]).length;
+        out.intros=(state.intros||[]).length;
+        out.materials=(state.materials||[]).length;
+        out.brainstorms=(state.brainstorms||[]).length;
+        out.todayAdded=(state.examples||[]).filter(function(x){return x.createdAt && tsToDate(x.createdAt)===today;}).length;
+      }
+    }catch(e){ out.error=String(e); }
+    return out;
+  }
+  window.addEventListener("message", function(e){
+    var d=e.data||{};
+    if(d.type==="getSummary"){ try{ parent.postMessage({type:"summary",mod:MOD,payload:summarize()},"*"); }catch(err){ parent.postMessage({type:"summary",mod:MOD,payload:{error:String(err)}},"*"); } }
+    else if(d.type==="exportModule"){ try{ parent.postMessage({type:"moduleData",mod:MOD,key:LSKEY,data:JSON.parse(JSON.stringify(state))},"*"); }catch(err){ parent.postMessage({type:"moduleData",mod:MOD,key:LSKEY,error:String(err)},"*"); } }
+    else if(d.type==="importModule"){ try{ state=Object.assign(state,d.data); save(); if(typeof renderNav==="function") renderNav(); parent.postMessage({type:"importDone",mod:MOD},"*"); }catch(err){ parent.postMessage({type:"importDone",mod:MOD,error:String(err)},"*"); } }
+  });
+})();
+</script>
+<header class="top">
+  <div class="top-row">
+    <div class="logo">电影手帐<small>写作素材模块</small></div>
+    <div class="spacer"></div>
+    <button class="btn sm soft" id="btnBackup">备份/恢复</button>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="side" id="sideNav"></nav>
+  <main>
+    <!-- 正在看 -->
+    <section class="sec" id="sec-watching">
+      <div class="sec-head">
+        <h2 id="h-watching">正在看</h2>
+        <span class="hint" id="hint-watching"></span>
+        <div class="spacer"></div>
+        <button class="btn sm" id="btnSortWatching">↓ 最新</button>
+        <button class="btn sm" id="btnFilterWatching">⚲ 筛选</button>
+        <button class="btn sm primary" data-add="">+ 添加影片</button>
+      </div>
+      <div class="grid" id="gridWatching"></div>
+    </section>
+
+    <!-- 已看 -->
+    <section class="sec" id="sec-done">
+      <div class="sec-head">
+        <h2 id="h-done">已看</h2>
+        <span class="hint" id="hint-done"></span>
+        <div class="spacer"></div>
+        <button class="btn sm" id="btnSortDone">↓ 最新</button>
+        <button class="btn sm" id="btnFilterDone">⚲ 筛选</button>
+        <button class="btn sm primary" data-add="">+ 添加影片</button>
+      </div>
+      <div class="grid" id="gridDone"></div>
+    </section>
+
+    <!-- 待看 -->
+    <section class="sec" id="sec-wish">
+      <div class="sec-head">
+        <h2 id="h-wish">待看</h2>
+        <span class="hint" id="hint-wish"></span>
+        <div class="spacer"></div>
+        <button class="btn sm" id="btnSortWish">↓ 最新</button>
+        <button class="btn sm" id="btnFilterWish">⚲ 筛选</button>
+        <button class="btn sm primary" data-add="">+ 添加影片</button>
+      </div>
+      <div class="grid" id="gridWish"></div>
+    </section>
+
+    <!-- 统计 -->
+    <section class="sec" id="sec-stats">
+      <div class="sec-head"><h2>观影统计</h2><span class="hint" id="hint-stats"></span></div>
+      <div id="statsBox"></div>
+    </section>
+
+    <!-- 设置 -->
+    <section class="sec" id="sec-settings">
+      <div class="sec-head"><h2>设置</h2><span class="hint">管理筛选用的题材与国家选项</span></div>
+      <div class="set-sec">
+        <h3>题材</h3>
+        <div class="tag-manage" id="genreManage"></div>
+        <div class="set-row">
+          <input type="text" id="genreInput" placeholder="新增题材，如：悬疑 / 爱情 / 科幻">
+          <button class="btn primary" id="btnAddGenre">添加</button>
+        </div>
+        <div class="set-note">题材用于自动匹配后归类，以及各界面筛选。可随时增删。</div>
+      </div>
+      <div class="set-sec">
+        <h3>国家</h3>
+        <div class="tag-manage" id="countryManage"></div>
+        <div class="set-row">
+          <input type="text" id="countryInput" placeholder="新增国家，如：中国 / 美国 / 日本">
+          <button class="btn primary" id="btnAddCountry">添加</button>
+        </div>
+        <div class="set-note">国家用于筛选。自动匹配会尝试从简介识别国家，识别不到时需手动选择或补充。</div>
+      </div>
+      <div class="set-sec">
+        <h3>数据</h3>
+        <div class="set-row">
+          <button class="btn" id="btnExport2">导出备份(JSON)</button>
+          <button class="btn danger" id="btnClearAll">清空全部数据</button>
+        </div>
+        <div class="set-note">所有数据仅存在本设备浏览器，不上传网络。换设备请用备份/恢复迁移。</div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- 添加/编辑影片弹窗 -->
+<div class="mask" id="maskMovie">
+  <div class="modal">
+    <h3 id="movieModalTitle">添加影片</h3>
+    <div class="sub">填片名可自动联网匹配；可拍照识别海报</div>
+
+    <div class="match-box">
+      <div class="ttl">🔍 自动匹配：输入片名，自动抓取导演 / 海报 / 时长</div>
+      <div class="set-row">
+        <input type="text" id="matchInput" placeholder="如：肖申克的救赎 / 霸王别姬 / 千与千寻">
+        <button class="btn soft" id="btnMatch">搜索</button>
+      </div>
+      <div class="match-list" id="matchList"></div>
+    </div>
+
+    <div class="form" style="box-shadow:none;padding:0;max-width:none">
+      <div class="row">
+        <div class="field" style="flex:2">
+          <label>片名 *</label>
+          <input type="text" id="fTitle" placeholder="片名">
+        </div>
+        <div class="field" style="flex:2">
+          <label>导演</label>
+          <input type="text" id="fDirector" placeholder="导演名">
+        </div>
+      </div>
+      <div class="field">
+        <label>电影海报（自动匹配 / 粘贴图片链接 / 拍照识别）</label>
+        <div class="set-row">
+          <input type="url" id="fCoverUrl" placeholder="https://... 海报图片链接（自动匹配会填这里）">
+          <button class="btn soft" id="btnOcr">📷 拍照识别</button>
+        </div>
+        <input type="file" id="fCoverFile" accept="image/*" class="hidden-file">
+        <div class="drop-zone" id="coverDrop" style="margin-top:8px">
+          <div class="dz-icon">🖼️</div>
+          <div class="dz-text">点击或拖拽本地图片作为海报</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>题材</label>
+          <input type="text" id="fGenre" placeholder="如：悬疑 / 爱情（回车可快速选）" list="genreList">
+          <datalist id="genreList"></datalist>
+        </div>
+        <div class="field">
+          <label>国家</label>
+          <input type="text" id="fCountry" placeholder="如：中国 / 美国" list="countryList">
+          <datalist id="countryList"></datalist>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>时长（分钟）</label>
+          <input type="number" id="fTotal" placeholder="如：142">
+        </div>
+        <div class="field">
+          <label>当前进度（分钟，正在看填）</label>
+          <input type="number" id="fCurrent" placeholder="如：60">
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>观看开始</label>
+          <input type="date" id="fPStart">
+        </div>
+        <div class="field">
+          <label>观看结束</label>
+          <input type="date" id="fPEnd">
+        </div>
+      </div>
+      <div class="field">
+        <label>经典台词（每行一条）</label>
+        <textarea id="fQuotes" placeholder="打动你的台词，每行一条"></textarea>
+      </div>
+      <div class="field">
+        <label>观后感</label>
+        <textarea id="fFeeling" placeholder="观影感受、想法……"></textarea>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>状态</label>
+          <select id="fStatus">
+            <option value="">未设定</option>
+            <option value="watching">正在看</option>
+            <option value="wish">待看</option>
+            <option value="done">已看</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn danger" id="btnMovieDelete" style="margin-right:auto;display:none">删除</button>
+      <button class="btn ghost" id="btnMovieCancel">取消</button>
+      <button class="btn primary" id="btnMovieSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 拍照OCR候选弹窗 -->
+<div class="mask" id="maskOcr">
+  <div class="modal" style="max-width:520px">
+    <h3>识别海报文案</h3>
+    <div class="sub" id="ocrSub">正在识别，请稍候…</div>
+    <div class="ocr-cands" id="ocrCands"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="btnOcrClose">关闭（手动输入）</button>
+    </div>
+  </div>
+</div>
+
+<!-- 影片详情弹窗 -->
+<div class="mask" id="maskDetail">
+  <div class="modal" style="max-width:600px">
+    <div id="detailBody"></div>
+    <div class="modal-actions">
+      <button class="btn danger" id="btnDetailDelete" style="margin-right:auto">删除</button>
+      <button class="btn ghost" id="btnDetailClose">关闭</button>
+      <button class="btn primary" id="btnDetailEdit">编辑</button>
+    </div>
+  </div>
+</div>
+
+<!-- 筛选弹窗 -->
+<div class="mask" id="maskFilter">
+  <div class="modal" style="max-width:560px">
+    <h3>筛选</h3>
+    <div class="sub">导演 / 国家 / 题材 / 时间段，可组合</div>
+    <div class="filter-grid">
+      <div class="filter-field">
+        <label>导演</label>
+        <select id="flDirector"><option value="">全部</option></select>
+      </div>
+      <div class="filter-field">
+        <label>国家</label>
+        <div class="filter-chip-row" id="flCountryRow"></div>
+      </div>
+      <div class="filter-field">
+        <label>题材</label>
+        <div class="filter-chip-row" id="flGenreRow"></div>
+      </div>
+      <div class="filter-field">
+        <label>观看时间段（按开始年份）</label>
+        <div class="two">
+          <input type="number" id="flYearFrom" placeholder="起始年，如 2024">
+          <input type="number" id="flYearTo" placeholder="结束年，如 2026">
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="btnFilterClear">清除</button>
+      <button class="btn primary" id="btnFilterApply">应用</button>
+    </div>
+  </div>
+</div>
+
+<!-- 备份恢复弹窗 -->
+<div class="mask" id="maskBackup">
+  <div class="modal" style="max-width:520px">
+    <h3>备份 / 恢复</h3>
+    <div class="sub">换设备时，先在此导出 JSON，再到新设备导入</div>
+    <div class="modal-actions">
+      <button class="btn" id="btnBkExport">导出(JSON)</button>
+      <button class="btn" id="btnBkImport">导入</button>
+      <input type="file" id="bkFile" accept="application/json" class="hidden-file">
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var STORE_KEY = "dianying_shouzhang_v1";
+  var NAV = [
+    {sec:"watching", name:"正在看", sub:"在看的片"},
+    {sec:"done", name:"已看", sub:"看完的"},
+    {sec:"wish", name:"待看", sub:"想看未看"},
+    {sec:"stats", name:"统计", sub:"观影数据"},
+    {sec:"settings", name:"设置", sub:"筛选项"}
+  ];
+  var state = { movies:[], genres:[], countries:[], filter:{}, sortDir:{watching:"desc",done:"desc",wish:"desc"}, current:"watching" };
+
+  function uid(){ return "m"+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+  function fmtDate(ts){ if(!ts) return ""; var d=new Date(ts); if(isNaN(d)) return ""; return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate(); }
+
+  function load(){
+    try{
+      var raw = localStorage.getItem(STORE_KEY);
+      if(raw){
+        var o = JSON.parse(raw);
+        state.movies = o.movies||[];
+        state.genres = o.genres||["悬疑","爱情","科幻","喜剧","动作","剧情","动画","纪录片","恐怖","奇幻"];
+        state.countries = o.countries||["中国","美国","日本","韩国","英国","法国","德国","印度"];
+        state.filter = o.filter||{};
+        state.sortDir = o.sortDir||state.sortDir;
+      }
+    }catch(e){}
+    if(!state.genres.length) state.genres=["悬疑","爱情","科幻","喜剧","动作","剧情","动画","纪录片","恐怖","奇幻"];
+    if(!state.countries.length) state.countries=["中国","美国","日本","韩国","英国","法国","德国","印度"];
+  }
+  function save(){
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify({
+      movies:state.movies, genres:state.genres, countries:state.countries, filter:state.filter, sortDir:state.sortDir
+    })); }catch(e){ toast("保存失败："+e.message); }
+  }
+
+  function toast(msg){
+    var t=$("toast"); if(!t){ t=document.createElement("div"); t.className="toast"; t.id="toast"; document.body.appendChild(t); }
+    t.textContent=msg; t.classList.add("on");
+    clearTimeout(t._tm); t._tm=setTimeout(function(){ t.classList.remove("on"); },2200);
+  }
+
+  /* ---------- 导航 ---------- */
+  function renderNav(){
+    var box=$("sideNav"); box.innerHTML="";
+    NAV.forEach(function(n){
+      var b=document.createElement("button");
+      b.className="navitem"+(state.current===n.sec?" on":"");
+      var cnt="";
+      if(n.sec==="watching") cnt=countByStatus("watching");
+      else if(n.sec==="done") cnt=countByStatus("done");
+      else if(n.sec==="wish") cnt=countByStatus("wish");
+      b.innerHTML="<b>"+esc(n.name)+(cnt!==""?' <span class="nav-count">'+cnt+'</span>':"")+"</b>"+(n.sub?'<span>'+esc(n.sub)+'</span>':"");
+      b.onclick=function(){ switchSec(n.sec); };
+      box.appendChild(b);
+    });
+  }
+  function countByStatus(s){ return state.movies.filter(function(x){return x.status===s;}).length; }
+
+  function switchSec(sec){
+    state.current=sec;
+    NAV.forEach(function(n){
+      $("sec-"+n.sec).classList.toggle("on", n.sec===sec);
+    });
+    renderNav();
+    if(sec==="settings") renderSettings();
+    else if(sec==="stats") renderStats();
+    else renderList(sec);
+  }
+
+  /* ---------- 筛选 + 排序 ---------- */
+  function applyFilter(movies){
+    var f=state.filter||{};
+    return movies.filter(function(b){
+      if(f.director && b.director!==f.director) return false;
+      if(f.country && b.country!==f.country) return false;
+      if(f.genre && b.genre!==f.genre) return false;
+      if(f.yearFrom || f.yearTo){
+        var y = b.period&&b.period.start ? new Date(b.period.start).getFullYear() : null;
+        if(y==null) return false;
+        if(f.yearFrom && y < f.yearFrom) return false;
+        if(f.yearTo && y > f.yearTo) return false;
+      }
+      return true;
+    });
+  }
+  function sortMovies(movies, sec){
+    var dir = (state.sortDir[sec]||"desc")==="desc"?-1:1;
+    var keyFn = function(b){
+      if(sec==="done") return b.finishedAt||b.addedAt||0;
+      return b.addedAt||0;
+    };
+    return movies.slice().sort(function(a,b){ return (keyFn(a)-keyFn(b))*dir; });
+  }
+
+  /* ---------- 列表渲染 ---------- */
+  function renderList(sec){
+    var wrap, all;
+    if(sec==="watching"){ wrap=$("gridWatching"); all=state.movies.filter(function(b){return b.status==="watching";}); }
+    else if(sec==="done"){ wrap=$("gridDone"); all=state.movies.filter(function(b){return b.status==="done";}); }
+    else if(sec==="wish"){ wrap=$("gridWish"); all=state.movies.filter(function(b){return b.status==="wish";}); }
+    if(!wrap) return;
+    var filtered = applyFilter(all);
+    var sorted = sortMovies(filtered, sec);
+    var hint = $("hint-"+sec);
+    if(hint) hint.textContent = filtered.length!==all.length ? ("筛选中："+filtered.length+"/"+all.length+" 部") : (all.length+" 部");
+    wrap.innerHTML="";
+    if(!sorted.length){
+      wrap.innerHTML='<div class="empty">'+(all.length? "没有符合筛选条件的影片" : "还没有影片，点右上角「+ 添加影片」开始记录吧")+'</div>';
+      return;
+    }
+    sorted.forEach(function(b, i){
+      wrap.appendChild(movieCard(b, sec, i+1));
+    });
+  }
+
+  function coverHtml(b){
+    if(b.cover){
+      return '<img class="cover" src="'+esc(b.cover)+'" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><div class="cover-ph" style="display:none">'+esc((b.title||"?").slice(0,1))+'</div>';
+    }
+    return '<div class="cover-ph">'+esc((b.title||"?").slice(0,1))+'</div>';
+  }
+
+  function movieCard(b, sec, no){
+    var c=document.createElement("div");
+    c.className="card";
+    var pct = (b.totalMin&&b.currentMin!=null) ? Math.min(100, Math.round(b.currentMin/b.totalMin*100)) : null;
+    var statusBadge = "";
+    if(b.status==="watching") statusBadge='<span class="badge-status badge-reading">在看</span>';
+    else if(b.status==="done") statusBadge='<span class="badge-status badge-done">已看</span>';
+    else if(b.status==="wish") statusBadge='<span class="badge-status badge-wish">想看</span>';
+
+    var info = '<div class="binfo">';
+    info += '<div class="l1">导演：'+esc(b.director||"未知")+'</div>';
+    info += '<div class="l2">题材：'+esc(b.genre||"—")+(b.country?(" · "+esc(b.country)):"")+'</div>';
+    if(sec==="watching" && pct!=null){
+      info += '<div class="progress"><i style="width:'+pct+'%"></i></div>';
+      info += '<div class="pct">进度 '+b.currentMin+' / '+b.totalMin+' 分钟 ('+pct+'%)</div>';
+    } else if(b.totalMin){
+      info += '<div class="l2" style="color:var(--sub);font-size:12px">共 '+b.totalMin+' 分钟</div>';
+    }
+    info += '</div>';
+
+    var acts = '<div class="acts">';
+    if(b.status!=="watching") acts+='<button class="btn sm" data-act="watching">在看</button>';
+    if(b.status!=="done") acts+='<button class="btn sm" data-act="done">看完</button>';
+    if(b.status!=="wish") acts+='<button class="btn sm" data-act="wish">想看</button>';
+    acts+='<button class="btn sm" data-act="edit">编辑</button>';
+    acts+='</div>';
+
+    c.innerHTML =
+      '<div class="chead"><span class="cno">#'+no+'</span><h3>'+esc(b.title)+'</h3><span class="ctime">'+(b.addedAt?fmtDate(b.addedAt):"")+'</span></div>'+
+      '<div class="brow">'+coverHtml(b)+info+'</div>'+
+      '<div class="meta">'+statusBadge+'</div>'+
+      acts;
+
+    c.onclick=function(e){
+      var btn=e.target.closest("[data-act]");
+      if(btn){ e.stopPropagation(); var a=btn.getAttribute("data-act");
+        if(a==="edit"){ openMovie(b.id); }
+        else { changeStatus(b.id, a); }
+        return;
+      }
+      openDetail(b.id);
+    };
+    return c;
+  }
+
+  /* ---------- 互通：改变状态 ---------- */
+  function changeStatus(id, act){
+    var b=findMovie(id); if(!b) return;
+    if(act==="watching"){ b.status="watching"; b.addedAt=b.addedAt||Date.now(); toast("已加入「正在看」"); }
+    else if(act==="wish"){ b.status="wish"; toast("已加入「待看」"); }
+    else if(act==="done"){ b.status="done"; b.finishedAt=Date.now(); toast("已加入「已看」"); }
+    save(); renderNav(); renderList(state.current);
+  }
+
+  function findMovie(id){ return state.movies.filter(function(x){return x.id===id;})[0]; }
+
+  /* ---------- 影片弹窗 ---------- */
+  var editingId=null;
+  function openMovie(id){
+    editingId = id||null;
+    var b = id?findMovie(id):null;
+    $("movieModalTitle").textContent = b?("编辑："+b.title):"添加影片";
+    $("fTitle").value = b?b.title:"";
+    $("fDirector").value = b?b.director:"";
+    $("fCoverUrl").value = b?b.cover:"";
+    $("fGenre").value = b?b.genre:"";
+    $("fCountry").value = b?b.country:"";
+    $("fTotal").value = b?(b.totalMin||""):"";
+    $("fCurrent").value = b?(b.currentMin!=null?b.currentMin:""):"";
+    $("fPStart").value = b&&b.period?(b.period.start||""):"";
+    $("fPEnd").value = b&&b.period?(b.period.end||""):"";
+    $("fQuotes").value = b?(b.quotes||[]).join("\n"):"";
+    $("fFeeling").value = b?b.feeling:"";
+    $("fStatus").value = b?b.status:"";
+    $("btnMovieDelete").style.display = b?"block":"none";
+    $("matchList").innerHTML="";
+    refreshDatalists();
+    openMask("maskMovie");
+  }
+
+  function refreshDatalists(){
+    var gl=$("genreList"); gl.innerHTML=""; state.genres.forEach(function(g){ var o=document.createElement("option"); o.value=g; gl.appendChild(o); });
+    var nl=$("countryList"); nl.innerHTML=""; state.countries.forEach(function(n){ var o=document.createElement("option"); o.value=n; nl.appendChild(o); });
+  }
+
+  function saveMovie(){
+    var title=$("fTitle").value.trim();
+    if(!title){ toast("请填写片名"); return; }
+    var b = editingId?findMovie(editingId):{id:uid(), addedAt:Date.now()};
+    b.title=title;
+    b.director=$("fDirector").value.trim();
+    b.cover=$("fCoverUrl").value.trim();
+    b.genre=$("fGenre").value.trim();
+    b.country=$("fCountry").value.trim();
+    b.totalMin=parseInt($("fTotal").value,10)||null;
+    b.currentMin=parseInt($("fCurrent").value,10)||null;
+    b.period={start:$("fPStart").value||null, end:$("fPEnd").value||null};
+    b.quotes=$("fQuotes").value.split("\n").map(function(s){return s.trim();}).filter(Boolean);
+    b.feeling=$("fFeeling").value.trim();
+    var st=$("fStatus").value; b.status = st||null;
+    if(st==="done" && !b.finishedAt) b.finishedAt=Date.now();
+    if(b.genre && state.genres.indexOf(b.genre)<0) state.genres.push(b.genre);
+    if(b.country && state.countries.indexOf(b.country)<0) state.countries.push(b.country);
+    if(!editingId) state.movies.push(b);
+    save(); closeMask("maskMovie");
+    renderNav(); renderList(state.current);
+    if(state.current==="settings") renderSettings();
+    toast(editingId?"已更新":"已添加");
+  }
+
+  function deleteMovie(){
+    if(!editingId) return;
+    state.movies = state.movies.filter(function(x){return x.id!==editingId;});
+    save(); closeMask("maskMovie"); renderNav(); renderList(state.current);
+    toast("已删除");
+  }
+
+  /* ---------- 自动匹配 (维基百科，免费无需密钥) ---------- */
+  var matchTimer=null;
+  function onMatchInput(){
+    var q=$("matchInput").value.trim();
+    clearTimeout(matchTimer);
+    if(q.length<2){ $("matchList").innerHTML=""; return; }
+    matchTimer=setTimeout(function(){ doMatch(q); }, 450);
+  }
+  function doMatch(q){
+    var box=$("matchList");
+    box.innerHTML='<div class="match-loading">搜索中…</div>';
+    runWiki(q,"zh").then(function(items){
+      if(items.length) return renderMatch(items);
+      return runWiki(q,"en").then(renderMatch);
+    }).catch(function(){ box.innerHTML='<div class="match-empty">搜索失败（需联网），可手动填写</div>'; });
+    function renderMatch(items){
+      if(!items.length){ box.innerHTML='<div class="match-empty">没找到，换个片名试试</div>'; return; }
+      box.innerHTML="";
+      items.forEach(function(d){
+        var item=document.createElement("div");
+        item.className="match-item";
+        item.innerHTML=(d.thumb?'<img src="'+esc(d.thumb)+'" onerror="this.style.visibility=\'hidden\'">':'<div style="width:38px;height:52px;flex:0 0 38px;background:var(--soft);border-radius:5px"></div>')+
+          '<div><div class="mt">'+esc(d.title)+'</div><div class="ma">'+esc((d.extract||"").slice(0,42))+'</div></div>';
+        item.onclick=function(){ pickMatch(d); };
+        box.appendChild(item);
+      });
+    }
+  }
+  function runWiki(q, lang){
+    var tail = lang==="zh" ? " 电影" : " film";
+    var searchUrl = "https://"+lang+".wikipedia.org/w/api.php?action=query&list=search&srsearch="+encodeURIComponent(q+tail)+"&format=json&origin=*&srlimit=7";
+    return fetch(searchUrl).then(function(r){return r.json();}).then(function(j){
+      var rs=j.query&&j.query.search||[];
+      var titles=rs.map(function(x){return x.title;});
+      if(!titles.length) return [];
+      var pageUrl="https://"+lang+".wikipedia.org/w/api.php?action=query&titles="+titles.map(encodeURIComponent).join("|")+"&prop=pageimages|extracts&pithumbsize=200&exintro&explaintext&exsentences=2&format=json&origin=*";
+      return fetch(pageUrl).then(function(r){return r.json();}).then(function(pj){
+        var pages=pj.query&&pj.query.pages||{};
+        return Object.keys(pages).map(function(k){
+          var pg=pages[k];
+          return { title:pg.title||"", thumb:pg.thumbnail?pg.thumbnail.source:"", extract:pg.extract||"", lang:lang };
+        });
+      });
+    });
+  }
+  function pickMatch(d){
+    $("fTitle").value=d.title||"";
+    if(d.thumb) $("fCoverUrl").value=d.thumb;
+    var ex=d.extract||"";
+    // 尝试识别导演
+    var dm=ex.match(/由\s*([一-龥A-Za-z·]{2,12}?)\s*执导/);
+    if(dm) $("fDirector").value=dm[1];
+    // 尝试识别国家
+    var cm=ex.match(/(中国|美国|日本|韩国|英国|法国|德国|印度|意大利|西班牙|俄罗斯)/);
+    if(cm) $("fCountry").value=cm[1];
+    toast("已填入，可补充题材/时长等");
+  }
+
+  /* ---------- 拍照 OCR ---------- */
+  var tessLoading=false;
+  function loadTesseract(cb){
+    if(window.Tesseract){ cb(); return; }
+    tessLoading=true; toast("加载识别组件…");
+    var s=document.createElement("script");
+    s.src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.5/dist/tesseract.min.js";
+    s.onload=function(){ tessLoading=false; cb(); };
+    s.onerror=function(){ tessLoading=false; toast("识别组件加载失败，请手动输入片名"); };
+    document.head.appendChild(s);
+  }
+  function doOcr(file){
+    openMask("maskOcr");
+    $("ocrSub").textContent="正在识别海报文案，请稍候…（首次较慢）";
+    $("ocrCands").innerHTML="";
+    loadTesseract(function(){
+      var url=URL.createObjectURL(file);
+      Tesseract.recognize(url, "chi_sim+eng", { logger:function(){} }).then(function(res){
+        var lines=(res.data.text||"").split("\n").map(function(s){return s.trim();}).filter(function(s){return s.length>=2 && s.length<=40;});
+        var seen={}, uniq=[];
+        lines.forEach(function(l){ if(!seen[l]){ seen[l]=1; uniq.push(l); } });
+        if(!uniq.length){ $("ocrSub").textContent="未识别到文字，请手动输入片名"; return; }
+        var best=uniq[0];
+        $("fTitle").value=best;
+        $("matchInput").value=best;
+        closeMask("maskOcr");
+        doMatch(best);
+        toast("已识别「"+best+"」并自动匹配，请在添加框点选正确影片");
+      }).catch(function(){ $("ocrSub").textContent="识别失败，请手动输入片名"; });
+    });
+  }
+
+  /* ---------- 影片详情弹窗 ---------- */
+  var detailId=null;
+  function openDetail(id){
+    var b=findMovie(id); if(!b) return;
+    detailId=id;
+    var cover = b.cover ? '<img class="detail-cover" src="'+esc(b.cover)+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><div class="detail-cover-ph" style="display:none">'+esc((b.title||"?").slice(0,1))+'</div>' : '<div class="detail-cover-ph">'+esc((b.title||"?").slice(0,1))+'</div>';
+    var statusBadge="";
+    if(b.status==="watching") statusBadge='<span class="badge-status badge-reading">在看</span>';
+    else if(b.status==="done") statusBadge='<span class="badge-status badge-done">已看</span>';
+    else if(b.status==="wish") statusBadge='<span class="badge-status badge-wish">想看</span>';
+    var meta='<div class="detail-meta">'+statusBadge+(b.director?'<span>导演：'+esc(b.director)+'</span>':'')+(b.genre?'<span>题材：'+esc(b.genre)+'</span>':'')+(b.country?'<span>'+esc(b.country)+'</span>':'')+'</div>';
+    var period="";
+    if(b.period&&(b.period.start||b.period.end)) period='<div class="detail-meta" style="margin-top:4px">观看时段：'+(b.period.start||"?")+' → '+(b.period.end||"至今")+'</div>';
+    var prog="";
+    if(b.status==="watching" && b.totalMin && b.currentMin!=null){
+      var pct=Math.min(100,Math.round(b.currentMin/b.totalMin*100));
+      prog='<div class="detail-prog"><i style="width:'+pct+'%"></i></div><div class="detail-meta">进度 '+b.currentMin+' / '+b.totalMin+' 分钟 ('+pct+'%)</div>';
+    } else if(b.totalMin){
+      prog='<div class="detail-meta">共 '+b.totalMin+' 分钟</div>';
+    }
+    var quotes="";
+    if(b.quotes&&b.quotes.length){
+      quotes='<div class="detail-sec"><h4>经典台词</h4>'+b.quotes.map(function(q){return '<div class="detail-quote">'+esc(q)+'</div>';}).join("")+'</div>';
+    }
+    var feel="";
+    if(b.feeling){
+      feel='<div class="detail-sec"><h4>观后感</h4><div class="detail-feel">'+esc(b.feeling)+'</div></div>';
+    }
+    $("detailBody").innerHTML='<div class="detail-head">'+cover+'<div class="detail-t"><h2>'+esc(b.title)+'</h2>'+meta+period+prog+'</div></div>'+quotes+feel;
+    openMask("maskDetail");
+  }
+
+  /* ---------- 观影统计 ---------- */
+  function barBlock(title, obj){
+    var keys=Object.keys(obj); var max=0; keys.forEach(function(k){ if(obj[k]>max)max=obj[k]; });
+    var h='<div class="stat-block"><h3>'+title+'</h3>';
+    if(!keys.length){ h+='<div style="color:var(--sub);font-size:13px">暂无数据</div>'; }
+    keys.forEach(function(k){
+      var v=obj[k]; var pct=max?Math.round(v/max*100):0;
+      h+='<div class="bar-row"><div class="bl">'+esc(k)+'</div><div class="bb"><i style="width:'+pct+'%"></i></div><div class="bv">'+v+'</div></div>';
+    });
+    h+='</div>';
+    return h;
+  }
+  function renderStats(){
+    var year=new Date().getFullYear();
+    var done=state.movies.filter(function(b){return b.status==="done";});
+    var doneY=done.filter(function(b){return b.finishedAt && new Date(b.finishedAt).getFullYear()===year;});
+    var watching=countByStatus("watching");
+    var wish=countByStatus("wish");
+    var minutesY=doneY.reduce(function(s,b){return s+(b.totalMin||0);},0);
+    var cards=[
+      {n:doneY.length, l:"今年看完(部)"},
+      {n:minutesY, l:"今年观看(分钟)"},
+      {n:watching, l:"正在看"},
+      {n:wish, l:"待看"},
+      {n:state.movies.length, l:"片单总数"}
+    ];
+    var html='<div class="stats-grid">';
+    cards.forEach(function(c){ html+='<div class="stat-card"><div class="num">'+c.n+'</div><div class="lab">'+c.l+'</div></div>'; });
+    html+='</div>';
+    var byGenre={};
+    doneY.forEach(function(b){ var g=b.genre||"未分类"; byGenre[g]=(byGenre[g]||0)+1; });
+    html+=barBlock("今年看完 · 题材分布", byGenre);
+    var byMonth={}; for(var m=1;m<=12;m++) byMonth[m+"月"]=0;
+    doneY.forEach(function(b){ var d=new Date(b.finishedAt); if(d.getFullYear()===year) byMonth[d.getMonth()+1+"月"]++; });
+    html+=barBlock("今年每月看完", byMonth);
+    $("statsBox").innerHTML=html;
+    var hint=$("hint-stats"); if(hint) hint.textContent="统计年份："+year;
+  }
+
+  /* ---------- 设置页 ---------- */
+  function renderSettings(){
+    var gm=$("genreManage"); gm.innerHTML="";
+    state.genres.forEach(function(g, i){
+      var t=document.createElement("span"); t.className="t";
+      t.innerHTML=esc(g)+'<button data-i="'+i+'">×</button>';
+      t.querySelector("button").onclick=function(){ state.genres.splice(i,1); save(); renderSettings(); };
+      gm.appendChild(t);
+    });
+    var cm=$("countryManage"); cm.innerHTML="";
+    state.countries.forEach(function(n, i){
+      var t=document.createElement("span"); t.className="t";
+      t.innerHTML=esc(n)+'<button data-i="'+i+'">×</button>';
+      t.querySelector("button").onclick=function(){ state.countries.splice(i,1); save(); renderSettings(); };
+      cm.appendChild(t);
+    });
+  }
+  function addGenre(){
+    var v=$("genreInput").value.trim(); if(!v) return;
+    if(state.genres.indexOf(v)<0) state.genres.push(v);
+    $("genreInput").value=""; save(); renderSettings();
+  }
+  function addCountry(){
+    var v=$("countryInput").value.trim(); if(!v) return;
+    if(state.countries.indexOf(v)<0) state.countries.push(v);
+    $("countryInput").value=""; save(); renderSettings();
+  }
+
+  /* ---------- 筛选弹窗 ---------- */
+  function openFilter(){
+    var directors={}; state.movies.forEach(function(b){ if(b.director) directors[b.director]=1; });
+    var sd=$("flDirector"); var cur=state.filter.director||"";
+    sd.innerHTML='<option value="">全部</option>';
+    Object.keys(directors).sort().forEach(function(a){ var o=document.createElement("option"); o.value=a; o.textContent=a; if(a===cur)o.selected=true; sd.appendChild(o); });
+    var cr=$("flCountryRow"); cr.innerHTML="";
+    state.countries.forEach(function(n){
+      var c=document.createElement("span"); c.className="chip"+(state.filter.country===n?" on":""); c.textContent=n;
+      c.onclick=function(){ c.classList.toggle("on"); };
+      cr.appendChild(c);
+    });
+    var gr=$("flGenreRow"); gr.innerHTML="";
+    state.genres.forEach(function(g){
+      var c=document.createElement("span"); c.className="chip"+(state.filter.genre===g?" on":""); c.textContent=g;
+      c.onclick=function(){ c.classList.toggle("on"); };
+      gr.appendChild(c);
+    });
+    $("flYearFrom").value=state.filter.yearFrom||"";
+    $("flYearTo").value=state.filter.yearTo||"";
+    openMask("maskFilter");
+  }
+  function applyFilterModal(){
+    state.filter={};
+    var dr=$("flDirector").value; if(dr) state.filter.director=dr;
+    var cty=$("flCountryRow").querySelector(".chip.on"); if(cty) state.filter.country=cty.textContent;
+    var gen=$("flGenreRow").querySelector(".chip.on"); if(gen) state.filter.genre=gen.textContent;
+    var yf=parseInt($("flYearFrom").value,10); if(yf) state.filter.yearFrom=yf;
+    var yt=parseInt($("flYearTo").value,10); if(yt) state.filter.yearTo=yt;
+    save(); closeMask("maskFilter"); renderList(state.current);
+  }
+  function clearFilter(){
+    state.filter={}; save();
+    $("flDirector").value=""; $("flYearFrom").value=""; $("flYearTo").value="";
+    $("flCountryRow").querySelectorAll(".chip.on").forEach(function(c){c.classList.remove("on");});
+    $("flGenreRow").querySelectorAll(".chip.on").forEach(function(c){c.classList.remove("on");});
+    renderList(state.current);
+  }
+
+  /* ---------- 遮罩通用 ---------- */
+  function openMask(id){ $(id).classList.add("on"); }
+  function closeMask(id){ $(id).classList.remove("on"); }
+
+  /* ---------- 备份恢复 ---------- */
+  function exportJson(){
+    var data=JSON.stringify({movies:state.movies,genres:state.genres,countries:state.countries},null,2);
+    var blob=new Blob([data],{type:"application/json"});
+    var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="电影手帐备份.json"; a.click();
+    closeMask("maskBackup");
+  }
+  function importJson(file){
+    var rd=new FileReader();
+    rd.onload=function(){
+      try{
+        var o=JSON.parse(rd.result);
+        if(o.movies) state.movies=o.movies;
+        if(o.genres) state.genres=o.genres;
+        if(o.countries) state.countries=o.countries;
+        save(); closeMask("maskBackup"); renderNav(); renderList(state.current);
+        toast("导入成功");
+      }catch(e){ toast("文件格式错误"); }
+    };
+    rd.readAsText(file);
+  }
+
+  /* ---------- 事件绑定 ---------- */
+  function bind(){
+    document.querySelectorAll("[data-add]").forEach(function(b){ b.onclick=function(){ openMovie(null); }; });
+    [["btnSortWatching","watching"],["btnSortDone","done"],["btnSortWish","wish"]].forEach(function(p){
+      $(p[0]).onclick=function(){
+        var cur=state.sortDir[p[1]]||"desc";
+        state.sortDir[p[1]]=cur==="desc"?"asc":"desc";
+        $(p[0]).textContent=(state.sortDir[p[1]]==="desc"?"↓ 最新":"↑ 最早");
+        save(); renderList(p[1]);
+      };
+    });
+    [["btnFilterWatching","watching"],["btnFilterDone","done"],["btnFilterWish","wish"]].forEach(function(p){
+      $(p[0]).onclick=function(){ openFilter(); };
+    });
+    $("btnMatch").onclick=function(){ var q=$("matchInput").value.trim(); if(q) doMatch(q); };
+    $("matchInput").addEventListener("input", onMatchInput);
+    $("btnMovieSave").onclick=saveMovie;
+    $("btnMovieCancel").onclick=function(){ closeMask("maskMovie"); };
+    $("btnMovieDelete").onclick=function(){ if(confirm("确定删除这部影片？")) deleteMovie(); };
+    $("btnOcr").onclick=function(){ $("fCoverFile").setAttribute("capture","camera"); $("fCoverFile").click(); };
+    $("fCoverFile").onchange=function(){
+      var f=this.files&&this.files[0]; if(!f) return;
+      var rd=new FileReader();
+      rd.onload=function(){ $("fCoverUrl").value=rd.result; };
+      rd.readAsDataURL(f);
+      doOcr(f);
+      this.value="";
+    };
+    var dz=$("coverDrop");
+    dz.onclick=function(){ $("fCoverFile").removeAttribute("capture"); $("fCoverFile").click(); };
+    dz.ondragover=function(e){ e.preventDefault(); dz.style.borderColor="var(--brand2)"; };
+    dz.ondragleave=function(){ dz.style.borderColor=""; };
+    dz.ondrop=function(e){
+      e.preventDefault(); dz.style.borderColor="";
+      var f=e.dataTransfer.files&&e.dataTransfer.files[0];
+      if(f&&/^image\//.test(f.type)){
+        var rd=new FileReader(); rd.onload=function(){ $("fCoverUrl").value=rd.result; }; rd.readAsDataURL(f);
+      }
+    };
+    $("btnOcrClose").onclick=function(){ closeMask("maskOcr"); };
+    $("btnAddGenre").onclick=addGenre;
+    $("btnAddCountry").onclick=addCountry;
+    $("genreInput").addEventListener("keydown",function(e){ if(e.key==="Enter"){e.preventDefault();addGenre();} });
+    $("countryInput").addEventListener("keydown",function(e){ if(e.key==="Enter"){e.preventDefault();addCountry();} });
+    $("btnClearAll").onclick=function(){ if(confirm("确定清空全部影片数据？不可恢复")){ state.movies=[]; save(); renderNav(); renderList(state.current); toast("已清空"); } };
+    $("btnExport2").onclick=exportJson;
+    $("btnFilterApply").onclick=applyFilterModal;
+    $("btnFilterClear").onclick=clearFilter;
+    $("btnBackup").onclick=function(){ openMask("maskBackup"); };
+    $("btnBkExport").onclick=exportJson;
+    $("btnBkImport").onclick=function(){ $("bkFile").click(); };
+    $("bkFile").onchange=function(){ var f=this.files&&this.files[0]; if(f) importJson(f); this.value=""; };
+    $("btnDetailClose").onclick=function(){ closeMask("maskDetail"); };
+    $("btnDetailEdit").onclick=function(){ closeMask("maskDetail"); openMovie(detailId); };
+    $("btnDetailDelete").onclick=function(){ if(confirm("确定删除这部影片？")){ state.movies=state.movies.filter(function(x){return x.id!==detailId;}); save(); closeMask("maskDetail"); renderNav(); renderList(state.current); } };
+    document.querySelectorAll(".mask").forEach(function(m){
+      m.addEventListener("click", function(e){ if(e.target===m && m.id!=="maskOcr"){ m.classList.remove("on"); } });
+    });
+  }
+
+  /* ---------- 初始化 ---------- */
+  load();
+  bind();
+  ["watching","done","wish"].forEach(function(s){
+    var btn=$("btnSort"+s.charAt(0).toUpperCase()+s.slice(1));
+    if(btn) btn.textContent=(state.sortDir[s]==="desc"?"↓ 最新":"↑ 最早");
+  });
+  renderNav();
+  switchSec("watching");
+  /* 演示种子：首次打开无数据时填充，方便预览（可在模块内清空） */
+  try{
+    if(!localStorage.getItem("dy_seed_v1") && state.movies.length===0){
+      state.movies.push(
+        {id:uid(),title:"肖申克的救赎",director:"弗兰克·德拉邦特",cover:"",genre:"剧情",country:"美国",totalMin:142,curMin:90,status:"watching",quotes:["希望是好事，也许是人间至善。"],feel:"越看越觉得自由的可贵。",period:["2026-07-25",""],addedAt:Date.now()},
+        {id:uid(),title:"霸王别姬",director:"陈凯歌",cover:"",genre:"剧情",country:"中国",totalMin:171,curMin:171,status:"watched",quotes:["不疯魔不成活。"],feel:"华语巅峰，每次看都哭。",period:["2026-06-15","2026-06-15"],addedAt:Date.now()-86400000},
+        {id:uid(),title:"星际穿越",director:"诺兰",cover:"",genre:"科幻",country:"美国",totalMin:169,curMin:0,status:"want",quotes:[],feel:"",period:["",""],addedAt:Date.now()-172800000}
+      );
+      save(); localStorage.setItem("dy_seed_v1","1");
+      renderNav(); switchSec("watching");
+    }
+  }catch(e){ console.warn("seed fail",e); }
+
+})();
+</script>
+</body>
+</html>
