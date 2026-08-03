@@ -621,6 +621,11 @@ const DEFAULT_NAV = [
 ];
 let navCfg = load(SHELL_KEY, DEFAULT_NAV.slice());
 if(!navCfg.some(function(x){ return x.key==="heat"; })){ navCfg.push({key:"heat",label:"打卡热力图",icon:"🔥",type:"native"}); }
+// 迁移：旧版“今日概览”改名“人生概览”（只改默认旧名，不覆盖用户自定义）
+(function(){
+  const ov=navCfg.find(function(x){ return x.key==="overview"; });
+  if(ov && ov.label==="今日概览"){ ov.label="人生概览"; persist(SHELL_KEY, navCfg); }
+})();
 
 function load(k, def){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):def; }catch(e){ return def; } }
 function persist(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){ alert("保存失败，本地存储可能已满"); } }
