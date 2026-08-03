@@ -331,7 +331,7 @@ async function encBundle(key,obj){ const iv=crypto.getRandomValues(new Uint8Arra
 async function decBundle(key,str){ const p=str.split("."); if(p.length!==2) throw new Error("密文格式错误"); const iv=new Uint8Array(b64to(p[0])); const ct=b64to(p[1]); const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv},key,ct); return JSON.parse(new TextDecoder().decode(pt)); }
 function sbHeaders(){ return {"apikey":SB_ANON,"Authorization":"Bearer "+SB_ANON,"Content-Type":"application/json"}; }
 async function sbFetch(url,opts){ let r; try{ r=await fetch(url,opts); }catch(e){ throw new Error("无法连接 Supabase（网络/跨域）："+(e.message||e)); } return r; }
-async function sbUpsert(vid,payload){ const url=SB_URL.replace(/\/$/,"")+"/rest/v1/sync_vault"; const r=await sbFetch(url,{method:"POST",headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates"}),body:JSON.stringify({vault_id:vid,payload,updated_at:new Date().toISOString()})}); if(!r.ok){ let b=""; try{b=await r.text();}catch(e){} throw new Error("上传失败 HTTP "+r.status+(b?("｜"+b.slice(0,160)):"")); } }
+async function sbUpsert(vid,payload,ts){ const url=SB_URL.replace(/\/$/,"")+"/rest/v1/sync_vault"; const r=await sbFetch(url,{method:"POST",headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates"}),body:JSON.stringify({vault_id:vid,payload,updated_at:ts||new Date().toISOString()})}); if(!r.ok){ let b=""; try{b=await r.text();}catch(e){} throw new Error("上传失败 HTTP "+r.status+(b?("｜"+b.slice(0,160)):"")); } }
 async function sbGet(vid){ const url=SB_URL.replace(/\/$/,"")+"/rest/v1/sync_vault?vault_id=eq."+encodeURIComponent(vid); const r=await sbFetch(url,{headers:sbHeaders()}); if(!r.ok){ let b=""; try{b=await r.text();}catch(e){} throw new Error("下载失败 HTTP "+r.status+(b?("｜"+b.slice(0,160)):"")); } const a=await r.json(); return (a&&a.length)?a[0]:null; }
 </script>
 </head>
@@ -993,15 +993,17 @@ function metaOnly(st){
 }
 async function save(){
   if(!collabSharedPwd || !collabPrivPwd) return; // 未登录不写
+  const ts=new Date().toISOString();
   try{
     const shared={examples:state.examples,intros:state.intros,materials:state.materials,misc:state.misc,tags:state.tags,aiFields:state.aiFields,nav:state.nav};
     const priv={brainstorms:state.brainstorms,ideas:state.ideas,crawlFav:state.crawlFav,aiMemory:state.aiCfg?state.aiCfg.aiMemory:""};
     const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
     const pId="collab_priv:"+await sha256Hex("collab:"+collabPrivPwd);
     await Promise.all([
-      deriveKey(collabSharedPwd).then(k=>encBundle(k,shared)).then(p=>sbUpsert(sId,p)),
-      deriveKey(collabPrivPwd).then(k=>encBundle(k,priv)).then(p=>sbUpsert(pId,p))
+      deriveKey(collabSharedPwd).then(k=>encBundle(k,shared)).then(p=>sbUpsert(sId,p,ts)),
+      deriveKey(collabPrivPwd).then(k=>encBundle(k,priv)).then(p=>sbUpsert(pId,p,ts))
     ]);
+    collabSharedUpdatedAt=ts;
     try{ localStorage.setItem("dp_collab_aicfg", JSON.stringify(state.aiCfg||{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""})); }catch(e){}
     try{ localStorage.setItem("dp_collab_cache", JSON.stringify(state)); }catch(e){}
   }catch(e){ toast("协作同步失败："+e.message); }
@@ -1011,6 +1013,7 @@ async function load(){
     const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
     const pId="collab_priv:"+await sha256Hex("collab:"+collabPrivPwd);
     const [sRow,pRow]=await Promise.all([sbGet(sId).catch(()=>null), sbGet(pId).catch(()=>null)]);
+    collabSharedUpdatedAt = (sRow && sRow.updated_at) ? sRow.updated_at : null;
     const shared = sRow ? await decBundle(await deriveKey(collabSharedPwd), sRow.payload) : null;
     const priv = pRow ? await decBundle(await deriveKey(collabPrivPwd), pRow.payload) : null;
     const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
@@ -2072,6 +2075,26 @@ $$(".ctab").forEach(b=>b.onclick=()=>{
 
 /* ---------- 启动（协作版：先登录，再加载共享+私有双保险箱）---------- */
 let collabSharedPwd="", collabPrivPwd="";
+let collabSharedUpdatedAt=null, _collabTimer=null;
+function collabStartPoll(){ if(_collabTimer) clearInterval(_collabTimer); _collabTimer=setInterval(collabPoll,20000); }
+async function collabPoll(){
+  if(!collabSharedPwd) return;
+  if(document.querySelector('.mask.on')) return; // 编辑弹窗打开时不打断
+  try{
+    const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
+    const url=SB_URL.replace(/\/$/,"")+"/rest/v1/sync_vault?vault_id=eq."+encodeURIComponent(sId)+"&select=vault_id,payload,updated_at";
+    const r=await sbFetch(url,{headers:sbHeaders()});
+    if(!r.ok) return;
+    const a=await r.json(); const row=a&&a[0];
+    if(row && row.updated_at!==collabSharedUpdatedAt){
+      const shared=row.payload ? await decBundle(await deriveKey(collabSharedPwd), row.payload) : null;
+      if(shared) Object.assign(state, shared);
+      collabSharedUpdatedAt=row.updated_at;
+      migrate(); renderAll();
+      toast("已同步协作伙伴的最新内容");
+    }
+  }catch(e){ /* 静默，下个周期再试 */ }
+}
 function collabBoot(){
   const saved=JSON.parse(localStorage.getItem("dp_collab_remember")||"null");
   if(saved && saved.share && saved.priv){ $("#collabShare").value=saved.share; $("#collabPriv").value=saved.priv; $("#collabRemember").checked=true; doCollabLogin(true); }
@@ -2086,6 +2109,7 @@ async function doCollabLogin(silent){
   collabSharedPwd=share; collabPrivPwd=priv;
   try{
     await load();
+    collabStartPoll();
     if($("#collabRemember").checked){ localStorage.setItem("dp_collab_remember",JSON.stringify({share,priv})); }
     else { localStorage.removeItem("dp_collab_remember"); }
     $("#maskLogin").classList.remove("on");
