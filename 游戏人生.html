@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html data-page-node-id="YajWnYUlKDopkNYMPEY4Wc" lang="zh-CN">
+<head data-page-node-id="pThUszuYxJxMNzblG5vKWh">
+<script data-page-node-id="PpvEtRJ80he1RJJwvtggfk" src="/page/page_comm/inject.js"></script>
+<meta data-page-node-id="bbOQqCnxVESfvS067GjQYz" charset="UTF-8">
+<meta data-page-node-id="HcYl1sarXuozsU1vIPG8ql" content="width=device-width, initial-scale=1.0" name="viewport">
+<title data-page-node-id="WQSLHOEVLU3rRcBSGD8lsm" data-pnid-children="2B3WHtE7K12bvdoaO9i9ZA">小日子 · 经营人生</title>
+<style data-page-node-id="RerY5grrJzfM9yxXJcS8XI" data-pnid-children="mlHfsmja7kXnAcIQLYs4MC">
+  :root{
+    --bg:#fbf7f0; --card:#ffffff; --ink:#4a4039; --muted:#9a8f84;
+    --line:#ece3d8; --accent:#FF8E72; --accent2:#FFB088; --gold:#e6a23c;
+    --pink:#e58fa6; --blue:#7aa6d6; --shadow:0 6px 18px rgba(120,90,60,.10);
+    --radius:16px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  /* body 改为 flex 列布局，让 <nav> 的 sticky top 行为稳定（iOS 兼容）；nav 放在顶部避免被外壳 tabbar / 凸起＋ 遮挡 */
+  html,body{height:100%}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.6;display:flex;flex-direction:column;min-height:100%}
+  .wrap{max-width:760px;margin:0 auto;padding:0 14px;flex:1 0 auto;width:100%}
+
+  /* 顶部仪表盘 */
+  header{background:linear-gradient(135deg,#f6d9c4,#f3c6a8);
+    padding:18px 16px 14px;border-radius:0 0 26px 26px;box-shadow:var(--shadow)}
+  .logo{font-size:22px;font-weight:800;color:#6b4a36;letter-spacing:1px}
+  .logo small{font-size:12px;font-weight:500;color:#8a6b54;margin-left:6px}
+  .stats{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .pill{background:rgba(255,255,255,.72);border-radius:14px;padding:7px 12px;
+    font-size:13px;font-weight:600;color:#6b4a36;display:flex;align-items:center;gap:5px}
+  .pill b{font-size:16px}
+  .progress-wrap{margin-top:12px}
+  .progress-label{font-size:12px;color:#7a5b45;margin-bottom:4px;display:flex;justify-content:space-between}
+  .bar{height:12px;background:rgba(255,255,255,.6);border-radius:8px;overflow:hidden}
+  .bar>i{display:block;height:100%;background:linear-gradient(90deg,#FFB088,#FF8E72);
+    width:0;transition:width .5s ease;border-radius:8px}
+
+  /* 导航：放在顶部（之前在底部会被外壳的 tabbar / 凸起＋ 遮挡，导致点不动；sticky top 在 iOS 内嵌 iframe 中稳定） */
+  nav{position:sticky;top:0;left:0;right:0;background:#fff;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-around;padding:7px 0;z-index:50;box-shadow:0 4px 14px rgba(0,0,0,.05);
+    pointer-events:auto!important;touch-action:manipulation;flex:none}
+  nav button{background:none;border:none;font-size:11px;color:var(--muted);display:flex;
+    flex-direction:column;align-items:center;gap:2px;padding:5px 8px;cursor:pointer;
+    pointer-events:auto!important;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  nav button .ic{font-size:19px}
+  nav button.on{color:var(--accent)}
+  /* 兜底：万一浏览器不认 sticky，自动降级为 absolute 钉在文档顶部 */
+  @supports not (position:sticky){nav{position:absolute;top:0}}
+
+  /* iPad / 宽屏：顶部 tab 改为左侧竖栏（与减肥手帐、短篇一致） */
+  body.ipad{display:grid; grid-template-columns:212px 1fr; grid-template-rows:auto 1fr; height:100vh; overflow:hidden}
+  body.ipad header{grid-column:1 / -1; grid-row:1}
+  body.ipad #nav{grid-column:1; grid-row:2; position:static; flex-direction:column; height:auto;
+    align-self:stretch; border-bottom:none; border-right:1px solid var(--line); justify-content:flex-start;
+    padding:14px 10px; gap:4px; box-shadow:none; overflow:auto}
+  body.ipad #nav button{width:100%; flex-direction:row; justify-content:flex-start; gap:10px;
+    font-size:14px; padding:12px 13px; border-radius:12px}
+  body.ipad #nav button .ic{font-size:18px}
+  body.ipad #nav button.on{background:var(--accent); color:#fff}
+  body.ipad #nav button.on .ic{filter:none}
+  body.ipad .wrap{grid-column:2; grid-row:2; max-width:none; margin:0; padding:20px 24px 40px; overflow:auto; height:100%}
+
+  /* 卡片/区块 */
+  section{display:none;animation:fade .25s ease}
+  section.on{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .card{background:var(--card);border-radius:var(--radius);padding:16px;margin:14px 0;
+    box-shadow:var(--shadow);border:1px solid var(--line)}
+  .card h2{font-size:16px;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+  .card .sub{font-size:12px;color:var(--muted);margin-bottom:12px}
+  .seg{display:flex;background:#f3ece2;border-radius:12px;padding:4px;margin-bottom:12px}
+  .seg button{flex:1;border:none;background:none;padding:7px;border-radius:9px;font-size:13px;
+    color:var(--muted);font-weight:600;cursor:pointer}
+  .seg button.on{background:#fff;color:var(--accent);box-shadow:var(--shadow)}
+  /* 宠物商城分类：图标在上，文字在下 */
+  #petShop-seg .btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:9px 6px;min-width:62px;font-size:12.5px;white-space:nowrap}
+  #petShop-seg .btn .ic{font-size:18px;line-height:1}
+
+  /* 任务 */
+  .task{display:flex;align-items:center;gap:10px;padding:11px 10px;border-radius:12px;
+    background:#faf6f0;margin-bottom:8px;border:1px solid var(--line)}
+  .task .ck{width:24px;height:24px;border-radius:50%;border:2px solid var(--accent2);
+    cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+    color:#fff;font-size:14px;transition:.2s}
+  .task.done .ck{background:var(--accent2)}
+  .task.done .t-title{text-decoration:line-through;color:var(--muted)}
+  .task .t-title{flex:1;font-size:14px;font-weight:600}
+  .task .tag{font-size:11px;background:#f3e3d6;color:#a06b45;border-radius:8px;padding:2px 8px}
+  .task .pts{font-size:12px;font-weight:700;color:var(--gold)}
+  .task .del{color:#c9bdb0;cursor:pointer;font-size:16px;padding:0 4px}
+  .add-row{display:flex;gap:8px;margin-top:10px}
+  .add-row input,.add-row select{flex:1;border:1px solid var(--line);border-radius:10px;
+    padding:9px;font-size:13px;background:#faf6f0;color:var(--ink)}
+  .btn{border:none;border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;
+    cursor:pointer;background:var(--accent);color:#fff}
+  .btn.ghost{background:#f3ece2;color:#7a5b45}
+  .btn.green{background:var(--accent2)}
+  .btn.sm{padding:6px 10px;font-size:12px}
+
+  /* 商城 */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .item{background:#faf6f0;border:1px solid var(--line);border-radius:14px;padding:12px;
+    text-align:center;position:relative}
+  .item .em{font-size:34px}
+  .item .nm{font-size:13px;font-weight:700;margin:4px 0 2px}
+  .item .ds{font-size:11px;color:var(--muted);min-height:28px}
+  .item .pr{font-size:13px;font-weight:800;color:var(--gold);margin-top:4px}
+  .item .buy{margin-top:8px;width:100%}
+  .item.disabled{opacity:.5}
+
+  /* 玩具链 */
+  .chain{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;
+    font-size:13px;background:#fdf0e6;border-radius:14px;padding:14px;margin-bottom:10px}
+  .chain b{font-size:18px}
+
+  /* 宠物 */
+  .pet-box{text-align:center}
+  .pet-emoji{font-size:80px;line-height:1;margin:6px 0;transition:transform .3s}
+  .pet-emoji:hover{transform:scale(1.08)}
+  .pet-mood{font-size:13px;color:var(--muted)}
+  .meters{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+  .meter .ml{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px}
+  .meter .mbar{height:10px;background:#f1e7da;border-radius:6px;overflow:hidden}
+  .meter .mbar>i{display:block;height:100%;border-radius:6px;transition:width .4s}
+  .pet-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:6px}
+
+  /* 成就 */
+  .ach{display:flex;gap:10px;align-items:center;padding:10px;border-radius:12px;position:relative;
+    background:#faf6f0;margin-bottom:8px;border:1px solid var(--line)}
+  .ach .ae{font-size:26px;filter:grayscale(1);opacity:.4}
+  .ach.un .ae{filter:none;opacity:1}
+  .ach .at{flex:1;min-width:0}
+  .ach .at b{font-size:13px}
+  .ach .at div{font-size:11px;color:var(--muted);margin-top:2px}
+  .ach .ap{display:inline-block;font-size:11px;color:var(--accent2);font-weight:700;margin-top:4px}
+  .ach .acts{position:absolute;right:10px;top:10px;display:flex;gap:4px;opacity:0;transition:.15s}
+  .ach:hover .acts{opacity:1}
+  .ach .acts button{background:#fff;border:1px solid var(--line);border-radius:8px;width:28px;height:28px;
+    cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;padding:0;line-height:1}
+  .ach .acts button:disabled{opacity:.35;cursor:not-allowed}
+  .ach .acts .del{color:#c0392b}
+
+  /* 弹窗（成就编辑等） */
+  .modal-mask{position:fixed;inset:0;background:rgba(60,45,35,.45);display:none;align-items:center;justify-content:center;z-index:90;padding:20px}
+  .modal-mask.on{display:flex}
+  .modal{background:#fff;border-radius:18px;padding:22px;max-width:360px;width:100%;box-shadow:0 14px 40px rgba(0,0,0,.2);animation:pop .3s ease}
+  .modal h3{margin-bottom:12px;font-size:17px}
+  .modal .field{margin-bottom:12px}
+  .modal label{display:block;font-size:13px;color:var(--muted);margin-bottom:5px}
+  .modal input,.modal textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-family:inherit;font-size:14px;box-sizing:border-box;resize:vertical}
+  .modal .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+  .rule-grid{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px}
+  .rule-grid label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .rule-grid input{width:62px;border:1px solid var(--line);border-radius:9px;padding:6px 8px;font-family:inherit;font-size:14px}
+
+  /* 统计 */
+  .mini-bar{display:flex;align-items:flex-end;gap:6px;height:120px;padding:10px 0}
+  .mini-bar .col{flex:1;background:linear-gradient(180deg,#FFB088,#FF8E72);border-radius:6px 6px 0 0;
+    position:relative;min-height:4px}
+  .mini-bar .col span{position:absolute;bottom:-18px;left:0;right:0;text-align:center;font-size:10px;color:var(--muted)}
+  .kv{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px dashed var(--line)}
+  .kv b{color:var(--accent)}
+
+  /* 日志 */
+  .log{font-size:12px;color:var(--muted);max-height:240px;overflow:auto}
+  .log div{padding:5px 0;border-bottom:1px dashed var(--line);display:flex;justify-content:space-between}
+  .log .lp{color:var(--gold);font-weight:700}
+
+  /* 弹窗 */
+  .toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#4a4039;color:#fff;
+    padding:10px 18px;border-radius:20px;font-size:13px;z-index:99;opacity:0;transition:.3s;pointer-events:none}
+  .toast.show{opacity:1;top:30px}
+  .pop{position:fixed;inset:0;background:rgba(60,45,35,.45);display:none;align-items:center;
+    justify-content:center;z-index:80;padding:20px}
+  .pop.on{display:flex}
+  .pop .box{background:#fff;border-radius:18px;padding:22px;max-width:340px;text-align:center;
+    box-shadow:var(--shadow);animation:pop .3s ease}
+  @keyframes pop{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
+  .pop .box .big{font-size:54px;margin-bottom:6px}
+  .pop .box h3{font-size:17px;margin-bottom:6px}
+  .pop .box p{font-size:13px;color:var(--muted);margin-bottom:14px}
+  .hidden{display:none!important}
+  /* 嵌入整合工作台外壳时隐藏自身标题（仪表盘保留） */
+  body.embedded .logo{display:none}
+
+
+  /* 商城商品卡片操作条：↑↓ ✏️ 🗑（电脑端手机端都用） */
+  .item .opts{display:flex;justify-content:space-between;align-items:center;gap:4px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+  .item .opts button{flex:1;border:1px solid var(--line);background:#faf6f0;color:var(--ink);font-size:12px;padding:5px 0;border-radius:8px;cursor:pointer;transition:.15s}
+  .item .opts button:hover{background:#f3e3d6;border-color:var(--accent)}
+  .item .opts .op-del:hover{background:#FFF1E8;border-color:#FF8E72;color:#E85F4A}
+  .item .opts .op-arrow{font-weight:700;color:var(--muted)}
+  .item .opts .op-arrow:disabled{opacity:.3;cursor:not-allowed}
+  .item .opts .op-edit{color:var(--accent)}
+  .add-row-mini{margin-top:8px}
+  .add-row-mini button{width:100%;border:1px dashed var(--accent);background:#fff;color:var(--accent);font-size:13px;padding:8px;border-radius:10px;cursor:pointer;font-weight:600}
+  .add-row-mini button:hover{background:#fff5ee}
+
+  /* 编辑弹窗（电脑/手机通用） */
+  #editMask{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:none;align-items:center;justify-content:center;padding:14px}
+  #editMask.show{display:flex}
+  #editMask .em-box{background:#fff;border-radius:18px;padding:18px;max-width:380px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.2);max-height:88vh;overflow-y:auto}
+  #editMask h3{font-size:15px;margin-bottom:12px;color:var(--ink);display:flex;align-items:center;gap:6px}
+  #editMask label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px;font-weight:600}
+  #editMask input,#editMask select,#editMask textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:13px;font-family:inherit;background:#fdfaf5}
+  #editMask input:focus,#editMask select:focus,#editMask textarea:focus{outline:none;border-color:var(--accent);background:#fff}
+  #editMask .em-row{display:flex;gap:8px;align-items:center}
+  #editMask .em-row input{flex:1}
+  #editMask .em-row .em-pick{font-size:22px;cursor:pointer;border:1px solid var(--line);border-radius:9px;padding:5px 10px;background:#fdfaf5}
+  #editMask .em-actions{display:flex;gap:8px;margin-top:16px}
+  #editMask .em-actions button{flex:1;padding:9px;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer}
+  #editMask .em-cancel{background:#f3ece2;color:var(--ink)}
+  #editMask .em-save{background:var(--accent);color:#fff}
+  #editMask .em-del{background:#fce4e4;color:#c0392b;flex:0 0 auto;padding:9px 14px}
+
+</style>
+</head>
+<body data-page-node-id="6dwonzXiO77uVJXvMDCU86">
+
+<header data-page-node-id="CTNkylpfxu3dlx6PHdYPXl">
+  <div data-page-node-id="JapGNpRbn3FnxiybcgjKpG" class="wrap">
+    <div data-page-node-id="G3zVQmh1c3Relnzm3Q1L7w" class="logo"><!--pnid:9QDcBAxPBnS7K1aBaCl572-->小日子 · 经营人生 <small data-page-node-id="yIfsOcf0IgxJG86PSlmaHD"><!--pnid:N9J8oJky1oVtna4j3ZuZL0-->把生活过成模拟经营游戏</small></div>
+    <div data-page-node-id="UrPe0mY4Uom7BMDrvC3KNl" class="stats">
+      <div data-page-node-id="FY9WwJPP5OeV7C2pqRdXsD" class="pill"><!--pnid:n58jGFNsmPaPQT4wmroPkq-->💰 金币 <b data-page-node-id="xbYwhGnNHmmeZxrIX5MvVv" id="s-coins"><!--pnid:B4RfktlPvmSftXu6wdGzk1-->0</b></div>
+      <div data-page-node-id="FHr2ztt8rEwnYIzHPMxcj6" class="pill"><!--pnid:LlW6o33DozZzQPHyt3Ps35-->🧸 小玩具 <b data-page-node-id="FeF6lvddgPLDTNXO0OIaY2" id="s-toy"><!--pnid:AVgLA6IdnpS9tel8TyYlsb-->0</b></div>
+      <div data-page-node-id="xEdovIn8IluXZomndqheb2" class="pill"><!--pnid:4hfUgr4tBIES4nNPMHDKWn-->🎁 大玩具 <b data-page-node-id="c6me8ru55mZcESCFwg4SZv" id="s-big"><!--pnid:1b4rl4jz7XXBEgM1b7vk5n-->0</b></div>
+      <div data-page-node-id="8J7usOCg0r3KDGEeDwyz5d" class="pill"><!--pnid:7AO4f65Anncj14wmtNDd98-->⭐ Lv.<b data-page-node-id="nzwCkeOiLchWnzIr1JXfze" id="s-level"><!--pnid:PCkyZKiPRltBzmEV0ks3jH-->1</b></div>
+      <div data-page-node-id="ZT9FFk54p74UBst2Ahc0t6" class="pill"><!--pnid:tLuEEdeonngMmsoMKv3V3x-->🔥 连击 <b data-page-node-id="JQw5OcpVeDpV1hjQE7FY8m" id="s-streak"><!--pnid:yIGqPQ6Q9zviYtjdiy4gFM-->0</b><!--pnid:1YpedubnqJC1Wd0rOLMYFK-->天</div>
+    </div>
+    <div data-page-node-id="9RUfwLJLI8J6K0zx8SmtKp" class="progress-wrap">
+      <div data-page-node-id="uNHTfHrB5sawTcQn25iHjt" class="progress-label"><span data-page-node-id="NAYmEJm3iR0owM8BPzu20t"><!--pnid:lumH3TgDp2cJS0Puv61FPl-->今日任务进度</span><span data-page-node-id="GDLIbyrFVLmR7uxGiITHEd" id="day-pct"><!--pnid:wTa6B9PHx7NPIOvIwjoahb-->0/0</span></div>
+      <div data-page-node-id="EmfQg8scLY0svZggkv5o61" class="bar"><i data-page-node-id="6eC8iDVSuTjeQttWRrV4Ba" id="day-bar"></i></div>
+    </div>
+  </div>
+</header>
+
+<nav data-page-node-id="Uumewq23aI2eF9OupAaZVX" id="nav">
+  <button data-page-node-id="vxhQhatXc8LhHrJcMT6YVB" class="on" data-s="task"><span data-page-node-id="g16KQEBoBrc148Pb7IdrOD" class="ic"><!--pnid:ATIfMqM11xV9JgnR5Lo3Af-->📋</span><!--pnid:XBeGnsn5CHCb1wk4osmDOS-->任务</button>
+  <button data-page-node-id="KUFER7a7hCzLSnl1ddC4Ka" data-s="shop"><span data-page-node-id="3l0vVemXg0Vypqxx3StbSb" class="ic"><!--pnid:8cyDPIZrhFfJvpHtd39JsX-->🛍️</span><!--pnid:33zckrWEXVHKW3370LgCeH-->商城</button>
+  <button data-page-node-id="kxfvtsExyMCQmN2GYTwKBl" data-s="pet"><span data-page-node-id="1UYgjbij9qseC11kW57c0s" class="ic"><!--pnid:B6vVvZMuXtDUPhhVqGMCcE-->🐾</span><!--pnid:3LsZ0W0N5kwv5GVJieW2Kq-->宠物</button>
+  <button data-s="yard"><span class="ic">🏡</span>家园</button>
+  <button data-page-node-id="vQ8oXQZ9aAZ2qszAigI4qe" data-s="ach"><span data-page-node-id="98OEdy1u5c0nUF7PnwC7nI" class="ic"><!--pnid:iHF9MoP3p5o4lx6hxfJstx-->🏆</span><!--pnid:EgijuSpkopeM3y6YNztZLI-->成就</button>
+  <button data-page-node-id="HnHhepu4RIufqBdRY8RfvU" data-s="stat"><span data-page-node-id="HYgBbJwR3K5YdHFJGXCTjo" class="ic"><!--pnid:7T1TlutXpe0bkg45sDW6BS-->📊</span><!--pnid:1038wMfjkLVCRjH9h0WhQe-->数据</button>
+</nav>
+
+<div data-page-node-id="6ZYUbG58p5NIbkb4hav0GW" class="wrap">
+
+  <!--pnid:wK9AIZNW9GuykY69Ef7ME3--><!-- 任务 -->
+  <section data-page-node-id="KvBTP3Q7gtFe9Ine3T1d0O" class="on" id="sec-task">
+    <div data-page-node-id="YDqjbdqaaFYR05tLOkTN2H" class="card">
+      <h2 data-page-node-id="2xpKq0ESoD9XMXYk8FnHGx"><!--pnid:Idwb4Wr45nCI3om0HhPV4U-->📋 任务中心</h2>
+      <div data-page-node-id="y0zD3eOg0diM0VpUAJkZhe" class="sub" id="task-sub"><!--pnid:RPHEnsuJ6H1DmgDZpfVfk6-->小任务 +5 · 大任务 +10 · 全勤额外大奖</div>
+      <div data-page-node-id="dGWyZm9srRfp1ydgxWtQYR" class="seg" id="task-seg">
+        <button data-page-node-id="zFzWippdsWc9QsfBMeRV0k" class="on" data-k="daily"><!--pnid:lKercdgP0SY3VM5QfuH3p9-->每日</button>
+        <button data-page-node-id="OF1NtKBy5Hk6DRUHo44QKQ" data-k="weekly"><!--pnid:d7iioxwJVvehtXmDGEIIcg-->每周</button>
+        <button data-page-node-id="I8yqtmi2rBvWVED1i1GOTo" data-k="monthly"><!--pnid:aJYHgvDAxOekLay9xwzyDB-->每月</button>
+      </div>
+      <div data-page-node-id="KvipE30dVoL9JYIYtulm8o" id="task-list"></div>
+      <div data-page-node-id="Ef1SC7LIpfeFH4lbrZdQQK" class="add-row">
+        <input data-page-node-id="9G9lb5xy0kcWtAgGc8kyeh" id="t-title" placeholder="新任务，如：写500字短篇">
+        <select data-page-node-id="68rHJ9vymAO02U1LSpVx9M" id="t-type">
+          <option data-page-node-id="Jngpi2xYszGGNz3lLyp6Hx" value="small"><!--pnid:JdrzosopWkkyzEOL1tlCt0-->小任务</option>
+          <option data-page-node-id="T4hqSlcYRy3TnPvkDN3ROv" value="big"><!--pnid:6rrbbCdWtgq0HALP9JhfGp-->大任务</option>
+          <option data-page-node-id="a3kVm3S0qdPz9fA0bBnXt1" value="special">✨ 特殊任务</option>
+        </select>
+        <button data-page-node-id="vWIju1ObGRMg6a8IlLP7IB" class="btn sm" id="t-add"><!--pnid:Lq98jo7KDni0udanKrTW8h-->添加</button>
+      </div>
+      <div data-page-node-id="dLMjfmYStJjnKFI9ApizeK" class="sub" id="bonus-hint" style="color:var(--accent2); margin-top:10px"></div>
+      <div class="card" style="margin-top:14px;background:#faf6f0">
+        <div class="sub" style="font-weight:700;margin-bottom:6px">积分规则（自由调整）</div>
+        <div class="rule-grid">
+          <label>小任务 +<input id="r-small" type="number" min="0" value="5"></label>
+          <label>大任务 +<input id="r-big" type="number" min="0" value="10"></label>
+          <label>✨ 特殊任务 +<input id="r-special" type="number" min="0" value="20"></label>
+        </div>
+        <div class="sub" style="margin-top:10px">全勤奖（全部完成自动得，金币 + 经验）</div>
+        <div class="rule-grid">
+          <label>每日 +<input id="r-daily" type="number" min="0" value="100"></label>
+          <label>每周 +<input id="r-weekly" type="number" min="0" value="300"></label>
+          <label>每月 +<input id="r-monthly" type="number" min="0" value="1000"></label>
+        </div>
+        <button class="btn sm" style="margin-top:10px" onclick="saveTaskRules()">保存积分规则</button>
+      </div>
+    </div>
+  </section>
+
+  <!--pnid:p1bDoCaDz6CpWU2Z5zbjBl--><!-- 商城 -->
+  <section data-page-node-id="2VS0FemXROolc5i7jKTknW" id="sec-shop">
+    <div data-page-node-id="HdTUdkted8OpPUkfiKSeV7" class="card">
+      <h2 data-page-node-id="7qPFwEbmJAf092dnUy8hIS"><!--pnid:aHq1mpQ0TA1lEpXgkWasvh-->🛍️ 奖励商城</h2>
+      <div data-page-node-id="ECbfEy3Dsp6eW6PmR9zzyX" class="sub"><!--pnid:Dj23WaimDmdUVToUc1PdHZ-->用金币兑换你真正想要的奖励（可自定义）</div>
+      <div data-page-node-id="KZzgfCfxrPLJUCEN8J7YhE" class="grid" id="shop-grid"></div>
+      <div data-page-node-id="1wocQlrCvpHA7R3MaUDKlR" class="add-row" style="margin-top:14px">
+        <input data-page-node-id="qzeVd5xn7sMLR03DTv2RUr" id="r-name" placeholder="自定义奖励，如：按摩1次">
+        <input data-page-node-id="l0PJ5NNhJ6NKFL4JcJg3kr" id="r-cost" placeholder="金币价" type="number" style="max-width:90px">
+        <button data-page-node-id="lmMUjBV6ZM1SLhS9FmcPHJ" class="btn sm" id="r-add"><!--pnid:Pao7oDzBW2dQb1NAuX2Q2E-->上架</button>
+      </div>
+    </div>
+    <div class="card" style="background:#fff8f0">
+      <h2>🐾 宠物商城</h2>
+      <div class="sub">用 <b>金币 / 经验</b> 给宠物买食物、玩具、衣服、装备。装备买后可给主宠物穿上。</div>
+      <div class="sub" id="petBag" style="margin-top:-6px;margin-bottom:10px;color:#b07c2f">已拥有：-</div>
+      <div class="seg" id="petShop-seg" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="btn sm on" data-cat="food">🍖 食物</button>
+        <button class="btn sm" data-cat="glove">🧤 手套</button>
+        <button class="btn sm" data-cat="toy">🧸 玩具</button>
+        <button class="btn sm" data-cat="outfit">👕 衣服</button>
+        <button class="btn sm" data-cat="accessory">🎀 配饰</button>
+      </div>
+      <div id="petShop-grid" class="grid"></div>
+    </div>
+
+    <div data-page-node-id="VAPt9iNWd6QR3KoazF3BOO" class="card">
+      <h2 data-page-node-id="7CDdAOCRo0VtgyX8e6k04X"><!--pnid:AafRBZPBkBc3NSl7P00HZC-->🎁 盲盒 & 玩具合成链</h2>
+      <div data-page-node-id="PlwTzVHOEWfTEs6pvZSrOg" class="sub"><!--pnid:Pou0eata7LhCm7XVS20vcD-->不确定奖励制造惊喜 · 你的「10 小玩具→大玩具」</div>
+      <div data-page-node-id="fJGWUO6aTP8baPbkccNbHB" class="chain"><!--pnid:wFqs6LZV950fSGu9SkbPwp-->
+        🧸 小玩具 ×<b data-page-node-id="Gh5bU0XXUgCQ7NOhQlLX2B" id="c-toy"><!--pnid:UXvE5Vv46rZC3Cfr6klz9F-->0</b>
+        <span data-page-node-id="bQG6TLPTgC7dH5caHOyABy"><!--pnid:8HRcoV3m3O3FUrriAyWPCt-->—— 一键合成 ——▶</span><!--pnid:UyxkKcy80fRXFKBMeCR524-->
+        🎁 大玩具 ×<b data-page-node-id="V2rCVOdqUEESHOrjeFD303" id="c-big"><!--pnid:0yXVqH7C7kyvwZfuuPo6AZ-->0</b>
+      </div>
+      <div data-page-node-id="1AGQCzcqAzAAUtuARDeT6Y" style="display:flex; flex-wrap:wrap; gap:8px">
+        <button data-page-node-id="mrfbHVdxWHkePDGz8pmFpd" class="btn green sm" id="btn-synth"><!--pnid:42NdEbpza1wnxd25DSW9D8-->合成大玩具（需10小玩具）</button>
+        <button data-page-node-id="7u6sdybRFteM4AOxBRXacP" class="btn sm" id="btn-blind"><!--pnid:kBlqPVi1uxAZrteQOqyHCH-->🎲 开盲盒（150金币）</button>
+      </div>
+      <div data-page-node-id="SzMEZN5hoZDQ10tIc0Cdl7" class="sub" id="bag" style="margin-top:10px"></div>
+    </div>
+  </section>
+
+  <!--pnid:6fQa40GDEUSPF6zU54rqyN--><!-- 宠物 -->
+  <section data-page-node-id="dGhapKOQwnCLl9hSaKwEsZ" id="sec-pet">
+    <div data-page-node-id="sLEJ7I24L2OOXGCyUxQBT0" class="card pet-box">
+      <h2 data-page-node-id="MtzP17GkFaHlKe79AGZI38" style="justify-content:center"><!--pnid:XO2tXSkQI8QArRzZ27SEm1-->🐾 我的宠物</h2>
+      <div data-page-node-id="lkyK3mNfJJuj9Owyq73u0V" class="sub"><!--pnid:ZMz6dzWM2PL2HUs34o5yVQ-->完成「游戏人生」的任务 → 赚金币和经验 → 给宠物买食物/手套，它才有力气陪你长大 🍖🧤</div>
+      <div data-page-node-id="ca7i3sSw8hACpi5AaVKWCj" class="pet-emoji" id="pet-emoji"><!--pnid:dfOEMwKnk2ENJry3s2N3YA-->🐣</div>
+      <div data-page-node-id="WYDICmc5ZPDZinzdJHAtE2" class="pet-mood" id="pet-name"><!--pnid:Of2OcE9TmoxaBxn8LaIF3Z-->毛球</div>
+      <div data-page-node-id="ofeA0iru10Cje423ExNxa9" class="meters">
+        <div data-page-node-id="RtesgOCRf1YWjLOBOVRQj1" class="meter"><div data-page-node-id="KVg29xSHuA0F6UbBKbi9TP" class="ml"><span data-page-node-id="s3P1ccBrpRKEsB0RiOOFn7"><!--pnid:m8lwlzEjzuqyepGk9tYDQQ-->心情</span><span data-page-node-id="irYlFacq2vbmMDlNsVAhMh" id="m-mood"><!--pnid:oBfV0zyA8JcUdVcnOd9qcD-->70%</span></div>
+          <div data-page-node-id="kbxd5tUxxpvzqLnksTnAXS" class="mbar"><i data-page-node-id="PSVewUfJEWSthncrDIZ8QO" id="b-mood" style="background:#FF9E80; width:70%"></i></div></div>
+        <div data-page-node-id="WoIBXogG5y1KLFCDcdgOoG" class="meter"><div data-page-node-id="zcPB47dX6OuqTMcjxEtyAC" class="ml"><span data-page-node-id="Yb8HXMVXHYSzKFFgMuHOK0"><!--pnid:rqiRxzafZVJrYNYiL1Mt49-->亲密</span><span data-page-node-id="2Z6sQC1CVwWdY8r9XtHwoV" id="m-int"><!--pnid:dYGFjkaHqAn2upuPrpfV6Z-->0</span></div>
+          <div data-page-node-id="n088KtB1kLEiN1ynQJHaum" class="mbar"><i data-page-node-id="3eVNKkpBSxxxO4nQtYAwrn" id="b-int" style="background:#e6a23c; width:0%"></i></div></div>
+        <div data-page-node-id="99LOKEXfOXhAqqd2zSivW8" class="meter"><div data-page-node-id="OqMfmzk1qpi2rX5DWXthBo" class="ml"><span data-page-node-id="YQ5rqTkKrsTLYcY5PBJbsj"><!--pnid:Gt6W2mFpGKwGGhwsuGxkiC-->经验</span><span data-page-node-id="byWvyB3swlgM3Ds2uqsoTG" id="m-grow"><!--pnid:KZF7O9GQ4yK6nSYluvuA9i-->0%</span></div>
+          <div data-page-node-id="GAeHixMWq2pzfkR68zFGcT" class="mbar"><i data-page-node-id="z6VxBXaOVtOrMZ3WE678Ib" id="b-grow" style="background:#FFB088; width:0%"></i></div></div>
+      </div>
+      <div data-page-node-id="Y5dnf49LbcPFrc2KOlXddd" class="sub" id="pet-tip" style="margin-top:10px"></div>
+      <div style="margin-top:8px;font-size:13px;color:var(--muted)">种类：<b id="pet-kind">小鸡</b> · <span id="pet-equip" style="cursor:pointer;text-decoration:underline dotted" title="点击卸下装备">无装备</span></div>
+      <div data-page-node-id="X4pYLhtEf8aasAeelyf23s" class="pet-actions">
+        <button data-page-node-id="MAuXj1I0vrCYrnCELBld5d" class="btn green sm" id="pet-feed"><!--pnid:RNb5dBIW9H0qOPdEJ7Bxac-->🍖 喂食</button>
+        <button data-page-node-id="QiDNMnIjmWP05HH2FhAxNS" class="btn sm" id="pet-pet"><!--pnid:Jp69r17xKio7BN2hbgH72b-->✋ 摸摸</button>
+        <button data-page-node-id="rgAJ3uwnCGYpcypYVXZb4x" class="btn ghost sm" id="pet-rename"><!--pnid:8e2HhiPzckbLagF1pyiiVN-->✏️ 改名</button>
+      </div>
+      <div class="pet-actions" style="margin-top:6px">
+        <button class="btn ghost sm" id="pet-change-kind">🔄 换形象</button>
+        <button class="btn ghost sm" id="pet-adopt">🥚 领养新宠</button>
+        <button class="btn ghost sm" id="pet-go-yard">🏡 宠物家园</button>
+      </div>
+    </div>
+  </section>
+
+  <!--pnid:dGhapKOQwnCLl9hSaKwEsZ--><!-- 宠物家园 -->
+  <section id="sec-yard">
+    <div class="card">
+      <h2>🏡 宠物家园</h2>
+      <div class="sub">参考闲鱼鱼塘：把养成后的宠物放进来互动、产出金币；可以继续领养新宠物。</div>
+      <div id="yard" style="position:relative;min-height:280px;border-radius:18px;
+        background:linear-gradient(180deg,#dff5e6,#b8e4c4);
+        border:2px dashed #8fc6a4;padding:18px;margin:14px 0;overflow:hidden"></div>
+      <div id="yard-settle" style="display:flex;flex-wrap:wrap;gap:10px"></div>
+    </div>
+  </section>
+
+  <!--pnid:OtUM2cZs7ZnjG3M95yn9A1--><!-- 成就 -->
+  <section data-page-node-id="r0t5hasonoKXrl5IQNW3ZP" id="sec-ach">
+    <div data-page-node-id="f6sExcVVx6Bhy9PekWDeb0" class="card">
+      <h2 data-page-node-id="RM3Lhi3TeHA2rgPOVoTGpL"><!--pnid:8XbJhYYWJxC28jmbqmwnxm-->🏆 成就图鉴</h2>
+      <div data-page-node-id="VZ6Dhvo6x4DEhxrp6lSuBA" class="sub"><!--pnid:f1uwoTPytDLLQ6HksZKU2v-->收集癖的终极满足</div>
+      <div data-page-node-id="hEHzWeeBdVO9eSz4TSdThP" id="ach-list"></div>
+    </div>
+  </section>
+
+  <!--pnid:Q8fZmtjBFfFvjK4prv4BWi--><!-- 统计 -->
+  <section data-page-node-id="z6SrRZzGzaBjxorjcSwMAi" id="sec-stat">
+    <div data-page-node-id="D32QwfrTuQSjyWavj1czII" class="card">
+      <h2 data-page-node-id="NilFM9kdktLjaev3Nc731c"><!--pnid:FTXixTPjLqCP9ZyNsJDfOc-->📊 本周完成率</h2>
+      <div data-page-node-id="EqCQqwhpr6bazUF6VkJQX4" class="mini-bar" id="week-bar"></div>
+    </div>
+    <div data-page-node-id="st8gNl5t6QPafbmcuKgv4U" class="card">
+      <h2 data-page-node-id="8rxzUOFKIvmO1Q1qkwHeRk"><!--pnid:Da4qNSiZBktDoMRo55EIPV-->📈 数据概览</h2>
+      <div data-page-node-id="6fgm705035UQ3gIJ1Nex9R" class="kv"><span data-page-node-id="xR8tsSXIJv6R7NfQX6tnoT"><!--pnid:HJn0wR1i9pWQkpEdi0UpUc-->累计获得金币</span><b data-page-node-id="AJ3mKyNFCakjUsr0suY8rz" id="k-total"><!--pnid:QNNHD6gkCyxHvEgf3Vz6HK-->0</b></div>
+      <div class="kv"><span>🪙 待办累计金币</span><b id="k-taskcoin">0</b></div>
+      <div class="kv"><span>⭐ 待办累计经验</span><b id="k-taskexp">0</b></div>
+      <div data-page-node-id="8wQCp6dqrJewWX3kKvJgXX" class="kv"><span data-page-node-id="et50LbMhKCipB1iUURKepi"><!--pnid:DZqm6dFwaP3kmhqqDGCuIV-->完成任务总数</span><b data-page-node-id="BKYXJx4ncJJrrkxvGMFFT7" id="k-done"><!--pnid:PNupgDO3quNDEF71Pp8miy-->0</b></div>
+      <div data-page-node-id="lJZs7TFl4pI3NU9Bvf2qJj" class="kv"><span data-page-node-id="wvmYXCNncSYGTnZ0FUGBGS"><!--pnid:z3bQQSqq55WgTbMuw7NwXU-->最长连击</span><b data-page-node-id="GyBNEVQiyHmdFTSBeKefz9" id="k-best"><!--pnid:CE2G1tBAGP2ipUftCGLmgX-->0</b><!--pnid:f48gyaX4b4CLKOdPOixuRM--> 天</div>
+      <div data-page-node-id="omU3YoIk9CQ2VZFXhQ4dyz" class="kv"><span data-page-node-id="uOUUOWh21YbxyZupnfEjd1"><!--pnid:ULYLkiUfOD06q8koAAokG6-->已兑换奖励</span><b data-page-node-id="n9udjuNYEWj3h6PKIzv8Jr" id="k-rewards"><!--pnid:1KNRqiL6JOTKyDKj5zq1uG-->0</b><!--pnid:U3I0QkpUblVj9qOOyhqCE3--> 次</div>
+      <div data-page-node-id="lDSYTO76RVAY1zpz4nv2dQ" class="kv"><span data-page-node-id="dYjXWPDsaJ3IgfUKCqpuIS"><!--pnid:mTvGbqPUJ7PHSz0c5SygNk-->开盲盒次数</span><b data-page-node-id="7LPHaBjbYsL0Pt00T3mmQU" id="k-blind"><!--pnid:i8o1Q8qp0KAZdI857gsORa-->0</b><!--pnid:o5jFLEx6KYd7UoflN3uQHW--> 次</div>
+    </div>
+    <div data-page-node-id="7q40vNj4pGW8Ni5PNLHHcq" class="card">
+      <h2 data-page-node-id="69ZJuRpewAjaynDdkGsCxu"><!--pnid:AbL98hGyiIBQ1CO7Gi7Kwp-->📜 活动日志</h2>
+      <div data-page-node-id="RWayYyS08d1bkPniezKpnC" class="log" id="log"></div>
+    </div>
+    <div data-page-node-id="VFf5ZLzqB6hxdnNugoTuAm" class="card">
+      <h2 data-page-node-id="SuJ3WqtCZIid6XmkaI7KQz"><!--pnid:cjAYuWJ7jSDI7vJvpWudxa-->⚙️ 数据</h2>
+      <div data-page-node-id="awjR2wRVAbvYSUbYbbcBrN" class="sub"><!--pnid:YEXEkAtfOnEQwsMAmYFjvE-->全部存在你本地浏览器，不上传、不联网</div>
+      <div data-page-node-id="yiexp6PYYlXFtNFkfciuIA" style="display:flex; flex-wrap:wrap; gap:8px">
+        <button data-page-node-id="0bHXC93w2YFEM7a1zPPlA3" class="btn ghost sm" id="btn-export"><!--pnid:OP7vnMQRluh8aXuJuZ6Mwb-->导出备份</button>
+        <button data-page-node-id="NqfWQOkbhQj5GbHrUGqV0U" class="btn ghost sm" id="btn-import"><!--pnid:UScckienhAICmEGNfmJn1G-->导入备份</button>
+        <button data-page-node-id="2EEKf47OZyuUcRNaBbFdSc" class="btn ghost sm" id="btn-reset" style="color:#c0392b"><!--pnid:IHqdckFHh3JeUPlktl6jtq-->清空重来</button>
+      </div>
+      <input data-page-node-id="A9WwE5RZxqtrKAJI2tmyIy" class="hidden" id="file-input" type="file">
+    </div>
+  </section>
+
+</div>
+
+<!-- 成就编辑弹窗 -->
+<div class="modal-mask" id="achModal" onclick="if(event.target===this)closeAchModal()">
+  <div class="modal">
+    <h3 id="achModalTitle">编辑成就</h3>
+    <div class="field"><label>图标 emoji</label><input id="achEm" maxlength="4" placeholder="🏅"></div>
+    <div class="field"><label>名称</label><input id="achName" placeholder="成就名"></div>
+    <div class="field"><label>描述（达成条件）</label><textarea id="achDesc" rows="2" placeholder="如：完成第一个任务"></textarea></div>
+    <div class="row">
+      <button class="btn primary" onclick="saveAchEdit()">保存</button>
+      <button class="btn" onclick="closeAchModal()">取消</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="kindMask" onclick="if(event.target===this)closeKindMask()">
+  <div class="modal">
+    <h3>🥚 选一只宠物</h3>
+    <p class="sub" style="color:var(--muted);font-size:13px;margin-bottom:12px">选好后从蛋/幼崽开始养。新宠物会进入「宠物家园」。</p>
+    <div id="kind-grid" class="grid"></div>
+    <div class="row" style="margin-top:8px"><button class="btn" onclick="closeKindMask()">关闭</button></div>
+  </div>
+</div>
+
+<div data-page-node-id="e814auqPjkNXLrdKniZaLR" class="toast" id="toast"></div>
+<div data-page-node-id="lZbLXeLXTpgUKrsMjj1wYW" class="pop" id="pop">
+  <div data-page-node-id="WnsGbxTxTX6wSqJMvcRidv" class="box">
+    <div data-page-node-id="EWnFagZiCN4OmoRKMByeLP" class="big" id="pop-em"><!--pnid:jx0rLyCJn9VpPq4JTswMjP-->🎉</div>
+    <h3 data-page-node-id="RQfbgBK7iIrZFV7I4ja3V0" id="pop-title"><!--pnid:O6FJ3yS62HdUiAkRm0Bghz-->恭喜</h3>
+    <p data-page-node-id="fD1Dje4BTdvohk2C66u9Di" id="pop-text"></p>
+    <button data-page-node-id="ewBGUWM6kV4Wodx3Hgb4VZ" class="btn" id="pop-ok"><!--pnid:04khFmQf3UTrHLWCXyoEi1-->好耶</button>
+  </div>
+</div>
+
+<script data-page-node-id="XpGPKF75A3PaR6pI3DpM1Y" data-pnid-children="Z7GGAe5kCAy8pnd4A3edtU">
+/* ============ 数据层 ============ */
+const KEY='life-rpg-v1';
+const todayStr=()=>new Date().toISOString().slice(0,10);
+function weekKey(d=new Date()){const t=new Date(d);const day=(t.getDay()+6)%7;t.setDate(t.getDate()-day);
+  const y=t.getFullYear();const w=Math.ceil((((t-new Date(y,0,1))/864e5)+1)/7);return y+'-W'+w;}
+function monthKey(d=new Date()){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+
+const defaults=()=>({
+  coins:0, smallToys:0, bigToys:0, level:1, exp:0, streak:0, bestStreak:0,
+  lastCheckin:null, totalCoins:0, totalDone:0, rewardsRedeemed:0, blindCount:0,
+  smallPts:5, bigPts:10, specialPts:20,
+  bonusDaily:100, bonusWeekly:300, bonusMonthly:1000,
+  awarded:{daily:null,weekly:null,monthly:null},
+  /* === 宠物系统（4 形象 / 10 级 / 装备 / 家园） === */
+  petInventory:[],     /* 已养成→可放家园的宠物列表 [{id,name,kind,emoji,level,outfit,accessory,settled}] */
+  petShop:[],          /* 商城已上架的食物/玩具/衣服/装备 */
+  equipped:{},         /* 当前主宠物穿装 {outfit, accessory} */
+  petLog:[],           /* 互动记录 */
+  yardItems:[],        /* 家园里其他摆件 */
+  tasks:{
+    daily:[
+      {id:uid(),title:'签到',type:'small',tag:'签到',done:false,period:null},
+      {id:uid(),title:'阅读30分钟',type:'small',tag:'阅读',done:false,period:null},
+      {id:uid(),title:'收拾家务15分钟',type:'small',tag:'家务',done:false,period:null},
+      {id:uid(),title:'看一部电影/纪录片',type:'big',tag:'电影',done:false,period:null},
+      {id:uid(),title:'写一段短篇（≥500字）',type:'big',tag:'短篇',done:false,period:null},
+    ],
+    weekly:[
+      {id:uid(),title:'读完一本书',type:'big',tag:'阅读',done:false,period:null},
+      {id:uid(),title:'完成3次大扫除',type:'big',tag:'家务',done:false,period:null},
+      {id:uid(),title:'产出2篇短篇草稿',type:'big',tag:'短篇',done:false,period:null},
+    ],
+    monthly:[
+      {id:uid(),title:'月度写作复盘',type:'big',tag:'短篇',done:false,period:null},
+      {id:uid(),title:'存下一笔「快乐基金」',type:'big',tag:'理财',done:false,period:null},
+    ]
+  },
+  shop:[
+    {id:uid(),name:'奶茶',cost:80,em:'🧋',ds:'奖励自己一杯',type:'normal'},
+    {id:uid(),name:'咖啡',cost:60,em:'☕',ds:'提神一下',type:'normal'},
+    {id:uid(),name:'看一场电影',cost:150,em:'🎬',ds:'院线或在家都行',type:'normal'},
+    {id:uid(),name:'打游戏半小时',cost:50,em:'🎮',ds:'理直气壮玩',type:'normal'},
+    {id:uid(),name:'乐高积木',cost:800,em:'🧱',ds:'攒钱买大件',type:'normal'},
+    {id:uid(),name:'一束花',cost:120,em:'💐',ds:'取悦自己',type:'normal'},
+    {id:uid(),name:'小玩具',cost:100,em:'🧸',ds:'收集物，10个合成大玩具',type:'toy'},
+  ],
+  inventory:[],
+  food:0, glove:0,
+  pet:{name:'毛球',kind:'chick',emoji:'🐣',mood:70,intimacy:0,exp:0,level:1,fed:null,lastInteract:null,nextFoodAt:null,nextPetAt:null},
+  petCatalog:[  /* 宠物商城商品（4 类） */
+    /* 食物：金币价，给心情/亲密 */
+    {id:'p-f1',cat:'food',     em:'🍖',name:'狗粮',  cost:30,  cur:'coin',ds:'心情+10'},
+    {id:'p-f2',cat:'food',     em:'🐟',name:'小鱼干',cost:50,  cur:'coin',ds:'心情+15 亲密+2'},
+    {id:'p-f3',cat:'food',     em:'🥛',name:'牛奶',  cost:20,  cur:'coin',ds:'心情+8'},
+    /* 手套：金币价，摸摸宠物用（消耗品，可重复购买） */
+    {id:'p-g1',cat:'glove',    em:'🧤',name:'棉布手套',cost:40, cur:'coin',ds:'摸摸宠物用'},
+    {id:'p-g2',cat:'glove',    em:'🧤',name:'皮质手套',cost:80, cur:'coin',ds:'摸摸用，更耐用'},
+    /* 玩具：经验价，可加亲密 */
+    {id:'p-t1',cat:'toy',      em:'🧶',name:'毛线球',cost:50,  cur:'exp', ds:'亲密+5 心情+3'},
+    {id:'p-t2',cat:'toy',      em:'🎾',name:'小球',  cost:80,  cur:'exp', ds:'亲密+8 心情+5'},
+    /* 衣服：金币价，装备在身上 */
+    {id:'p-o1',cat:'outfit',   em:'🧥',name:'小外套',cost:200, cur:'coin',ds:'外型加成'},
+    {id:'p-o2',cat:'outfit',   em:'🦺',name:'迷彩背心',cost:300, cur:'coin',ds:'外型加成'},
+    {id:'p-o3',cat:'outfit',   em:'👘',name:'汉服',  cost:500, cur:'coin',ds:'外型加成'},
+    /* 配饰：经验价，装备在身上 */
+    {id:'p-a1',cat:'accessory',em:'🎀',name:'蝴蝶结',cost:60, cur:'exp', ds:'配饰加成'},
+    {id:'p-a2',cat:'accessory',em:'🎩',name:'小礼帽',cost:120,cur:'exp', ds:'配饰加成'},
+    {id:'p-a3',cat:'accessory',em:'🕶',name:'墨镜',  cost:150,cur:'exp', ds:'配饰加成'},
+  ],
+  smallPts:5, bigPts:10,
+  bonusDaily:100, bonusWeekly:300, bonusMonthly:1000,
+  achievements:[
+    {id:'a1',em:'🌱',name:'第一步',desc:'完成第一个任务',un:false,prog:0},
+    {id:'a2',em:'💪',name:'大干一场',desc:'完成第一个大任务',un:false,prog:0},
+    {id:'a3',em:'🔥',name:'一周不中断',desc:'连续打卡7天',un:false,prog:0},
+    {id:'a4',em:'🧸',name:'玩具收藏家',desc:'集齐10个小玩具',un:false,prog:0},
+    {id:'a5',em:'🎁',name:'大玩具到手',desc:'合成第一个大玩具',un:false,prog:0},
+    {id:'a6',em:'🎲',name:'开盲盒的人',desc:'第一次开盲盒',un:false,prog:0},
+    {id:'a8',em:'🐾',name:'宠物伙伴',desc:'宠物升到2级',un:false,prog:0},
+    {id:'a9',em:'🌕',name:'月月全勤',desc:'完成一次每月全勤',un:false,prog:0},
+  ],
+  log:[],
+  taskAwarded:{},      /* 待办积分去重：taskKey -> points，防止同一任务反复勾选重复加分 */
+  taskCoinTotal:0,     /* 累计从整体工作台待办获得的金币（商城用） */
+  taskExpTotal:0       /* 累计从整体工作台待办获得的宠物经验（宠物成长用） */
+});
+function uid(){return Math.random().toString(36).slice(2,9)}
+let S=load();
+function load(){try{const r=localStorage.getItem(KEY);if(r){const d=defaults();return Object.assign(d,JSON.parse(r));}}catch(e){}
+  const d=defaults();localStorage.setItem(KEY,JSON.stringify(d));return d;}
+function save(){localStorage.setItem(KEY,JSON.stringify(S));}
+
+/* ============ 商城商品 编辑/新增 弹窗（电脑/手机通用） ============ */
+let _editCtx=null;  // {kind:'shop'|'pet', idx:number} idx=-1 表示新增
+function openEdit(kind, idx){
+  _editCtx={kind,idx};
+  const isPet = kind==='pet';
+  // 隐藏/显示分类行（奖励商城无分类）
+  document.getElementById('em-cat-row').style.display = isPet ? 'block' : 'none';
+  let item;
+  if(isPet){
+    if(idx>=0){ item=S.petCatalog[idx]; }
+  } else {
+    if(idx>=0){ item=S.shop[idx]; }
+  }
+  document.getElementById('em-title').textContent = (idx<0 ? '➕ 新增商品' : '✏️ 编辑商品');
+  document.getElementById('em-cat').value  = item ? item.cat  : curPetCat;
+  document.getElementById('em-em').value   = item ? item.em   : '🎁';
+  document.getElementById('em-name').value = item ? item.name : '';
+  document.getElementById('em-cost').value = item ? item.cost : '';
+  document.getElementById('em-cur').value  = item ? (item.cur||'coin') : 'coin';
+  document.getElementById('em-ds').value   = item ? (item.ds||'') : '';
+  // 控制显示分类下拉
+  document.getElementById('em-cat').closest('div').style.display = isPet ? 'block' : 'none';
+  document.getElementById('editMask').classList.add('show');
+}
+function closeEdit(){
+  document.getElementById('editMask').classList.remove('show');
+  _editCtx=null;
+}
+function saveEdit(){
+  if(!_editCtx) return;
+  const em=document.getElementById('em-em').value.trim()||'🎁';
+  const name=document.getElementById('em-name').value.trim();
+  const cost=Math.max(0,parseInt(document.getElementById('em-cost').value,10)||0);
+  const cur=document.getElementById('em-cur').value;
+  const ds=document.getElementById('em-ds').value.trim();
+  if(!name){ toast('请填名称'); return; }
+  if(!cost){ toast('请填价格（>0）'); return; }
+  if(_editCtx.kind==='shop'){
+    if(_editCtx.idx<0){
+      S.shop.push({id:uid(),name,em,cost,ds,type:'normal'});
+    } else {
+      const it=S.shop[_editCtx.idx];
+      Object.assign(it,{name,em,cost,ds});
+    }
+    save(); renderShop();
+  } else {
+    const cat=document.getElementById('em-cat').value;
+    if(_editCtx.idx<0){
+      S.petCatalog.push({id:'p-'+uid(),cat,em,name,cost,cur,ds});
+    } else {
+      const it=S.petCatalog[_editCtx.idx];
+      Object.assign(it,{cat,em,name,cost,cur,ds});
+    }
+    save(); curPetCat=cat; renderPetShop();
+  }
+  closeEdit();
+  toast('已保存 ✨');
+}
+function randomEmoji(){
+  const pool=['🍖','🐟','🥛','🧤','🧶','🎾','🧸','🪀','⚽','🏀','🧥','🦺','👘','🎀','🎩','🕶','👜','🛍','💎','🌸','🌼','🌟','🍰','🍬','🧁','☕','🍵','📚','🎨','🎭'];
+  document.getElementById('em-em').value = pool[Math.floor(Math.random()*pool.length)];
+}
+// 点遮罩关闭（注意：#editMask 的 div 定义在脚本之后，必须等 DOM 解析完成再绑定，
+// 否则此处 getElementById 为 null 会抛错，进而中断后面所有事件绑定与 renderAll）
+document.addEventListener('DOMContentLoaded',function(){
+  if(/[?&]ipad=/.test(location.search)) document.body.classList.add('ipad');
+  var em=document.getElementById('editMask');
+  if(em) em.addEventListener('click',function(e){ if(e.target===this) closeEdit(); });
+});
+
+
+/* ============ 工具 ============ */
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1800);}
+function pop(em,title,text){document.getElementById('pop-em').textContent=em;
+  document.getElementById('pop-title').textContent=title;
+  document.getElementById('pop-text').textContent=text;
+  document.getElementById('pop').classList.add('on');}
+function addLog(act,coins){S.log.unshift({d:todayStr(),act,coins:coins||0});
+  if(S.log.length>200)S.log.pop();}
+function addCoins(n,reason){S.coins+=n;if(n>0)S.totalCoins+=n;addLog(reason,n);}
+/* ============ 宠物 10 级经验体系 ============ */
+const PET_KINDS = {  /* 4 种形象，每种都有 5 阶段 emoji 数组对应 1→10 级 */
+  chick:{name:'小鸡',em:['🥚','🐣','🐤','🐥','🐔'],levels:[0,30,80,160,280,440,650,920,1260,1700,2300]},
+  cat:  {name:'小猫',em:['🟤','😺','😻','😸','🐈'],levels:[0,30,80,160,280,440,650,920,1260,1700,2300]},
+  dog:  {name:'小狗',em:['🟫','🐶','🐕','🦮','🐕‍🦺'],levels:[0,30,80,160,280,440,650,920,1260,1700,2300]},
+  rabbit:{name:'小兔',em:['⚪','🐰','🐇','🐰','🐇'],levels:[0,30,80,160,280,440,650,920,1260,1700,2300]},
+};
+const PET_ADOPT_COST = {chick:200, cat:300, dog:300, rabbit:350};
+function petLevelEmoji(p){ const k=PET_KINDS[p.kind]||PET_KINDS.chick; const stage=Math.min(k.em.length-1, Math.floor((p.level-1)/2)); return k.em[stage]; }
+function petLevelMax(){ return 10; }
+function petLevelReq(lv){ return (PET_KINDS.chick.levels[lv]||9999); }
+function gainPetExp(n){
+  if(!S.pet || !S.pet.kind) S.pet=Object.assign(S.pet,{kind:'chick',exp:0,level:1});
+  S.pet.exp = Math.max(0, (S.pet.exp||0) + (n||0));
+  let lv = S.pet.level||1;
+  while(lv < petLevelMax() && S.pet.exp >= petLevelReq(lv)){ S.pet.exp -= petLevelReq(lv); lv++; }
+  if(lv > (S.pet.level||1)){
+    const old = S.pet.level; S.pet.level=lv; S.pet.emoji = petLevelEmoji(S.pet);
+    if(old<2 && lv>=2) unlock('a8');
+    if(lv>=petLevelMax()) pop('🏆','宠物成年！',S.pet.name+' 已经成年啦，可以送进「宠物家园」再领养新宠');
+    else pop('✨','宠物升级',S.pet.name+' 升到 Lv.'+lv);
+  }
+}
+/* 喂食/摸摸不再有冷却：只要有食物/手套就能无限次互动（逼自己去做任务赚金币买） */
+
+/* ============ 周期重置 ============ */
+function resetCycle(){
+  const tk=todayStr(),wk=weekKey(),mk=monthKey();
+  ['daily','weekly','monthly'].forEach(k=>{
+    const key=k==='daily'?tk:k==='weekly'?wk:mk;
+    S.tasks[k].forEach(t=>{if(t.period!==key){t.done=false;t.period=key;}});
+  });
+  // 连击：今天还没签到过
+  if(S.lastCheckin!==tk && S.lastCheckin!==null){
+    const y=new Date();y.setDate(y.getDate()-1);
+    if(S.lastCheckin!==y.toISOString().slice(0,10))S.streak=0;
+  }
+  if(S.awarded.daily!==tk){S.awarded.daily=null;}
+  if(S.awarded.weekly!==wk){S.awarded.weekly=null;}
+  if(S.awarded.monthly!==mk){S.awarded.monthly=null;}
+  save();
+}
+
+/* ============ 渲染：仪表盘 ============ */
+function renderTop(){
+  document.getElementById('s-coins').textContent=S.coins;
+  document.getElementById('s-toy').textContent=S.smallToys;
+  document.getElementById('s-big').textContent=S.bigToys;
+  document.getElementById('s-level').textContent=S.level;
+  document.getElementById('s-streak').textContent=S.streak;
+  const ds=S.tasks.daily,total=ds.length,done=ds.filter(t=>t.done).length;
+  document.getElementById('day-pct').textContent=done+'/'+total;
+  document.getElementById('day-bar').style.width=(total?done/total*100:0)+'%';
+}
+
+/* ============ 渲染：任务 ============ */
+let curTask='daily';
+function renderTasks(){
+  const list=document.getElementById('task-list');list.innerHTML='';
+  S.tasks[curTask].forEach(t=>{
+    const div=document.createElement('div');div.className='task'+(t.done?' done':'')+(t.type==='special'?' special':'');
+    const pts=t.type==='big'?S.bigPts:t.type==='special'?S.specialPts:S.smallPts;
+    const typeTag=t.type==='special'?'<span class="tag" style="background:#fff4e6;color:#d98324">✨特殊</span>':'';
+    div.innerHTML=`<div class="ck">${t.done?'✓':''}</div>
+      <div class="t-title">${esc(t.title)}</div>
+      ${typeTag}
+      <span class="tag">${esc(t.tag||'')}</span>
+      <span class="pts">+${pts}</span>
+      <span class="del" data-del="${t.id}">×</span>`;
+    div.querySelector('.ck').onclick=()=>toggleTask(curTask,t.id);
+    div.querySelector('.del').onclick=()=>delTask(curTask,t.id);
+    list.appendChild(div);
+  });
+  // 动态文案 + 规则输入回填
+  const sub=document.getElementById('task-sub');
+  if(sub) sub.textContent='小任务 +'+S.smallPts+' · 大任务 +'+S.bigPts+' · ✨特殊 +'+S.specialPts+' · 全勤额外大奖　｜　做任务 = 给宠物赚粮草 🍖';
+  const fill=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v;};
+  fill('r-small',S.smallPts);fill('r-big',S.bigPts);fill('r-special',S.specialPts);
+  fill('r-daily',S.bonusDaily);fill('r-weekly',S.bonusWeekly);fill('r-monthly',S.bonusMonthly);
+  // 全勤提示
+  const hint=document.getElementById('bonus-hint');
+  const all=S.tasks[curTask].every(t=>t.done)&&S.tasks[curTask].length>0;
+  const bonusMap={daily:S.bonusDaily,weekly:S.bonusWeekly,monthly:S.bonusMonthly};
+  const awKey={daily:'daily',weekly:'weekly',monthly:'monthly'};
+  if(all){hint.textContent=S.awarded[awKey[curTask]]?
+    '✅ 本'+({daily:'日',weekly:'周',monthly:'月'}[curTask])+'全勤奖已领取':'🎉 全部完成！点击任意已完成任务即可领取全勤大奖';}
+  else hint.textContent='完成全部可领 '+bonusMap[curTask]+' 金币+经验全勤奖';
+}
+function saveTaskRules(){
+  S.smallPts=Math.max(0,parseInt(document.getElementById('r-small').value,10)||0);
+  S.bigPts=Math.max(0,parseInt(document.getElementById('r-big').value,10)||0);
+  S.specialPts=Math.max(0,parseInt(document.getElementById('r-special').value,10)||0);
+  S.bonusDaily=Math.max(0,parseInt(document.getElementById('r-daily').value,10)||0);
+  S.bonusWeekly=Math.max(0,parseInt(document.getElementById('r-weekly').value,10)||0);
+  S.bonusMonthly=Math.max(0,parseInt(document.getElementById('r-monthly').value,10)||0);
+  save();renderTasks();toast('积分规则已保存');
+}
+function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function toggleTask(k,id){
+  const t=S.tasks[k].find(x=>x.id===id);if(!t)return;
+  const pts=t.type==='big'?S.bigPts:t.type==='special'?S.specialPts:S.smallPts;
+  if(!t.done){
+    t.done=true;addCoins(pts,'完成任务：'+t.title);
+    S.totalDone++;S.streak=S.lastCheckin===todayStr()?S.streak:S.streak+1;
+    if(S.lastCheckin!==todayStr()){S.streak=Math.max(S.streak,1);}
+    S.lastCheckin=todayStr();S.bestStreak=Math.max(S.bestStreak,S.streak);
+    // 宠物掉落亲密 + 经验（金币用于商城，经验用于宠物成长）
+    S.pet.intimacy+=2; gainPetExp(pts);
+    toast('+'+pts+' 金币 💰  +'+pts+' 经验 ✨');
+    // 成就
+    if(k==='daily'||k==='weekly'||k==='monthly'){unlock('a1');}
+    if(t.type==='big')unlock('a2');
+    if(S.streak>=7)unlock('a3');
+    // 全勤奖
+    checkBonus(k);
+  }else{
+    t.done=false;addCoins(-pts,'撤销：'+t.title);
+  }
+  levelUp();save();renderAll();
+}
+function checkBonus(k){
+  if(!S.tasks[k].every(t=>t.done))return;
+  const map={daily:{k:'daily',n:S.bonusDaily,label:'每日全勤'},weekly:{k:'weekly',n:S.bonusWeekly,label:'每周全勤'},
+    monthly:{k:'monthly',n:S.bonusMonthly,label:'每月全勤'}}[k];
+  if(S.awarded[map.k])return;
+  S.awarded[map.k]=k==='daily'?todayStr():k==='weekly'?weekKey():monthKey();
+  addCoins(map.n,map.label+'奖'); gainPetExp(map.n);
+  pop('🏅',map.label+'大奖！','全部'+({daily:'每日',weekly:'每周',monthly:'每月'}[k])+'任务完成，奖励 '+map.n+' 金币 +'+map.n+' 经验！');
+  if(k==='monthly')unlock('a9');
+}
+function delTask(k,id){S.tasks[k]=S.tasks[k].filter(x=>x.id!==id);save();renderTasks();}
+function addTask(){
+  const ti=document.getElementById('t-title').value.trim();
+  const ty=document.getElementById('t-type').value;
+  if(!ti){toast('先写点什么吧');return;}
+  S.tasks[curTask].push({id:uid(),title:ti,type:ty,tag:'自定义',done:false,period:null});
+  document.getElementById('t-title').value='';save();renderTasks();renderTop();
+}
+document.getElementById('t-add').onclick=addTask;
+document.getElementById('task-seg').onclick=e=>{
+  if(e.target.dataset.k){curTask=e.target.dataset.k;
+    [...document.getElementById('task-seg').children].forEach(b=>b.classList.toggle('on',b.dataset.k===curTask));
+    renderTasks();}
+};
+
+/* ============ 渲染：商城 ============ */
+function renderShop(){
+  const g=document.getElementById('shop-grid');g.innerHTML='';
+  S.shop.forEach((r,idx)=>{
+    const div=document.createElement('div');div.className='item'+(S.coins<r.cost?' disabled':'');
+    div.innerHTML=`<div class="em">${r.em}</div><div class="nm">${esc(r.name)}</div>
+      <div class="ds">${esc(r.ds)}</div><div class="pr">💰 ${r.cost}</div>
+      <button class="btn sm buy" ${S.coins<r.cost?'disabled':''}>兑换</button>
+      <div class="opts">
+        <button class="op-arrow" data-act="up" title="上移" ${idx===0?'disabled':''}>↑</button>
+        <button class="op-edit" data-act="edit" title="编辑">✏️</button>
+        <button class="op-del" data-act="del" title="删除">🗑</button>
+        <button class="op-arrow" data-act="down" title="下移" ${idx===S.shop.length-1?'disabled':''}>↓</button>
+      </div>`;
+    div.querySelector('.buy').onclick=()=>buyReward(r);
+    div.querySelectorAll('.opts button').forEach(btn=>{
+      btn.onclick=(e)=>{
+        const act=btn.dataset.act; if(!act) return;
+        if(act==='up'){ if(idx>0){[S.shop[idx-1],S.shop[idx]]=[S.shop[idx],S.shop[idx-1]]; save(); renderShop();} }
+        else if(act==='down'){ if(idx<S.shop.length-1){[S.shop[idx+1],S.shop[idx]]=[S.shop[idx],S.shop[idx+1]]; save(); renderShop();} }
+        else if(act==='edit'){ openEdit('shop',idx); }
+        else if(act==='del'){ if(confirm('删除「'+r.name+'」？\\n（已兑换的不会退）')){ S.shop.splice(idx,1); save(); renderShop(); toast('已删除'); } }
+      };
+    });
+    g.appendChild(div);
+  });
+  document.getElementById('c-toy').textContent=S.smallToys;
+  document.getElementById('c-big').textContent=S.bigToys;
+  document.getElementById('bag').innerHTML='背包：'+
+    (S.inventory.length?S.inventory.map(i=>i.em+esc(i.name)+'×'+i.qty).join('  '):'空空如也');
+}
+function buyReward(r){
+  if(S.coins<r.cost){toast('金币不够，先去完成任务吧');return;}
+  addCoins(-r.cost,'兑换：'+r.name);S.rewardsRedeemed++;
+  if(r.type==='toy'){S.smallToys++;toast('获得小玩具 🧸');}
+  else{
+    S.inventory.push({id:uid(),name:r.name,em:r.em,qty:1});
+    pop(r.em,'兑换成功！','去享受你的「'+r.name+'」吧～ 这是你努力的回报');
+  }
+  if(S.smallToys>=10)unlock('a4');
+  save();renderAll();
+}
+/* ============ 渲染：宠物商城 ============ */
+let curPetCat='food';
+function renderPetShop(){
+  const g=document.getElementById('petShop-grid'); if(!g) return;
+  g.innerHTML='';
+  const listInCat=S.petCatalog.map((x,i)=>({x,i})).filter(o=>o.x.cat===curPetCat);
+  listInCat.forEach(function(o){
+    const it=o.x, idx=o.i;
+    const isConsumable = (it.cat==='food'||it.cat==='glove');
+    const owned = (!isConsumable) && (S.petInventory.find(p=>p.id===it.id+':owned')||(S.equipped.outfit===it.em||S.equipped.accessory===it.em));
+    const cur = it.cur==='exp' ? (S.pet.exp||0) : S.coins;
+    const enough = cur >= it.cost;
+    const div=document.createElement('div');div.className='item'+(enough?'':' disabled');
+    const curLabel = it.cur==='exp' ? '⭐ '+it.cost : '💰 '+it.cost;
+    const btnLabel = isConsumable ? '购买' : (owned?'已拥有':'购买');
+    div.innerHTML='<div class="em">'+it.em+'</div><div class="nm">'+esc(it.name)+'</div><div class="ds">'+esc(it.ds)+'</div><div class="pr">'+curLabel+'</div>'+
+      '<button class="btn sm buy" '+(enough&&!owned?'':'disabled')+'>'+btnLabel+'</button>'+
+      '<div class="opts">'+
+        '<button class="op-arrow" data-act="up" title="上移" '+((idx===0||S.petCatalog[idx-1].cat!==curPetCat)?'disabled':'')+'>↑</button>'+
+        '<button class="op-edit" data-act="edit" title="编辑">✏️</button>'+
+        '<button class="op-del" data-act="del" title="删除">🗑</button>'+
+        '<button class="op-arrow" data-act="down" title="下移" '+((idx===S.petCatalog.length-1||S.petCatalog[idx+1].cat!==curPetCat)?'disabled':'')+'>↓</button>'+
+      '</div>';
+    div.querySelector('.buy').onclick=()=>{
+      if(!isConsumable && owned){toast('已拥有这件了');return;}
+      if(it.cur==='exp'){ if((S.pet.exp||0)<it.cost){toast('宠物经验不够');return;} S.pet.exp=Math.max(0,S.pet.exp-it.cost); }
+      else { if(S.coins<it.cost){toast('金币不够，先去完成任务赚金币吧');return;} addCoins(-it.cost,'购买：'+it.name); }
+      if(it.cat==='food'){ S.food=(S.food||0)+1; }
+      else if(it.cat==='glove'){ S.glove=(S.glove||0)+1; }
+      else if(it.cat==='outfit') S.equipped.outfit = it.em;
+      else if(it.cat==='accessory') S.equipped.accessory = it.em;
+      else if(it.cat==='toy'){ S.pet.intimacy+=it.em==='🧶'?5:8; S.pet.mood=Math.min(100,S.pet.mood+(it.em==='🧶'?3:5)); }
+      if(!isConsumable) S.petInventory.push({id:it.id+':owned',name:it.name,em:it.em,cat:it.cat});
+      save(); renderPet(); renderPetShop(); renderPetBag();
+      toast(isConsumable ? ('已购买 '+it.name+'（去宠物页'+(it.cat==='food'?'喂食':'摸摸')+'）') : ('已购买 '+it.name+(it.cat==='outfit'||it.cat==='accessory'?' 并已自动穿上！':'')));
+    };
+    div.querySelectorAll('.opts button').forEach(btn=>{
+      btn.onclick=()=>{
+        const act=btn.dataset.act; if(!act) return;
+        if(act==='up'){
+          if(idx>0 && S.petCatalog[idx-1].cat===curPetCat){
+            [S.petCatalog[idx-1],S.petCatalog[idx]]=[S.petCatalog[idx],S.petCatalog[idx-1]];
+            save(); renderPetShop();
+          }
+        }
+        else if(act==='down'){
+          if(idx<S.petCatalog.length-1 && S.petCatalog[idx+1].cat===curPetCat){
+            [S.petCatalog[idx+1],S.petCatalog[idx]]=[S.petCatalog[idx],S.petCatalog[idx+1]];
+            save(); renderPetShop();
+          }
+        }
+        else if(act==='edit'){ openEdit('pet',idx); }
+        else if(act==='del'){
+          if(confirm('删除「'+it.name+'」？\n（已购买/已穿戴的不会退）')){
+            S.petCatalog.splice(idx,1);
+            save(); renderPetShop();
+            toast('已删除');
+          }
+        }
+      };
+    });
+    g.appendChild(div);
+  });
+  // + 新增 按钮
+  const addDiv=document.createElement('div');
+  addDiv.className='add-row-mini';
+  addDiv.innerHTML='<button onclick="openEdit(\'pet\',-1)">＋ 新增一件商品</button>';
+  g.appendChild(addDiv);
+  renderPetBag();
+}
+function renderPetBag(){
+  const el=document.getElementById('petBag'); if(!el) return;
+  const food=S.food||0, glove=S.glove||0;
+  const ownedOutfit=S.equipped.outfit?'外型 '+S.equipped.outfit:'';
+  const ownedAcc=S.equipped.accessory?'配饰 '+S.equipped.accessory:'';
+  el.textContent = '🍖 食物 ×'+food+'　🧤 手套 ×'+glove+'　· 当前装备：'+(ownedOutfit||ownedAcc||'无');
+}
+document.getElementById('r-add').onclick=()=>{
+  const n=document.getElementById('r-name').value.trim();
+  const c=parseInt(document.getElementById('r-cost').value);
+  if(!n||!c){toast('名字和价格都要填');return;}
+  S.shop.push({id:uid(),name:n,cost:c,em:'🎀',ds:'自定义奖励',type:'normal'});
+  document.getElementById('r-name').value='';document.getElementById('r-cost').value='';
+  save();renderShop();toast('已上架 🛍️');
+};
+/* petShop 类别切换 */
+document.getElementById('petShop-seg').onclick = function(e){
+  const c=e.target.dataset.cat; if(!c) return;
+  curPetCat=c;
+  [...this.children].forEach(b=>b.classList.toggle('on',b.dataset.cat===c));
+  renderPetShop();
+};
+/* 卸下当前主宠物装备 */
+document.getElementById('pet-equip').onclick = function(){
+  if(!S.equipped.outfit && !S.equipped.accessory){toast('当前没穿装备');return;}
+  if(!confirm('卸下当前装备？\n'+JSON.stringify(S.equipped))) return;
+  S.equipped={}; save(); renderPet(); renderPetBag(); renderPetShop();
+  toast('已卸下');
+};
+/* ============ 宠物家园 ============ */
+function renderYard(){
+  const yard=document.getElementById('yard'); const settle=document.getElementById('yard-settle');
+  if(!yard) return;
+  /* 决定主宠物是否在园：默认主宠物在主仓，Yard 只放其他；这里我们用"主宠物额外放一次"作为可选项：默认在主仓，列表展示 */
+  const settled = S.petInventory.slice();
+  /* 简单飘动动画的固定网格 */
+  yard.innerHTML='';
+  if(!settled.length){
+    yard.innerHTML='<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#C2603F;font-size:14px;flex-direction:column;gap:6px">🌱 家园还空着<br><small>去「宠物」→「领养新宠」选一只</small></div>';
+  } else {
+    settled.forEach(function(p,i){
+      const d=document.createElement('div');
+      d.style.cssText='position:absolute;width:78px;text-align:center;cursor:pointer;transition:transform .4s;'
+        +'left:'+(8+Math.random()*78)+'%;top:'+(8+Math.random()*60)+'%;animation:yp-'+(i%3)+' '+ (4+Math.random()*3)+'s ease-in-out infinite;';
+      d.innerHTML='<div style="font-size:40px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.15))">'+(S.equipped.outfit&&i===0?S.equipped.outfit:'')+(p.emoji||'🐣')+(S.equipped.accessory&&i===0?S.equipped.accessory:'')+'</div>'
+        +'<div style="font-size:11px;color:#C2603F;margin-top:2px">'+esc(p.name)+' Lv.'+p.level+'</div>';
+      d.title=esc(p.name)+' (Lv.'+p.level+' '+((PET_KINDS[p.kind]||PET_KINDS.chick).name)+')\n点击互动（每只 4h 一次）';
+      d.onclick=function(){ interactYardPet(p); };
+      yard.appendChild(d);
+    });
+  }
+  if(settle){
+    settle.innerHTML='';
+    settled.forEach(function(p){
+      const tag=document.createElement('div');
+      tag.style.cssText='display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #d3e8db;border-radius:10px;padding:6px 10px;font-size:13px';
+      tag.innerHTML='<span style="font-size:22px">'+(p.emoji||'🐣')+'</span> '+esc(p.name)+' <small style="color:#7a8">Lv.'+p.level+'</small>';
+      settle.appendChild(tag);
+    });
+  }
+}
+function interactYardPet(p){
+  const cdKey='_yardCD_'+p.id;
+  if(S[cdKey] && Date.now()<S[cdKey]){ toast((p.name)+' 互动冷却中'); return; }
+  S[cdKey]=Date.now()+4*60*60*1000;
+  S.pet.intimacy += 2;            /* 同步到主宠物亲密 */
+  addCoins(5, p.name+' 在家园撒欢'); /* 家园产出金币 */
+  S.petLog.unshift({d:todayStr(), t:p.name+' 互动'});
+  if(S.petLog.length>100)S.petLog.pop();
+  save(); renderYard(); renderPet(); toast('+5 金币 · '+(p.name)+' 在家园撒欢');
+}
+/* 三个飘动 keyframes */
+(function(){
+  const s=document.createElement('style');
+  s.textContent='@keyframes yp-0{0%,100%{transform:translate(0,0)}50%{transform:translate(8px,-10px)}}'
+    +'@keyframes yp-1{0%,100%{transform:translate(0,0)}50%{transform:translate(-6px,8px)}}'
+    +'@keyframes yp-2{0%,100%{transform:translate(0,0)}50%{transform:translate(10px,6px)}}';
+  document.head.appendChild(s);
+})();
+/* 弹窗工具 */
+function openMask(id){const m=document.getElementById(id);if(m)m.classList.add('on');}
+function closeMask(id){const m=document.getElementById(id);if(m)m.classList.remove('on');}
+function closeKindMask(){closeMask('kindMask');}
+/* === 兼容旧字段：grow 迁移到 exp；导出摘要给工作台 === */
+function migrateOld(){
+  if(S.pet && typeof S.pet.grow!=='undefined'){ S.pet.exp=S.pet.grow; delete S.pet.grow; }
+  if(S.pet && !S.pet.kind){ S.pet.kind='chick'; S.pet.emoji=PET_KINDS.chick.em[Math.min(4,Math.floor((S.pet.level-1)/2))]; }
+  if(S.pet && S.pet.level>10){ S.pet.level=10; }
+  save();
+}
+migrateOld();
+document.getElementById('btn-synth').onclick=()=>{
+  if(S.smallToys<10){toast('需要10个小玩具');return;}
+  S.smallToys-=10;S.bigToys++;unlock('a5');
+  pop('🎁','合成大玩具！','10 个小玩具 → 1 个大玩具，收藏+1！');
+  save();renderAll();
+};
+document.getElementById('btn-blind').onclick=()=>{
+  if(S.coins<150){toast('需要150金币');return;}
+  addCoins(-150,'开盲盒');S.blindCount++;unlock('a6');
+  const pool=[
+    {em:'🧸',t:'小玩具',f:()=>S.smallToys++},
+    {em:'💰',t:'金币返还80',f:()=>addCoins(80,'盲盒返还')},
+    {em:'💐',t:'一束花',f:()=>S.inventory.push({id:uid(),name:'一束花',em:'💐',qty:1})},
+    {em:'🍰',t:'甜点券',f:()=>S.inventory.push({id:uid(),name:'甜点券',em:'🍰',qty:1})},
+    {em:'⭐',t:'额外50金币',f:()=>addCoins(50,'盲盒幸运')},
+    {em:'🎮',t:'游戏时间',f:()=>S.inventory.push({id:uid(),name:'打游戏1小时',em:'🎮',qty:1})},
+  ];
+  const w=pool[Math.floor(Math.random()*pool.length)];w.f();
+  pop(w.em,'盲盒开出：'+w.t,'生活需要一点不确定性的惊喜 ✨');
+  save();renderAll();
+};
+
+/* ============ 渲染：宠物 ============ */
+function renderPet(){
+  const p=S.pet;
+  const emoji = (p.emoji && S.equipped.outfit) ? (p.emoji) : (p.emoji||'🐣');
+  const displayEmoji = (S.equipped.outfit||'') + emoji + (S.equipped.accessory||'');
+  document.getElementById('pet-emoji').textContent = displayEmoji || emoji;
+  document.getElementById('pet-name').textContent = p.name+'（Lv.'+p.level+'/'+petLevelMax()+'）';
+  document.getElementById('m-mood').textContent=Math.round(p.mood)+'%';
+  document.getElementById('b-mood').style.width=p.mood+'%';
+  document.getElementById('m-int').textContent=Math.round(p.intimacy);
+  document.getElementById('b-int').style.width=Math.min(100,p.intimacy)+'%';
+  /* 等级进度：本级经验 / 升下级所需 */
+  const need = petLevelReq(p.level);
+  const curExp = Math.round(p.exp||0);
+  const pct = p.level>=petLevelMax() ? 100 : Math.min(100, Math.round(curExp/need*100));
+  document.getElementById('m-grow').textContent = p.level>=petLevelMax() ? 'MAX 成年 🎉' : (curExp+' / '+need);
+  document.getElementById('b-grow').style.width = pct+'%';
+  /* 提示：显示剩余食物/手套，缺了就催去做任务赚金币买 */
+  const food=S.food||0, glove=S.glove||0;
+  const tip = '🍖 食物 ×'+food+'　🧤 手套 ×'+glove+( (food<=0||glove<=0) ? '　— 没了去「宠物商城」买，做了任务才有金币' : '　— 喂它 / 摸它都能加亲密');
+  const tipEl=document.getElementById('pet-tip'); if(tipEl) tipEl.textContent = tip;
+  /* 按钮：无限次，只要有食物/手套 */
+  const feedBtn=document.getElementById('pet-feed'); if(feedBtn){ feedBtn.disabled=false; feedBtn.textContent='🍖 喂食 ('+food+')'; }
+  const petBtn=document.getElementById('pet-pet');   if(petBtn){ petBtn.disabled=false; petBtn.textContent='✋ 摸摸 ('+glove+')'; }
+  /* 展示主宠物装备 */
+  const eqEl=document.getElementById('pet-equip'); if(eqEl){
+    const o=S.equipped.outfit?'外型：'+S.equipped.outfit+'  ':'';
+    const a=S.equipped.accessory?'配饰：'+S.equipped.accessory:'';
+    eqEl.textContent = (o||a)? (o||a) : '当前没穿装备（到「宠物商城」挑选）';
+  }
+  /* 形象选择 */
+  const kindEl=document.getElementById('pet-kind'); if(kindEl) kindEl.textContent = (PET_KINDS[p.kind]||PET_KINDS.chick).name;
+}
+document.getElementById('pet-feed').onclick=()=>{
+  if((S.food||0)<=0){ toast('没有食物啦，去「宠物商城」买 🍖（先做任务赚金币）'); return; }
+  S.food--; S.pet.mood=Math.min(100,S.pet.mood+15); S.pet.intimacy+=2; gainPetExp(2);
+  toast('喂食成功 🍖 心情 +15 · 亲密 +2'); save(); renderPet(); renderPetShop(); renderPetBag();
+};
+document.getElementById('pet-pet').onclick=()=>{
+  if((S.glove||0)<=0){ toast('没有手套啦，去「宠物商城」买 🧤（先做任务赚金币）'); return; }
+  S.glove--; S.pet.intimacy+=5; S.pet.mood=Math.min(100,S.pet.mood+5); gainPetExp(1);
+  toast('摸摸头 ✋ +5 亲密'); save(); renderPet(); renderPetShop(); renderPetBag();
+};
+document.getElementById('pet-rename').onclick=()=>{
+  const n=prompt('给宠物起个名字：',S.pet.name);if(n){S.pet.name=n;save();renderPet();}
+};
+document.getElementById('pet-change-kind').onclick=()=>{
+  if(S.pet.level<2){ toast('宠物需要 2 级以上才能换形象'); return; }
+  openKindModal();
+};
+document.getElementById('pet-go-yard').onclick=()=>{ goSection('yard'); };
+/* 选择新宠物（出生蛋 → 选种类） */
+document.getElementById('pet-adopt').onclick=()=>{
+  if(S.pet.level < petLevelMax() && !(S.petInventory.length>=3)){
+    if(!confirm('主宠物未满级，新领养的宠物会先放在「宠物家园」\n确定要领养新宠物吗？')) return;
+  }
+  openKindModal();
+};
+function openKindModal(){
+  const box=document.getElementById('kind-grid'); if(!box) return;
+  box.innerHTML='';
+  Object.keys(PET_KINDS).forEach(function(k){
+    const kd=PET_KINDS[k];
+    const d=document.createElement('div');d.className='item';
+    d.innerHTML='<div class="em" style="font-size:38px">'+kd.em[1]+'</div><div class="nm">'+kd.name+'</div><div class="ds">领养 '+PET_ADOPT_COST[k]+' 金币</div>'+
+      '<button class="btn sm">领养</button>';
+    d.querySelector('button').onclick=()=>{
+      if(S.coins<PET_ADOPT_COST[k]){ toast('金币不够，先做点任务赚金币吧'); return; }
+      addCoins(-PET_ADOPT_COST[k],'领养宠物：'+kd.name);
+      const newPet={id:uid(), name:kd.name+'-'+(S.petInventory.length+2), kind:k, emoji:kd.em[1], level:1, exp:0, outfit:'', accessory:'', settled:false};
+      S.petInventory.push(newPet);
+      save(); closeMask('kindMask'); renderYard(); renderPet();
+      toast('领养成功！'+newPet.name+' 已入住宠物家园');
+    };
+    box.appendChild(d);
+  });
+  openMask('kindMask');
+}
+
+/* ============ 渲染：成就 ============ */
+function unlock(id){const a=S.achievements.find(x=>x.id===id);if(a&&!a.un){a.un=true;
+  pop(a.em,'解锁成就：'+a.name,a.desc);save();renderAch();}}
+function renderAch(){
+  const l=document.getElementById('ach-list');l.innerHTML='';
+  S.achievements.forEach((a,idx)=>{
+    const d=document.createElement('div');d.className='ach'+(a.un?' un':'');
+    d.innerHTML=`<div class="ae">${esc(a.em)}</div>`+
+      `<div class="at"><b>${esc(a.name)}</b><div>${esc(a.desc)}</div>`+
+      `<span class="ap">${a.un?'✓ 已解锁':'🔒 未解锁'}</span></div>`+
+      `<div class="acts">`+
+        `<button class="up" title="上移" ${idx===0?'disabled':''} onclick="moveAch('${a.id}',-1)">↑</button>`+
+        `<button class="down" title="下移" ${idx===S.achievements.length-1?'disabled':''} onclick="moveAch('${a.id}',1)">↓</button>`+
+        `<button class="edit" title="编辑" onclick="editAch('${a.id}')">✏️</button>`+
+        `<button class="del" title="删除" onclick="delAch('${a.id}')">🗑</button>`+
+      `</div>`;
+    l.appendChild(d);
+  });
+  const add=document.createElement('button');add.className='btn sm';add.style.marginTop='8px';
+  add.textContent='＋ 新增成就';add.onclick=addAch;l.appendChild(add);
+}
+let editingAchId=null;
+function moveAch(id,dir){
+  const i=S.achievements.findIndex(x=>x.id===id); if(i<0) return;
+  const j=i+dir; if(j<0||j>=S.achievements.length) return;
+  const tmp=S.achievements[i];S.achievements[i]=S.achievements[j];S.achievements[j]=tmp;
+  save();renderAch();
+}
+function openAchModal(){document.getElementById('achModal').classList.add('on');}
+function closeAchModal(){document.getElementById('achModal').classList.remove('on');}
+function addAch(){ editingAchId=null; document.getElementById('achModalTitle').textContent='新增成就';
+  document.getElementById('achEm').value='🏅'; document.getElementById('achName').value=''; document.getElementById('achDesc').value=''; openAchModal(); }
+function editAch(id){ const a=S.achievements.find(x=>x.id===id); if(!a) return; editingAchId=id;
+  document.getElementById('achModalTitle').textContent='编辑成就';
+  document.getElementById('achEm').value=a.em||''; document.getElementById('achName').value=a.name||''; document.getElementById('achDesc').value=a.desc||''; openAchModal(); }
+function saveAchEdit(){
+  const em=document.getElementById('achEm').value.trim()||'🏅';
+  const nm=document.getElementById('achName').value.trim();
+  const ds=document.getElementById('achDesc').value.trim();
+  if(!nm){toast('名字不能为空');return;}
+  if(editingAchId){ const a=S.achievements.find(x=>x.id===editingAchId); if(a){a.em=em;a.name=nm;a.desc=ds;} }
+  else { S.achievements.push({id:'a'+uid(),em:em,name:nm,desc:ds,un:false,prog:0}); }
+  closeAchModal();save();renderAch();
+}
+function delAch(id){ const a=S.achievements.find(x=>x.id===id); if(!a) return; if(!confirm('删除成就「'+(a.name||'')+'」？')) return; S.achievements=S.achievements.filter(x=>x.id!==id); save();renderAch(); }
+
+/* ============ 渲染：统计 ============ */
+function renderStat(){
+  document.getElementById('k-total').textContent=S.totalCoins;
+  document.getElementById('k-taskcoin').textContent=S.taskCoinTotal||0;
+  document.getElementById('k-taskexp').textContent=S.taskExpTotal||0;
+  document.getElementById('k-done').textContent=S.totalDone;
+  document.getElementById('k-best').textContent=S.bestStreak;
+  document.getElementById('k-rewards').textContent=S.rewardsRedeemed;
+  document.getElementById('k-blind').textContent=S.blindCount;
+  // 近7天完成率（基于日志粗略统计每日完成任务数 vs 当日任务总数）
+  const bar=document.getElementById('week-bar');bar.innerHTML='';
+  const dailyTotal=S.tasks.daily.length||1;
+  for(let i=6;i>=0;i--){
+    const d=new Date();d.setDate(d.getDate()-i);const ds=d.toISOString().slice(0,10);
+    const done=S.log.filter(l=>l.d===ds&&l.coins>0&&l.act.startsWith('完成任务')).length;
+    const pct=Math.min(100,Math.round(done/dailyTotal*100));
+    const col=document.createElement('div');col.className='col';col.style.height=pct+'%';
+    col.title=ds+'：'+done+'个';col.innerHTML='<span>'+(d.getMonth()+1)+'/'+d.getDate()+'</span>';
+    bar.appendChild(col);
+  }
+  const log=document.getElementById('log');log.innerHTML='';
+  if(!S.log.length)log.innerHTML='<div>还没有记录，去完成任务吧</div>';
+  S.log.slice(0,40).forEach(l=>{const d=document.createElement('div');
+    d.innerHTML='<span>'+l.d+' · '+esc(l.act)+'</span>'+
+    (l.coins?'<span class="lp">'+(l.coins>0?'+':'')+l.coins+'</span>':'<span></span>');
+    log.appendChild(d);});
+}
+
+/* ============ 等级 ============ */
+function levelUp(){
+  // 每100经验升1级（经验=累计完成任务的积分贡献近似用 totalDone*5）
+  const need=S.level*100;const cur=S.totalDone*5;
+  if(cur>=need){S.level++;pop('⭐','升级！','你升到了 Lv.'+S.level+'，人生经营得越来越好了');}
+}
+
+/* ============ 导入导出 ============ */
+document.getElementById('btn-export').onclick=()=>{
+  const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='人生经营备份-'+todayStr()+'.json';a.click();toast('已导出备份');
+};
+document.getElementById('btn-import').onclick=()=>document.getElementById('file-input').click();
+document.getElementById('file-input').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{S=JSON.parse(r.result);save();renderAll();toast('导入成功');}
+    catch(_){toast('文件格式不对');}};r.readAsText(f);
+};
+document.getElementById('btn-reset').onclick=()=>{
+  if(confirm('确定清空所有数据重来？此操作不可恢复')){
+    S=defaults();save();resetCycle();renderAll();toast('已重置');}
+};
+
+/* ============ 导航 ============ */
+document.getElementById('nav').onclick=e=>{
+  const b=e.target.closest('button');if(!b)return;
+  const s=b.dataset.s;
+  [...document.getElementById('nav').children].forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('section').forEach(sec=>sec.classList.toggle('on',sec.id==='sec-'+s));
+};
+/* ============ 防御性补救：每个 nav 按钮直接绑定 click / touchend（绕过事件委托可能失效的情况） ============ */
+(function(){
+  var nav=document.getElementById('nav'); if(!nav) return;
+  function switchTo(s, btn){
+    if(btn){ [...nav.children].forEach(function(x){x.classList.toggle('on',x===btn);}); }
+    else { [...nav.children].forEach(function(x){x.classList.toggle('on', x.dataset.s===s);}); }
+    document.querySelectorAll('section').forEach(function(sec){sec.classList.toggle('on',sec.id==='sec-'+s);});
+  }
+  nav.querySelectorAll('button[data-s]').forEach(function(btn){
+    btn.style.cursor='pointer';
+    btn.addEventListener('click', function(e){ e.stopPropagation(); switchTo(this.dataset.s, this); });
+    // touchend 兼容 iOS 内嵌 iframe（部分机型 click 会被边界吞掉）
+    btn.addEventListener('touchend', function(e){ e.stopPropagation(); e.preventDefault(); switchTo(this.dataset.s, this); }, {passive:false});
+  });
+})();
+document.getElementById('pop-ok').onclick=()=>document.getElementById('pop').classList.remove('on');
+
+/* ============ 启动 ============ */
+function renderAll(){renderTop();renderTasks();renderShop();renderPetShop();renderPet();renderYard();renderAch();renderStat();}
+resetCycle();renderAll();
+</script>
+<script>
+/* ===== 整合外壳通信桥接（游戏人生） ===== */
+(function(){
+  var MOD='game';
+  var LSKEY='life-rpg-v1';
+  function summarize(){
+    try{
+      var dailyDone=(S.tasks.daily||[]).filter(function(t){return t.done;}).length;
+      var achUn=(S.achievements||[]).filter(function(a){return a.un;}).length;
+      return {module:MOD, level:S.level||1, coins:S.coins||0, smallToys:S.smallToys||0,
+        bigToys:S.bigToys||0, streak:S.streak||0, bestStreak:S.bestStreak||0,
+        totalDone:S.totalDone||0, totalCoins:S.totalCoins||0,
+        dailyDone:dailyDone, dailyTotal:(S.tasks.daily||[]).length,
+        petLevel:(S.pet&&S.pet.level)||1, achUn:achUn, achTotal:(S.achievements||[]).length,
+        pet:(S.pet?{emoji:S.pet.emoji||'🐣', name:S.pet.name||'毛球', mood:Math.round(S.pet.mood||0), intimacy:Math.round(S.pet.intimacy||0), exp:Math.round(S.pet.exp||0), level:S.pet.level||1, kind:(S.pet.kind||'chick')}:null)};
+    }catch(e){return {module:MOD, error:String(e)};}
+  }
+  window.addEventListener('message', function(e){
+    var d=e.data||{};
+    if(d.type==='getSummary'){ try{ parent.postMessage({type:'summary', mod:MOD, payload:summarize()}, '*'); }catch(_){} }
+    else if(d.type==='exportModule'){ try{ parent.postMessage({type:'moduleData', mod:MOD, key:LSKEY, data:S}, '*'); }catch(err){ parent.postMessage({type:'moduleData', mod:MOD, key:LSKEY, error:String(err)}, '*'); } }
+    else if(d.type==='importModule'){ try{ S=Object.assign({}, defaults(), d.data); save(); if(typeof renderAll==='function')renderAll(); parent.postMessage({type:'importDone', mod:MOD}, '*'); }catch(err){ parent.postMessage({type:'importDone', mod:MOD, error:String(err)}, '*'); } }
+    else if(d.type==='gotoInner'){ try{ var btn=document.querySelector('nav button[data-s="'+d.sec+'"]'); if(btn)btn.click(); }catch(_){} }
+    else if(d.type==='awardTask'){ try{
+      var key=d.taskId; if(!key) return;
+      if(S.taskAwarded[key]!==undefined) return; /* 已加过，防重复（同任务反复勾选） */
+      var pts=Math.max(1, Math.round(d.points||5));
+      addCoins(pts,'完成待办：'+(d.group||''));
+      S.taskCoinTotal+=pts; S.taskExpTotal+=pts; S.taskAwarded[key]=pts;
+      S.totalDone++; S.pet.intimacy+=2; gainPetExp(pts);
+      save(); if(typeof renderAll==='function')renderAll();
+      try{ parent.postMessage({type:'awardDone',mod:MOD,key:key,points:pts},'*'); }catch(_){}
+    }catch(e){} }
+    else if(d.type==='revokeTask'){ try{
+      var key=d.taskId; if(!key) return;
+      var pts=S.taskAwarded[key]; if(pts===undefined) return;
+      var real=Math.min(pts,S.coins); addCoins(-real,'撤销待办');
+      S.taskCoinTotal=Math.max(0,S.taskCoinTotal-pts);
+      S.taskExpTotal=Math.max(0,S.taskExpTotal-pts);
+      gainPetExp(-pts);
+      delete S.taskAwarded[key];
+      save(); if(typeof renderAll==='function')renderAll();
+    }catch(e){} }
+  });
+})();
+</script>
+
+<!-- 编辑弹窗（电脑/手机通用） -->
+<div id="editMask">
+  <div class="em-box">
+    <h3 id="em-title">✏️ 编辑商品</h3>
+    <div id="em-cat-row"><label>分类</label>
+      <select id="em-cat">
+        <option value="food">🍖 食物（金币）</option>
+        <option value="glove">🧤 手套（金币）</option>
+        <option value="toy">🧸 玩具（经验）</option>
+        <option value="outfit">👕 衣服（金币）</option>
+        <option value="accessory">🎀 配饰（经验）</option>
+      </select>
+    </div>
+    <div class="em-row">
+      <div style="flex:1">
+        <label>图标（点右边的🎲随机）</label>
+        <input id="em-em" maxlength="2" placeholder="例如 🍖">
+      </div>
+      <div style="padding-top:22px"><span class="em-pick" onclick="randomEmoji()" title="随机一个">🎲</span></div>
+    </div>
+    <label>名称</label>
+    <input id="em-name" placeholder="例如 狗粮">
+    <label>价格</label>
+    <div class="em-row">
+      <input id="em-cost" type="number" min="0" placeholder="30" style="max-width:120px">
+      <select id="em-cur" style="max-width:120px">
+        <option value="coin">💰 金币</option>
+        <option value="exp">⭐ 经验</option>
+      </select>
+    </div>
+    <label>描述</label>
+    <input id="em-ds" placeholder="例如 心情+10">
+    <div class="em-actions">
+      <button class="em-cancel" onclick="closeEdit()">取消</button>
+      <button class="em-save" onclick="saveEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
