@@ -441,14 +441,24 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
       <div class="appbar-title" id="pgTitle">今日概览</div>
     </div>
     <div class="appbar-date" id="appDate"></div>
+    <button class="appbar-add" aria-label="搜索" onclick="toggleGlobalSearch()">🔍</button>
     <button class="appbar-add" aria-label="快速添加" onclick="openQuickAdd()">＋</button>
   </header>
+
+  <!-- 跨模块搜索条（电脑/手机共用，平时隐藏） -->
+  <div id="globalSearchBar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:120;background:#fff;border-bottom:1px solid var(--line);box-shadow:0 6px 18px rgba(0,0,0,.10);padding:10px 14px;align-items:center;gap:10px">
+    <input id="globalSearch" type="search" placeholder="🔍 搜例文 / 书名 / 标签…" oninput="globalSearch(this.value)" style="flex:1;border:1px solid var(--line);border-radius:20px;padding:10px 14px;font-size:14px;font-family:inherit;min-width:0">
+    <button class="btn" onclick="toggleGlobalSearch()">取消</button>
+  </div>
+  <div id="searchPanel" style="display:none;position:fixed;top:58px;left:0;right:0;z-index:119;max-height:72vh;overflow:auto;background:#fff;border-bottom:1px solid var(--line);box-shadow:0 12px 30px rgba(0,0,0,.14);padding:8px 10px"></div>
+
   <!-- 右侧主区（桌面含顶栏+内容；手机态顶栏隐藏，内容直接显示） -->
   <div class="main">
     <header class="topbar">
       <h1 id="topTitle">今日概览</h1>
       <div class="sub" id="topDate"></div>
       <div class="spacer"></div>
+      <button class="appbar-add topbar-add" aria-label="搜索" onclick="toggleGlobalSearch()">🔍</button>
       <button class="appbar-add topbar-add" aria-label="快速添加" onclick="openQuickAdd()">＋</button>
     </header>
     <div class="content">
@@ -458,6 +468,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
       <div class="native on" id="native-overview"></div>
       <div class="native" id="native-todo"></div>
       <div class="native" id="native-checkin"></div>
+      <div class="native" id="native-heat"></div>
       <div class="native" id="native-game"></div>
       <div class="native" id="native-settings"></div>
       <div class="native" id="native-my"></div>
@@ -491,8 +502,23 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
     <div class="qa-grid">
       <div class="qa-item" onclick="closeMask('quickAddMask');go('todo')"><span class="ic">✅</span><span class="lb">待办</span></div>
       <div class="qa-item" onclick="closeMask('quickAddMask');go('checkin')"><span class="ic">📅</span><span class="lb">签到</span></div>
-      <div class="qa-item" onclick="closeMask('quickAddMask');go('yuedu')"><span class="ic">📚</span><span class="lb">阅读手帐</span></div>
-      <div class="qa-item" onclick="closeMask('quickAddMask');go('duanpian')"><span class="ic">✒️</span><span class="lb">写短篇</span></div>
+      <div class="qa-item" onclick="closeMask('quickAddMask');openInspiration()"><span class="ic">💡</span><span class="lb">灵感速记</span></div>
+      <div class="qa-item" onclick="closeMask('quickAddMask');openPet()"><span class="ic">🐾</span><span class="lb">宠物</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- 灵感速记弹层 -->
+<div class="mask" id="inspMask">
+  <div class="sheet">
+    <span class="closex" onclick="closeMask('inspMask')">×</span>
+    <h2>✨ 灵感速记</h2>
+    <p class="hint" style="color:var(--sub);font-size:12px;margin:0 0 12px">随手记一句灵感，保存后直接进「短篇 → 素材收集」。</p>
+    <div class="field" style="margin-bottom:10px"><label>标题</label><input type="text" id="inspTitle" placeholder="给这条灵感起个名（可不填）" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:14px;font-family:inherit"></div>
+    <div class="field"><label>灵感</label><textarea id="inspIdea" placeholder="此刻冒出来的一个点子、一句台词、一个画面…" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:14px;font-family:inherit;min-height:90px;resize:vertical"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeMask('inspMask')">取消</button>
+      <button class="btn primary" onclick="saveInspiration()">存入短篇素材</button>
     </div>
   </div>
 </div>
@@ -557,13 +583,13 @@ const DEFAULT_NAV = [
   {key:"jianfei", label:"减肥记录", icon:"🏃", type:"iframe", src:"减肥板块.html"},
   {key:"health", label:"健康状况", icon:"🩺", type:"iframe", src:"健康板块.html"},
   {key:"checkin", label:"签到记录", icon:"📅", type:"native"},
+  {key:"heat", label:"打卡热力图", icon:"🔥", type:"native"},
   {key:"duanpian", label:"短篇", icon:"✒️", type:"iframe", src:"短篇工作台.html"},
-  {key:"collab", label:"协作短篇", icon:"🔗", type:"iframe", src:"duanpian-collab.html"},
   {key:"game", label:"游戏人生", icon:"🎮", type:"iframe", src:"游戏人生.html"},
   {key:"settings", label:"设置", icon:"⚙️", type:"native"}
 ];
 let navCfg = load(SHELL_KEY, DEFAULT_NAV.slice());
-if(!navCfg.some(x=>x.key==="collab")){ navCfg.push({key:"collab", label:"协作短篇", icon:"🔗", type:"iframe", src:"duanpian-collab.html"}); try{persist(SHELL_KEY,navCfg);}catch(e){} }
+if(!navCfg.some(function(x){ return x.key==="heat"; })){ navCfg.push({key:"heat",label:"打卡热力图",icon:"🔥",type:"native"}); }
 
 function load(k, def){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):def; }catch(e){ return def; } }
 function persist(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){ alert("保存失败，本地存储可能已满"); } }
@@ -653,6 +679,7 @@ function go(key){
     if (key==="overview") loadOverview();
     else if (key==="todo") renderTodo();
     else if (key==="checkin") renderCheckin();
+    else if (key==="heat") renderHeatmap();
     else if (key==="my") renderMy();
     else if (key==="settings") renderSettings();
   }
@@ -834,6 +861,11 @@ function defaultGame(){ return {tasks:[{id:"g1",name:"写作",xp:20,on:true},{id
 function loadStore(){
   const t = load(TODO_KEY, []); store.todo = Array.isArray(t)?t:[];
   const c = load(CHECKIN_KEY, {apps:[]}); store.checkin = c&&c.apps?c:{apps:[]};
+  if(!store.checkin.apps) store.checkin.apps=[];
+  let _seed=false;
+  store.checkin.apps.forEach(function(a){ if(!a.dates){ a.dates=[]; _seed=true; } });
+  ["减肥","健康"].forEach(function(nm){ if(!store.checkin.apps.some(function(a){return a.name===nm;})){ store.checkin.apps.push({id:uid(),name:nm,icon:nm.charAt(0),last:null,streak:0,dates:[]}); _seed=true; } });
+  if(_seed) persist(CHECKIN_KEY, store.checkin);
   const g = load(GAME_KEY, null); store.game = g?Object.assign(defaultGame(),g):defaultGame();
   store.todoIgnore = load("todo_ignore_v1", []); if(!Array.isArray(store.todoIgnore)) store.todoIgnore=[];
   store.todoIgnore = store.todoIgnore.filter(x=>x && typeof x==="object"); // 兼容旧版字符串条目
@@ -1131,7 +1163,7 @@ function onAddImgSelected(input){
 }
 function addApp(){
   const v=$("appName").value.trim(); if(!v) return;
-  const app={id:uid(), name:v, icon:(v.trim().charAt(0)), last:null, streak:0};
+  const app={id:uid(), name:v, icon:(v.trim().charAt(0)), last:null, streak:0, dates:[]};
   if(pendingAddImg){ app.img=pendingAddImg; pendingAddImg=null; }
   store.checkin.apps.push(app);
   persist(CHECKIN_KEY, store.checkin); renderCheckin(); renderNav();
@@ -1192,6 +1224,7 @@ function doCheckin(id){
   a._undoToday={last:a.last, streak:a.streak};   // 存撤销快照，还原用
   if(a.last && daysBetween(a.last, todayStr())===1) a.streak=(a.streak||0)+1; else a.streak=1;
   a.last=todayStr();
+  if(!a.dates) a.dates=[]; if(a.dates.indexOf(a.last)<0) a.dates.push(a.last);
   persist(CHECKIN_KEY, store.checkin); renderCheckin(); renderNav();
   awardXP(3, "签到");
 }
@@ -1207,6 +1240,7 @@ function realUndo(id){
   if(a.last!==todayStr()) return;
   if(a._undoToday){ a.last=a._undoToday.last; a.streak=a._undoToday.streak; a._undoToday=null; }
   else { a.last=null; a.streak=0; }
+  if(a.dates) a.dates=a.dates.filter(function(d){ return d!==todayStr(); });
   store.game.xp=Math.max(0,(store.game.xp||0)-3);   // 扣回签到奖励的经验
   persist(CHECKIN_KEY, store.checkin); persist(GAME_KEY, store.game);
   renderCheckin(); renderNav();
@@ -1218,6 +1252,7 @@ function makeupCheckin(id){
   const oldLast=a.last, oldStreak=a.streak;
   if(oldLast && daysBetween(oldLast, yest)===1) a.streak=(a.streak||0)+1; else a.streak=1;
   a.last=yest;
+  if(!a.dates) a.dates=[]; if(a.dates.indexOf(yest)<0) a.dates.push(yest);
   persist(CHECKIN_KEY, store.checkin); renderCheckin(); renderNav();
   awardXP(3, "补签");
 }
@@ -1704,6 +1739,139 @@ function pendingCount(){ return pendingTodos().length; }
 function esc(s){ return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 function openMask(id){ $(id).classList.add("show"); }
 function closeMask(id){ $(id).classList.remove("show"); }
+function toast(m){ let t=document.getElementById("appToast"); if(!t){ t=document.createElement("div"); t.id="appToast"; t.style.cssText="position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:rgba(40,32,24,.92);color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;z-index:200;opacity:0;transition:.25s;pointer-events:none"; document.body.appendChild(t);} t.textContent=m; t.style.opacity=".96"; clearTimeout(t._tm); t._tm=setTimeout(function(){ t.style.opacity="0"; },1800); }
+function openInspiration(){ try{ $("#inspTitle").value=""; $("#inspIdea").value=""; }catch(e){} openMask("inspMask"); setTimeout(function(){ try{ $("#inspIdea").focus(); }catch(e){} },60); }
+function saveInspiration(){
+  const title=(($("#inspTitle")&&$("#inspTitle").value)||"").trim();
+  const idea=(($("#inspIdea")&&$("#inspIdea").value)||"").trim();
+  if(!title && !idea){ toast("先写点什么吧～"); return; }
+  addInspirationToDuanpian(title, idea);
+  closeMask("inspMask");
+}
+function openPet(){
+  go('game');
+  let tries=0;
+  const iv=setInterval(function(){
+    tries++;
+    try{
+      const f=document.getElementById("modFrame");
+      if(f && f.contentWindow && f.contentWindow.document){
+        const btn=f.contentWindow.document.querySelector('[data-s="pet"]');
+        if(btn){ btn.click(); clearInterval(iv); return; }
+      }
+    }catch(e){}
+    if(tries>20){ clearInterval(iv); }
+  },100);
+}
+function addInspirationToDuanpian(title, idea){
+  const frame=document.getElementById("modFrame");
+  if(frame && (frame.dataset.src||"").indexOf("短篇工作台")>=0 && frame.contentWindow && typeof frame.contentWindow.__dpQuickAddMaterial==="function"){
+    try{ frame.contentWindow.__dpQuickAddMaterial(title, idea); toast("已存入短篇·素材 ✓"); return; }catch(e){}
+  }
+  try{
+    const req=indexedDB.open("dp_idb_v1");
+    req.onsuccess=function(){ const db=req.result;
+      const tx=db.transaction("state","readwrite");
+      const rq=tx.objectStore("state").get("duanpian_full");
+      rq.onsuccess=function(){ const st=rq.result;
+        if(st && st.materials){ st.materials.push({id:"m"+Date.now()+Math.random().toString(36).slice(2,7),type:"text",title:title||"灵感速记",idea:idea||"",tags:[],createdAt:Date.now()}); tx.objectStore("state").put(st,"duanpian_full"); tx.oncomplete=function(){ toast("已存入短篇·素材 ✓"); }; }
+        else { toast("短篇数据未初始化，请先打开短篇模块"); }
+      };
+      rq.onerror=function(){ toast("写入失败"); };
+    };
+    req.onerror=function(){ toast("无法访问短篇存档"); };
+  }catch(e){ toast("写入失败"); }
+}
+/* ===== 跨模块搜索（例文 / 书名 / 标签） ===== */
+function toggleGlobalSearch(){
+  const b=$("#globalSearchBar");
+  if(b.style.display!=="flex"){ b.style.display="flex"; setTimeout(function(){ try{ $("#globalSearch").focus(); }catch(e){} },40); }
+  else { b.style.display="none"; const p=$("#searchPanel"); if(p){ p.style.display="none"; p.innerHTML=""; } }
+}
+function escapeHtml(s){ return (s||"").replace(/[&<>"]/g,function(c){ return ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]); }); }
+let _gsTimer=null;
+function globalSearch(q){
+  q=(q||"").trim();
+  const panel=$("#searchPanel");
+  if(!q){ panel.style.display="none"; panel.innerHTML=""; return; }
+  clearTimeout(_gsTimer);
+  _gsTimer=setTimeout(function(){ runGlobalSearch(q); },200);
+}
+function runGlobalSearch(q){
+  const L=q.toLowerCase();
+  const results=[];
+  // 阅读手帐（localStorage，同步）
+  try{
+    const raw=localStorage.getItem("yuedu_shouzhang_v1");
+    if(raw){ const o=JSON.parse(raw); (o.books||[]).forEach(function(b){ if((b.title||"").toLowerCase().indexOf(L)>=0) results.push({mod:"yuedu",icon:"📚",label:"阅读手帐",title:b.title,sub:(b.author||"")+(b.status?(" · "+(b.status==="reading"?"在读":b.status==="done"?"读完":"想读")):"")}); }); }
+  }catch(e){}
+  // 短篇（IndexedDB，异步）
+  const req=indexedDB.open("dp_idb_v1");
+  req.onsuccess=function(){
+    try{
+      const db=req.result;
+      const tx=db.transaction("state","readonly");
+      const rq=tx.objectStore("state").get("duanpian_full");
+      rq.onsuccess=function(){ const st=rq.result; if(st){
+        (st.examples||[]).forEach(function(e){ if((e.title||"").toLowerCase().indexOf(L)>=0 || (e.content||"").toLowerCase().indexOf(L)>=0) results.push({mod:"duanpian",icon:"✒️",label:"短篇·例文",title:e.title||"未命名",sub:"例文"}); });
+        (st.materials||[]).forEach(function(m){ if((m.title||"").toLowerCase().indexOf(L)>=0 || (m.idea||"").toLowerCase().indexOf(L)>=0) results.push({mod:"duanpian",icon:"📎",label:"短篇·素材",title:m.title||"未命名",sub:"素材"}); });
+        (st.tags||[]).forEach(function(t){ if((t.name||"").toLowerCase().indexOf(L)>=0) results.push({mod:"duanpian",icon:"🏷️",label:"短篇·元素",title:t.name,sub:(t.kind==="trope"?"核心梗":"类型")}); });
+      } renderSearchResults(results,q); };
+      rq.onerror=function(){ renderSearchResults(results,q); };
+    }catch(e){ renderSearchResults(results,q); }
+  };
+  req.onerror=function(){ renderSearchResults(results,q); };
+}
+function renderSearchResults(results,q){
+  const panel=$("#searchPanel");
+  if(!results.length){ panel.innerHTML='<div style="padding:14px;color:var(--sub);font-size:13px">没找到和「'+escapeHtml(q)+'」相关的内容</div>'; panel.style.display="block"; return; }
+  let h='<div style="padding:4px 6px 8px;color:var(--sub);font-size:12px">找到 '+results.length+' 条</div>';
+  results.slice(0,40).forEach(function(r){
+    h+='<div onclick="jumpSearch(\''+r.mod+'\')" style="display:flex;gap:8px;align-items:center;padding:10px;margin:2px 0;border-radius:10px;cursor:pointer" onmouseover="this.style.background=\'#fbf6f1\'" onmouseout="this.style.background=\'transparent\'">'
+      +'<span style="font-size:16px">'+r.icon+'</span>'
+      +'<span style="font-size:11px;color:#fff;background:var(--brand);border-radius:10px;padding:1px 7px;flex:none">'+r.label+'</span>'
+      +'<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px">'+escapeHtml(r.title)+'</span>'
+      +'<span style="font-size:11px;color:var(--sub);flex:none">'+escapeHtml(r.sub||"")+'</span></div>';
+  });
+  panel.innerHTML=h; panel.style.display="block";
+}
+function jumpSearch(mod){ toggleGlobalSearch(); try{ go(mod); }catch(e){} }
+/* ===== 连续打卡热力图（减肥 / 健康 / 待办） ===== */
+function fmtKey(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function renderHeatmap(){
+  const box=$("native-heat"); if(!box) return;
+  function doneSetFor(name){
+    const a=store.checkin.apps.find(function(x){ return x.name===name; });
+    const s={}; if(a&&a.dates) a.dates.forEach(function(d){ s[d]=1; }); return s;
+  }
+  const todoH=loadHistory(); const todoSet={};
+  Object.keys(todoH).forEach(function(k){ if(todoH[k] && todoH[k].rate>0) todoSet[k]=1; });
+  const rows=[
+    {key:"减肥", set:doneSetFor("减肥")},
+    {key:"健康", set:doneSetFor("健康")},
+    {key:"待办", set:todoSet}
+  ];
+  const weeks=17, total=weeks*7;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const start=new Date(today); start.setDate(start.getDate()-(total-1));
+  function rowHtml(r){
+    let cells="";
+    for(let i=0;i<total;i++){
+      const d=new Date(start); d.setDate(start.getDate()+i);
+      const key=fmtKey(d);
+      const on=r.set[key];
+      cells+='<div title="'+key+(on?" ✓":"")+'" style="width:12px;height:12px;border-radius:3px;background:'+(on?"#FF8E72":"#efe9e2")+';flex:none"></div>';
+    }
+    return '<div style="display:flex;align-items:center;gap:10px;margin:10px 0"><div style="width:42px;font-size:13px;color:var(--ink);flex:none">'+r.key+'</div><div style="display:flex;flex-wrap:wrap;gap:3px;max-width:calc(100% - 52px)">'+cells+'</div></div>';
+  }
+  const counts=rows.map(function(r){ return Object.keys(r.set).length; });
+  box.innerHTML=
+    '<div class="card" style="margin-bottom:16px"><h3 style="margin:0 0 6px">🔥 连续打卡热力图</h3>'+
+    '<p class="hint" style="color:var(--sub);font-size:12px;margin:0 0 14px">近 '+weeks+' 周打卡情况：橙格＝当天完成。减肥 / 健康来自「签到」每日打卡，待办来自每日待办完成。</p>'+
+    rows.map(rowHtml).join("")+
+    '<div style="margin-top:14px;font-size:12px;color:var(--sub)">累计打卡天：减肥 '+counts[0]+' · 健康 '+counts[1]+' · 待办 '+counts[2]+' 天</div>'+
+    '</div>';
+}
 function openQuickAdd(){ openMask("quickAddMask"); }
 document.querySelectorAll(".mask").forEach(function(m){ m.addEventListener("click",function(e){ if(e.target===m) m.classList.remove("show"); }); });
 
