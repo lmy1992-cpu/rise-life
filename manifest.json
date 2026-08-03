@@ -1,0 +1,18 @@
+{
+  "name": "崛起吧人生 · 经营人生",
+  "short_name": "崛起吧人生",
+  "description": "跨端人生经营工作台：阅读 / 电影 / 减肥 / 健康 / 游戏 / 短篇 + AI 分析",
+  "lang": "zh-CN",
+  "start_url": "./整体工作台.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFF6F2",
+  "theme_color": "#FF8E72",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "./icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
