@@ -906,13 +906,17 @@ function renderLifeHeat(targetId){
     const a=store.checkin.apps.find(function(x){ return x.name===r.name; }); const s={};
     if(a&&a.dates) a.dates.forEach(function(d){ s[d]=1; }); return s;
   }
-  const weeks=17, total=weeks*7;
-  const today=new Date(); today.setHours(0,0,0,0);
-  const start=new Date(today); start.setDate(start.getDate()-(total-1));
-  function cells(set){
+  const now=new Date(); now.setHours(0,0,0,0);
+  let cy=+box.dataset.y; if(isNaN(cy)) cy=now.getFullYear();
+  let cm=+box.dataset.m; if(isNaN(cm)) cm=now.getMonth();
+  const dim=new Date(cy,cm+1,0).getDate();
+  function dayCells(set){
     let c="";
-    for(let i=0;i<total;i++){ const d=new Date(start); d.setDate(start.getDate()+i); const key=fmtKey(d); const on=set[key];
-      c+='<div title="'+key+(on?" ✓":"")+'" style="width:11px;height:11px;border-radius:3px;background:'+(on?"#FF8E72":"#efe9e2")+';flex:none"></div>'; }
+    for(let day=1; day<=dim; day++){
+      const key=fmtKey(new Date(cy,cm,day));
+      const on=set[key];
+      c+='<div title="'+cy+'-'+(cm+1)+'-'+day+(on?" ✓":"")+'" style="width:13px;height:13px;border-radius:3px;background:'+(on?"#FF8E72":"#efe9e2")+';flex:none"></div>';
+    }
     return c;
   }
   const edit = box.dataset.edit==="1";
@@ -927,20 +931,28 @@ function renderLifeHeat(targetId){
         '<button class="heat-btn del" onclick="delHeatRow('+idx+')">✕</button>'+
       '</span>';
     }
-    rowsHtml+='<div style="display:flex;align-items:center;gap:8px;margin:7px 0"><div style="width:64px;font-size:13px;color:var(--ink);flex:none;display:flex;align-items:center;gap:6px">'+r.name+ctrl+'</div><div style="display:flex;flex-wrap:wrap;gap:3px;max-width:calc(100% - 72px)">'+cells(set)+'</div></div>';
+    rowsHtml+='<div style="display:flex;align-items:center;gap:8px;margin:7px 0"><div style="width:64px;font-size:13px;color:var(--ink);flex:none;display:flex;align-items:center;gap:6px">'+r.name+ctrl+'</div><div style="display:flex;flex-wrap:wrap;gap:3px;max-width:calc(100% - 72px)">'+dayCells(set)+'</div></div>';
   });
   let addBar="";
   if(edit){
     addBar='<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input id="heatNewName" placeholder="新增打卡项（如 背单词）" style="border:1px solid var(--line);border-radius:10px;padding:7px 10px;font-size:13px;font-family:inherit;width:190px"><button class="btn sm primary" onclick="addHeatRow()">+ 新增</button></div>';
   }
   const counts=rows.map(function(r){ return Object.keys(setFor(r)).length; });
+  const monthLabel=cy+"年"+(cm+1)+"月";
   box.innerHTML=
-    '<div class="card" style="margin-bottom:16px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h3 style="margin:0">🔥 连续打卡热力图</h3>'+
+    '<div class="card" style="margin-bottom:16px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h3 style="margin:0">🔥 每月打卡热力图</h3>'+
     '<button class="btn sm" onclick="toggleHeatEdit()">'+(edit?"完成":"管理")+'</button></div>'+
-    '<p class="hint" style="color:var(--sub);font-size:12px;margin:6px 0 12px">近 '+weeks+' 周打卡情况：橙格＝当天完成。减肥 / 健康来自「签到」每日打卡，待办来自每日待办完成。点「管理」可增删 / 调顺序。</p>'+
+    '<div style="display:flex;align-items:center;gap:10px;margin:8px 0 10px"><button class="heat-btn" onclick="lifeHeatStep(-1)">‹</button><span style="font-size:14px;font-weight:700;color:var(--ink);min-width:96px;text-align:center">'+monthLabel+'</span><button class="heat-btn" onclick="lifeHeatStep(1)">›</button><span style="font-size:12px;color:var(--sub);margin-left:6px">橙格＝当天打卡，每格代表一天</span></div>'+
     rowsHtml+ addBar +
     '<div style="margin-top:12px;font-size:12px;color:var(--sub)">累计打卡天：'+rows.map(function(r,idx){return r.name+" "+counts[idx];}).join(" · ")+' 天</div>'+
     '</div>';
+}
+function lifeHeatStep(d){
+  const box=$("lifeHeat"); if(!box) return;
+  let cy=+box.dataset.y; let cm=+box.dataset.m;
+  const now=new Date(); if(isNaN(cy)) cy=now.getFullYear(); if(isNaN(cm)) cm=now.getMonth();
+  cm+=d; if(cm<0){ cm=11; cy--; } if(cm>11){ cm=0; cy++; }
+  box.dataset.y=cy; box.dataset.m=cm; renderLifeHeat();
 }
 function loadOverview(){
   const box = $("native-overview");
