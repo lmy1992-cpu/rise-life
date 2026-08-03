@@ -1,119 +1,40 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta http-equiv="refresh" content="0; url=%E6%95%B4%E4%BD%93%E5%B7%A5%E4%BD%9C%E5%8F%B0.html" />
-<meta name="theme-color" content="#FF8E72" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="default" />
-<meta name="apple-mobile-web-app-title" content="崛起吧人生" />
-<link rel="manifest" href="./manifest.json" />
-<link rel="apple-touch-icon" href="./icon-180.png" />
-<link rel="icon" href="./icon-192.png" />
-<script>
-if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js').catch(function(){});});}
-</script>
-<title>写作工作台</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>人生工作台 · 导航</title>
 <style>
-  :root{
-    --bg:#FBF6EC; --panel:#ffffff; --ink:#4A3528; --sub:#8a7a6c;
-    --line:#F0E6D8; --brand:#FF8E72; --brand2:#FFB394; --chip:#FFE9DC;
-    --chipOn:#FF8E72; --soft:#FFF1E8; --ok:#5e8c6a;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0; height:100%}
-  body{
-    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
-    background:var(--bg); color:var(--ink); line-height:1.6; -webkit-text-size-adjust:100%;
-  }
-  /* 外壳顶栏 */
-  .shell-bar{
-    position:sticky; top:0; z-index:50; height:56px; display:flex; align-items:center; gap:14px;
-    padding:0 16px; background:rgba(247,244,238,.94); backdrop-filter:saturate(140%) blur(8px);
-    border-bottom:1px solid var(--line);
-  }
-  .shell-logo{font-size:17px; font-weight:700; color:var(--brand); letter-spacing:1px; white-space:nowrap}
-  .shell-logo small{font-weight:400; color:var(--sub); font-size:11px; margin-left:6px}
-  .shell-tabs{display:flex; gap:6px; overflow-x:auto; flex:1; scrollbar-width:none}
-  .shell-tabs::-webkit-scrollbar{display:none}
-  .tab{
-    border:1px solid var(--line); background:var(--panel); color:var(--ink);
-    border-radius:999px; padding:6px 15px; font-size:13.5px; cursor:pointer; white-space:nowrap; font-family:inherit;
-    display:inline-flex; align-items:center; gap:6px;
-  }
-  .tab:hover{border-color:var(--brand2)}
-  .tab.on{background:var(--brand); color:#fff; border-color:var(--brand)}
-  .tab .dot{width:6px; height:6px; border-radius:50%; background:var(--ok)}
-  .tab.coming{color:var(--sub)}
-  .tab .soon{font-size:10px; background:var(--soft); color:var(--sub); border-radius:6px; padding:1px 6px; margin-left:2px}
-  .tab.on .soon{background:rgba(255,255,255,.22); color:#fff}
-  .shell-priv{font-size:11px; color:var(--sub); white-space:nowrap; display:flex; align-items:center; gap:5px}
-  .shell-priv .lock{width:7px; height:7px; border-radius:2px; background:var(--ok); display:inline-block}
-  /* 主区域 */
-  .shell-main{position:relative; height:calc(100vh - 56px)}
-  #modFrame{width:100%; height:100%; border:0; display:block; background:var(--bg)}
-  .ph-panel{
-    position:absolute; inset:0; display:none; align-items:center; justify-content:center; padding:20px; text-align:center;
-  }
-  .ph-panel.show{display:flex}
-  .ph-card{background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:34px 30px; max-width:380px; box-shadow:0 14px 40px rgba(0,0,0,.08)}
-  .ph-card h2{margin:0 0 8px; font-size:20px; color:var(--brand)}
-  .ph-card p{margin:0; color:var(--sub); font-size:14px}
-  .ph-card .tag{display:inline-block; margin-top:14px; font-size:12px; color:var(--brand); background:var(--soft); border-radius:8px; padding:4px 12px}
-  @media(max-width:640px){
-    .shell-logo small{display:none}
-    .shell-priv{display:none}
-    .shell-bar{gap:8px; padding:0 10px}
-    .tab{padding:6px 12px; font-size:13px}
-  }
+  :root{--bg:#FFFDFA;--card:#fff;--line:#efe3d4;--brand:#FF8E72;--ink:#4a3f35;--sub:#9a8c7a}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(160deg,#fff6ee,#fffdfa);color:var(--ink);min-height:100vh;padding:32px 18px 60px;-webkit-tap-highlight-color:transparent}
+  .wrap{max-width:760px;margin:0 auto}
+  h1{font-size:24px;text-align:center;margin-bottom:4px}
+  .sub{text-align:center;color:var(--sub);font-size:13px;margin-bottom:26px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px}
+  a.card{display:block;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px 16px;text-decoration:none;color:var(--ink);box-shadow:0 2px 10px rgba(212,165,116,.07);transition:transform .15s,box-shadow .15s}
+  a.card:hover{transform:translateY(-3px);box-shadow:0 6px 18px rgba(212,165,116,.18)}
+  .ic{font-size:28px;margin-bottom:8px}
+  .nm{font-size:15px;font-weight:700}
+  .ds{font-size:12px;color:var(--sub);margin-top:3px}
+  .foot{text-align:center;color:var(--sub);font-size:12px;margin-top:30px}
 </style>
 </head>
 <body>
-  <header class="shell-bar">
-    <div class="shell-logo">写作工作台<small>本地 · 模块化</small></div>
-    <nav class="shell-tabs" id="shellTabs">
-      <button class="tab on" data-mod="duanpian" data-src="短篇工作台.html"><span class="dot"></span>短篇</button>
-      <button class="tab coming" data-mod="daiban">待办<span class="soon">即将上线</span></button>
-      <button class="tab coming" data-mod="qiandao">签到<span class="soon">即将上线</span></button>
-      <button class="tab coming" data-mod="log">阅读日志<span class="soon">即将上线</span></button>
-    </nav>
-    <div class="shell-priv"><span class="lock"></span>数据全本地 · 不上传</div>
-  </header>
-
-  <main class="shell-main">
-    <iframe id="modFrame" src="短篇工作台.html" title="短篇模块"></iframe>
-    <div class="ph-panel" id="phPanel">
-      <div class="ph-card">
-        <h2 id="phTitle">模块筹备中</h2>
-        <p id="phDesc">该模块将在后续版本接入工作台。当前可先使用「短篇」模块进行创作。</p>
-        <span class="tag" id="phTag">即将上线</span>
-      </div>
-    </div>
-  </main>
-
-<script>
-  const frame=document.getElementById("modFrame");
-  const phPanel=document.getElementById("phPanel");
-  const tabs=[...document.querySelectorAll("#shellTabs .tab")];
-  const coming={daiban:"待办",qiandao:"签到",log:"阅读日志"};
-  tabs.forEach(t=>t.onclick=()=>{
-    tabs.forEach(x=>x.classList.remove("on"));
-    t.classList.add("on");
-    const mod=t.dataset.mod;
-    if(mod==="duanpian"){
-      phPanel.classList.remove("show");
-      frame.style.display="block";
-      if(frame.dataset.src!==t.dataset.src){ frame.src=t.dataset.src; frame.dataset.src=t.dataset.src; }
-    } else {
-      frame.style.display="none";
-      document.getElementById("phTitle").textContent=coming[mod]+"模块";
-      document.getElementById("phDesc").textContent="「"+coming[mod]+"」模块正在筹备，将在后续版本接入工作台。";
-      document.getElementById("phTag").textContent="即将上线";
-      phPanel.classList.add("show");
-    }
-  });
-  frame.dataset.src="短篇工作台.html";
-</script>
+<div class="wrap">
+  <h1>🌿 人生工作台</h1>
+  <div class="sub">一个页面管理你的创作与生活 · 点开任意模块</div>
+  <div class="grid">
+    <a class="card" href="整体工作台.html"><div class="ic">🏠</div><div class="nm">人生概览</div><div class="ds">总仪表盘首页</div></a>
+    <a class="card" href="duanpian-collab.html"><div class="ic">🤝</div><div class="nm">短篇协作版</div><div class="ds">与好友共享写作</div></a>
+    <a class="card" href="短篇工作台.html"><div class="ic">✒️</div><div class="nm">短篇工作台</div><div class="ds">例文/素材/脑洞</div></a>
+    <a class="card" href="电影手帐.html"><div class="ic">🎬</div><div class="nm">电影手帐</div><div class="ds">观影记录</div></a>
+    <a class="card" href="阅读手帐.html"><div class="ic">📚</div><div class="nm">阅读手帐</div><div class="ds">读书记录</div></a>
+    <a class="card" href="减肥板块.html"><div class="ic">⚖️</div><div class="nm">减肥板块</div><div class="ds">体重管理</div></a>
+    <a class="card" href="健康板块.html"><div class="ic">💪</div><div class="nm">健康板块</div><div class="ds">健康打卡</div></a>
+    <a class="card" href="游戏人生.html"><div class="ic">🐾</div><div class="nm">游戏人生</div><div class="ds">宠物养成</div></a>
+  </div>
+  <div class="foot">本页纯本地静态文件 · 无需联网即可打开</div>
+</div>
 </body>
 </html>
