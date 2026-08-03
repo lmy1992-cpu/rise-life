@@ -4,7 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>短篇协作版 · 共享工作台</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
+<script src="mammoth.browser.min.js"></script>
 <style>
   :root{
     --bg:#FBF6EC; --panel:#ffffff; --ink:#4A3528; --sub:#8a7a6c;
@@ -822,7 +823,7 @@ function tryParseJson(s){
 // 调一次 chat/completions；useJson=true 时要求 JSON 输出
 function aiChat(messages, useJson){
   const cfg=state.aiCfg;
-  const base=(cfg.baseUrl||"https://api.openai.com/v1").replace(/\/+$/,"");
+  const base=(cfg.baseUrl||"https://api.deepseek.com/v1").replace(/\/+$/,"");
   const model=cfg.model||"gpt-4o-mini";
   const body={model:model, messages:messages, temperature:0.3};
   if(useJson) body.response_format={type:"json_object"};
@@ -1830,10 +1831,10 @@ $("#btnAiSettingsSave").onclick=()=>{
 };
 // 选服务商自动填接口地址 / 模型（用户仍可手动改）
 const AI_PRESETS={
-  "DeepSeek":{baseUrl:"https://api.deepseek.com/v1", model:"deepseek-chat"},
-  "OpenAI":{baseUrl:"https://api.openai.com/v1", model:"gpt-4o-mini"},
-  "通义千问":{baseUrl:"https://dashscope.aliyuncs.com/compatible-mode/v1", model:"qwen-plus"},
-  "智谱 GLM":{baseUrl:"https://open.bigmodel.cn/api/paas/v4", model:"glm-4-flash"},
+  "DeepSeek(国内可直连)":{baseUrl:"https://api.deepseek.com/v1", model:"deepseek-chat"},
+  "通义千问(国内可直连)":{baseUrl:"https://dashscope.aliyuncs.com/compatible-mode/v1", model:"qwen-plus"},
+  "智谱 GLM(国内可直连)":{baseUrl:"https://open.bigmodel.cn/api/paas/v4", model:"glm-4-flash"},
+  "OpenAI(需翻墙)":{baseUrl:"https://api.openai.com/v1", model:"gpt-4o-mini"},
 };
 $("#aiProvider").onchange=()=>{
   const p=$("#aiProvider").value, pr=AI_PRESETS[p];
