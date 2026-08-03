@@ -663,6 +663,11 @@
       <textarea id="aiInstruction" style="min-height:120px" placeholder="例如：重点抓男女主的情感转折点，配角一笔带过；结局类型只归为 BE / HE 两类"></textarea>
       <button class="btn sm ghost" id="btnAiInstrDefault" style="margin-top:6px">填入默认指令模板</button>
     </div>
+    <div class="field">
+      <label>🧠 AI 长期偏好（跨所有例文自动生效，不用每篇重说）</label>
+      <div class="sub" style="margin:-2px 0 6px">把「每次都一样的规矩」写在这里，例如「结局只分 BE / HE」「配角一笔带过」。以后每篇 AI 分析 / 聊这篇都会自动带上，你不用重复纠正。在「💬 跟 AI 聊这篇」里也可以一键把某条纠正存进来。</div>
+      <textarea id="aiMemory" style="min-height:90px" placeholder="例如：结局类型只归为 BE / HE 两类；男主的白月光身份不要猜错"></textarea>
+    </div>
     <div class="modal-actions">
       <button class="btn ghost" id="btnAiSettingsClose">关闭</button>
       <button class="btn primary" id="btnAiSettingsSave">保存设置</button>
@@ -680,6 +685,7 @@
     <div class="modal-actions">
       <button class="btn ghost" id="btnAiChatClear">清空对话</button>
       <button class="btn ghost" id="btnAiChatClose">关闭</button>
+      <button class="btn ghost" id="btnAiChatMemory" title="把最近一条你的发言存为长期偏好，以后每篇自动带上">💾 存为全局偏好</button>
       <button class="btn primary" id="btnAiChatSend">发送</button>
     </div>
   </div>
@@ -803,6 +809,8 @@ async function callAiForExample(ex, extraNote){
         +"用户会给你一篇例文，请按下面的维度提取结构化信息，并以 JSON 对象返回，字段为：{"+fieldSpec+"}。\n"
         +"每个字段用简体中文填写，抓住关键情节与人设，控制长度。";
   if(userInstruction){ sys+="\n\n用户的归纳要求（请严格遵守）：\n"+userInstruction; }
+  const mem=(cfg.aiMemory||"").trim();
+  if(mem){ sys+="\n\n【你的长期偏好，跨所有例文都适用，请一并严格遵守】：\n"+mem; }
   let user="请分析这篇例文：\n标题："+(ex.title||"未命名")+"\n正文：\n"+(ex.content||"（正文为空）");
   if(extraNote) user+="\n\n本次补充要求："+extraNote;
   const messages=[{role:"system",content:sys},{role:"user",content:user}];
@@ -824,6 +832,8 @@ function buildChatSys(ex){
   let sys="你是一位擅长拆解中文短篇言情小说（重点是「追妻火葬场」类型：男主前期冷/渣 → 女主心死离开 → 男主卑微追妻）的创作分析助手。\n"
     +"用户正在和你讨论下面这一篇例文，请基于例文内容回答，用简体中文，简洁务实，不要编造例文里没有的情节。\n";
   if(instr) sys+="用户的归纳要求（参考）："+instr+"\n";
+  const mem=(state.aiCfg.aiMemory||"").trim();
+  if(mem) sys+="你的长期偏好（跨所有例文都适用）："+mem+"\n";
   sys+="可归纳维度参考："+fields+"。\n";
   sys+="例文标题："+(ex.title||"未命名")+"\n例文正文：\n"+(ex.content||"（正文为空）");
   return {role:"system",content:sys};
@@ -867,6 +877,16 @@ async function sendAiChat(){
   }catch(e){ chat.pop(); if(input) input.value=msg; toast("调用失败："+e.message); }
   if(btn){ btn.disabled=false; btn.textContent="发送"; }
   renderAiChat();
+}
+function saveChatToMemory(){
+  const ex=editCur&&editCur.ex; if(!ex) return;
+  const chat=(ex.ai&&ex.ai.chat)||[];
+  const lastUser=chat.filter(m=>m.role==="user").pop();
+  if(!lastUser){ toast("先和 AI 聊一句，再把这条变成长期偏好"); return; }
+  const cur=(state.aiCfg.aiMemory||"").trim();
+  state.aiCfg.aiMemory=(cur? cur+"\n" : "")+lastUser.content;
+  save(); renderAiChat();
+  toast("已存为长期偏好，以后每篇分析都会带上这条");
 }
 function clearAiChat(){
   const ex=editCur&&editCur.ex; if(!ex) return;
@@ -984,8 +1004,9 @@ function migrate(){
   fix(state.examples); fix(state.intros); fix(state.materials); fix(state.brainstorms);
   if(!Array.isArray(state.aiFields)) state.aiFields=DEFAULT_AI_FIELDS.map(f=>({...f}));
   state.examples.forEach(e=>{ if(!e.ai) e.ai={}; aiFields().forEach(f=>{ if(e.ai[f.key]===undefined) e.ai[f.key]=""; }); if(e.ai.done===undefined) e.ai.done=false; });
-  if(!state.aiCfg) state.aiCfg={provider:"",key:"",baseUrl:"",model:"",instruction:""};
+  if(!state.aiCfg) state.aiCfg={provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""};
   if(typeof state.aiCfg.instruction!=="string") state.aiCfg.instruction="";
+  if(typeof state.aiCfg.aiMemory!=="string") state.aiCfg.aiMemory="";
   if(!Array.isArray(state.misc)) state.misc=[];
   state.misc.forEach(c=>{ if(!Array.isArray(c.items)) c.items=[]; c.items.forEach(it=>{ if(it.intro===undefined) it.intro=""; }); });
   if(!Array.isArray(state.ideas)) state.ideas=[];
@@ -1018,7 +1039,7 @@ function seed(){
       {id:"t10",kind:"trope",name:"偷听",intro:"偷听/隔墙有耳制造误会或打脸"},
     ],
     examples:[], intros:[], materials:[], brainstorms:[], misc:[], ideas:[], crawlFav:[],
-    aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:""},
+    aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},
     aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),
     nav: DEFAULT_NAV.map(x=>({...x})),
   };
@@ -1295,6 +1316,7 @@ $("#btnRdAiRun").onclick=()=>runAiAnalysis(editCur&&editCur.ex);
 $("#btnRdAiTrial").onclick=()=>trialAiAnalysis(editCur&&editCur.ex);
 $("#btnRdAiChat").onclick=()=>openAiChat();
 $("#btnAiChatSend").onclick=()=>sendAiChat();
+$("#btnAiChatMemory").onclick=()=>saveChatToMemory();
 $("#btnAiChatClose").onclick=()=>$("#maskAiChat").classList.remove("on");
 $("#btnAiChatClear").onclick=()=>clearAiChat();
 const _ci=$("#aiChatInput"); if(_ci) _ci.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); sendAiChat(); } });
@@ -1694,6 +1716,7 @@ $("#btnAiSettings").onclick=()=>{
   $("#aiKey").value=state.aiCfg.key||"";
   $("#aiModel").value=state.aiCfg.model||"";
   $("#aiInstruction").value=state.aiCfg.instruction||"";
+  $("#aiMemory").value=state.aiCfg.aiMemory||"";
   renderAiFieldManage();
   $("#maskAiSettings").classList.add("on");
 };
@@ -1718,6 +1741,7 @@ $("#btnAiSettingsSave").onclick=()=>{
   state.aiCfg.key=$("#aiKey").value.trim();
   state.aiCfg.model=$("#aiModel").value.trim();
   state.aiCfg.instruction=$("#aiInstruction").value;
+  state.aiCfg.aiMemory=$("#aiMemory").value;
   save(); $("#maskAiSettings").classList.remove("on");
   toast("已保存设置");
 };
