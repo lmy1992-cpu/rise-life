@@ -3,9 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<title>短篇协作版 · 共享工作台</title>
-<!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
-<script src="mammoth.browser.min.js"></script>
+<title>短篇 · 工作台</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <style>
   :root{
     --bg:#FBF6EC; --panel:#ffffff; --ink:#4A3528; --sub:#8a7a6c;
@@ -554,34 +553,6 @@
     nav.side .navitem b{min-width:0 !important; overflow:hidden !important; text-overflow:ellipsis !important}
   }
 </style>
-<script>
-/* ===== 协作版：Supabase 同步（共享 + 私有双保险箱）===== */
-const SB_URL="https://ailxzvbbjybezfoaqsit.supabase.co";
-const SB_ANON="sb_publishable_AQbq_KfBipQcYrlX5UL3Qg_ZIB1P_nx";
-const SYNC_SALT="rise-life-collab-v1";
-async function sha256Hex(s){ const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
-async function deriveKey(pass){ const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pass),"PBKDF2",false,["deriveKey"]); return crypto.subtle.deriveKey({name:"PBKDF2",salt:new TextEncoder().encode(SYNC_SALT),iterations:150000,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]); }
-function b64from(buf){ const bytes=new Uint8Array(buf); let bin=""; const c=0x8000; for(let i=0;i<bytes.length;i+=c) bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+c)); return btoa(bin); }
-function b64to(s){ const bin=atob(s); const bytes=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i); return bytes.buffer; }
-async function encBundle(key,obj){ const iv=crypto.getRandomValues(new Uint8Array(12)); const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,new TextEncoder().encode(JSON.stringify(obj))); return b64from(iv.buffer)+"."+b64from(ct); }
-async function decBundle(key,str){ const p=str.split("."); if(p.length!==2) throw new Error("密文格式错误"); const iv=new Uint8Array(b64to(p[0])); const ct=b64to(p[1]); const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv},key,ct); return JSON.parse(new TextDecoder().decode(pt)); }
-function sbHeaders(){ return {"apikey":SB_ANON,"Authorization":"Bearer "+SB_ANON,"Content-Type":"application/json"}; }
-async function sbFetch(url,opts){
-  const controller=new AbortController();
-  const t=setTimeout(function(){ controller.abort(); }, 12000);
-  let r;
-  try{
-    r=await fetch(url, Object.assign({}, opts, {signal: controller.signal}));
-  }catch(e){
-    clearTimeout(t);
-    throw new Error("无法连接 Supabase（网络/跨域）："+(e.message||e));
-  }
-  clearTimeout(t);
-  return r;
-}
-async function sbUpsert(vid,payload,ts){ const url=SB_URL.replace(/\/$/,"")+"/rest/v1/sync_vault"; const r=await sbFetch(url,{method:"POST",headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates"}),body:JSON.stringify({vault_id:vid,payload,updated_at:ts||new Date().toISOString()})}); if(!r.ok){ let b=""; try{b=await r.text();}catch(e){} throw new Error("上传失败 HTTP "+r.status+(b?("｜"+b.slice(0,160)):"")); } }
-async function sbGet(vid){ const url=SB_URL.replace(/\/$/,"")+"/rest/v1/sync_vault?vault_id=eq."+encodeURIComponent(vid); const r=await sbFetch(url,{headers:sbHeaders()}); if(!r.ok){ let b=""; try{b=await r.text();}catch(e){} throw new Error("下载失败 HTTP "+r.status+(b?("｜"+b.slice(0,160)):"")); } const a=await r.json(); return (a&&a.length)?a[0]:null; }
-</script>
 <style id="zoomfix">
 html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 @media (max-width:820px){
@@ -593,19 +564,6 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 </style>
 </head>
 <body>
-<!-- 协作登录 -->
-<div class="mask" id="maskLogin" style="z-index:999">
-  <div class="modal" style="max-width:440px">
-    <h3>🔗 短篇协作版</h3>
-    <div class="sub">和好友共用例文 / 素材 / 杂项 / 元素；各自的脑洞想法、想法拓展、抓取收藏则独立保存，互不覆盖。共享内容用「协作空间口令」打开；私人内容用「我的私有口令」打开，只在你当前设备上解密。</div>
-    <div class="field"><label>协作空间口令（两人约定同一个词）</label><input id="collabShare" type="password" placeholder="例如 rose2026" /></div>
-    <div class="field"><label>我的私有口令（只有你自己知道）</label><input id="collabPriv" type="password" placeholder="例如 my-rose-88" /></div>
-    <label class="up-batch"><input type="checkbox" id="collabRemember" /> <span>记住口令（仅存本机浏览器，方便下次直接进）</span></label>
-    <div id="collabMsg" style="color:#c0392b;font-size:13px;min-height:18px;margin:6px 0"></div>
-    <div class="modal-actions"><button class="btn primary" id="btnCollabLogin">进入协作空间</button></div>
-  </div>
-</div>
-<div id="collabBar" style="display:none;position:fixed;right:12px;bottom:12px;z-index:60;background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.12)">🔗 协作中 · <span id="syncStatus" style="color:#1a8a3c">已同步 ✓</span> · <a href="javascript:void(0)" id="btnCollabLogout" style="color:var(--brand);font-weight:600">退出</a></div>
 <script>if(window.self!==window.top && !/[?&]ipad=/.test(location.search)){document.body.className+=" embedded";}</script>
 <script src="crawl-data.js"></script>
 <script>
@@ -648,7 +606,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     if(d.type==="getSummary"){ try{ parent.postMessage({type:"summary",mod:MOD,payload:summarize()},"*"); }catch(err){ parent.postMessage({type:"summary",mod:MOD,payload:{error:String(err)}},"*"); } }
     else if(d.type==="exportModule"){ try{ parent.postMessage({type:"moduleData",mod:MOD,key:LSKEY,data:JSON.parse(JSON.stringify(state))},"*"); }catch(err){ parent.postMessage({type:"moduleData",mod:MOD,key:LSKEY,error:String(err)},"*"); } }
     else if(d.type==="importModule"){ try{ state=Object.assign(state,d.data); save(); if(typeof renderNav==="function") renderNav(); parent.postMessage({type:"importDone",mod:MOD},"*"); }catch(err){ parent.postMessage({type:"importDone",mod:MOD,error:String(err)},"*"); } }
-    else if(d.type==="duanpianSynced"){ try{ if(_loadPromise) return; load().then(function(){ if(typeof renderNav==="function") renderNav(); if(typeof renderAll==="function") renderAll(); if(typeof updateFilterBtns==="function") updateFilterBtns(); if(typeof renderMisc==="function") renderMisc(); if(typeof renderIdeasSaved==="function") renderIdeasSaved(); }); }catch(err){} }
+    else if(d.type==="duanpianSynced"){ try{ load().then(function(){ if(typeof renderNav==="function") renderNav(); if(typeof renderAll==="function") renderAll(); if(typeof updateFilterBtns==="function") updateFilterBtns(); if(typeof renderMisc==="function") renderMisc(); if(typeof renderIdeasSaved==="function") renderIdeasSaved(); }); }catch(err){} }
   });
 })();
 </script>
@@ -752,11 +710,6 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
       <div class="misc-tabs">
         <button class="mtab on" id="miscTabManual">📝 手工输入</button>
         <button class="mtab" id="miscTabAi">🤖 AI 自动归类</button>
-      </div>
-      <div class="misc-gen" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 12px">
-        <button class="btn sm primary" id="btnGenName">✨ 一键起名</button>
-        <button class="btn sm primary" id="btnGenDeath">💔 一键心死名场面</button>
-        <span class="hint">本地离线生成，结果存进下方对应大项，可随时改</span>
       </div>
       <div id="miscList"></div>
     </section>
@@ -1127,7 +1080,7 @@ function tryParseJson(s){
 // 调一次 chat/completions；useJson=true 时要求 JSON 输出
 function aiChat(messages, useJson, temperature){
   const cfg=state.aiCfg;
-  const base=(cfg.baseUrl||"https://api.deepseek.com/v1").replace(/\/+$/,"");
+  const base=(cfg.baseUrl||"https://api.openai.com/v1").replace(/\/+$/,"");
   const model=cfg.model||"gpt-4o-mini";
   const body={model:model, messages:messages, temperature:(typeof temperature==="number"?temperature:0.3)};
   if(useJson) body.response_format={type:"json_object"};
@@ -1144,7 +1097,7 @@ async function callAiForExample(ex, extraNote){
   const fields=aiFields();
   const fieldSpec=fields.map(f=>'"'+f.key+'": "'+f.label+'"').join(", ");
   const userInstruction=(cfg.instruction||"").trim();
-  let sys="你是一位擅长拆解中文短篇小说的创作分析助手，尤其熟悉这几类：①「追妻火葬场」（男主前期冷/渣 → 女主心死离开 → 男主卑微追妻）；②「爽文」（打脸逆袭 / 扮猪吃虎 / 富二代觉醒）；③「世情文」（家长里短：婆媳 / 父母偏心 / 邻里扰民 / 领导穿小鞋 / 裁员）；④「复仇文」（被坑后精密反击）。\n"
+  let sys="你是一位擅长拆解中文短篇小说的创作分析助手，尤其熟悉这几类：①「追妻火葬场」（男主前期冷/渣→女主心死离开→男主卑微追妻）；②「爽文」（打脸逆袭 / 扮猪吃虎 / 富二代觉醒）；③「世情文」（家长里短：婆媳 / 父母偏心 / 邻里扰民 / 领导穿小鞋 / 裁员）；④「复仇文」（被坑后精密反击）。\n"
         +"用户会给你一篇例文，请按下面的维度提取结构化信息，并以 JSON 对象返回，字段为：{"+fieldSpec+"}。\n"
         +"每个字段用简体中文填写，抓住关键情节与人设，控制长度。若例文不属于上述任一类型也无妨，按实际内容分析即可。";
   if(userInstruction){ sys+="\n\n用户的归纳要求（请严格遵守）：\n"+userInstruction; }
@@ -1304,134 +1257,35 @@ function metaOnly(st){
   (m.materials||[]).forEach(x=>{ if(x.type==="image") delete x.content; });
   return m;
 }
-let _syncRetryTimer=null;
-let _collabLoadedFromCloud=false; // 是否已成功从云端读取过一次数据
-/* 同电脑多窗口即时同步：一台电脑开多个协作版窗口时，一个窗口保存后，其它窗口立刻同步，
-   不再等 20 秒云端轮询、也不依赖海外 Supabase 网络（跨设备仍走云端）。 */
-const _COLLAB_TAB_ID = (Math.random().toString(36) + Date.now().toString(36)).slice(2);
-const _collabBC = ('BroadcastChannel' in window) ? new BroadcastChannel('duanpian-collab') : null;
-function _applyBroadcastState(shared, priv, ts){
-  if(!shared && !priv) return;
-  const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
-  state = Object.assign(def, shared||{}, priv||{});
-  try{ const a=JSON.parse(localStorage.getItem("dp_collab_aicfg")||"null"); if(a) state.aiCfg=Object.assign(state.aiCfg||{}, a); }catch(e){}
-  state.aiCfg.aiMemory = state.aiMemory||"";
-  migrate();
-  if(ts) collabSharedUpdatedAt = ts;
-  try{ localStorage.setItem("dp_collab_cache", JSON.stringify(state)); }catch(e){}
-  renderAll();
+function save(){
+  let full, meta;
+  try{ localStorage.setItem("__ts__"+KEY, String(Date.now())); }catch(_){}
+  try{ full=JSON.parse(JSON.stringify(state)); meta=metaOnly(state); }
+  catch(e){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(_){} return; }
+  // 优先写 IndexedDB（全量，含正文/图片）；localStorage 仅留元数据
+  idbPut(IDB_KEY, full).then(()=>{
+    try{ localStorage.setItem(KEY, JSON.stringify(meta)); }catch(e){ /* IDB 已是全量，忽略 */ }
+  }).catch(()=>{
+    // IDB 不可用（如隐私模式）：回退完整存 localStorage，保证不丢数据
+    try{ localStorage.setItem(KEY, JSON.stringify(full)); }catch(e){}
+  });
 }
-if(_collabBC){
-  _collabBC.onmessage = function(ev){
-    const d = ev && ev.data;
-    if(!d || d.type!=='collab-state' || d.from===_COLLAB_TAB_ID) return;
-    if(document.querySelector('.mask.on')) return;   // 正在编辑，不打断，避免覆盖你正在写的内容
-    if(_syncRetryTimer) return;                       // 本窗口还有未同步修改，先不拉，避免把刚改的冲掉
-    _applyBroadcastState(d.shared, d.priv, d.ts);
-    setSyncStatus("已同步 ✓", true);
-    toast("已同步（来自另一个窗口）");
-  };
-}
-function setSyncStatus(txt, ok){
-  const el=document.getElementById('syncStatus');
-  if(el){ el.textContent=txt; el.style.color=(ok===false)?"#d23":(ok===true?"#1a8a3c":"#888"); }
-}
-function isStateEmpty(){
-  return (!state.examples||!state.examples.length) &&
-         (!state.intros||!state.intros.length) &&
-         (!state.materials||!state.materials.length) &&
-         (!state.brainstorms||!state.brainstorms.length) &&
-         (!state.misc||!state.misc.length) &&
-         (!state.tags||!state.tags.length) &&
-         (!state.ideas||!state.ideas.length) &&
-         (!state.crawlFav||!state.crawlFav.length);
-}
-function _countItems(s){
-  if(!s) return 0;
-  return (s.examples?s.examples.length:0)+(s.intros?s.intros.length:0)+(s.materials?s.materials.length:0)+(s.misc?s.misc.length:0)+(s.tags?s.tags.length:0)+(s.brainstorms?s.brainstorms.length:0)+(s.ideas?s.ideas.length:0)+(s.crawlFav?s.crawlFav.length:0);
-}
-async function save(){
-  if(!collabSharedPwd || !collabPrivPwd) return; // 未登录不写
-  // 安全护栏：还没成功读过云端，且当前数据为空，禁止上传覆盖云端（防止首次联网失败时把空数据冲掉）
-  if(!_collabLoadedFromCloud && isStateEmpty()){
-    setSyncStatus("本地为空，未上传（等待云端数据）", false);
-    try{ localStorage.setItem("dp_collab_cache", JSON.stringify(state)); }catch(e){}
-    return;
-  }
-  const ts=new Date().toISOString();
-  // 先落本地缓存，再传云端。国内 Supabase 不稳定，必须保证即使上传失败/刷新，本地也有最新副本
-  try{ localStorage.setItem("dp_collab_aicfg", JSON.stringify(state.aiCfg||{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""})); }catch(e){}
-  try{ localStorage.setItem("dp_collab_cache", JSON.stringify(state)); }catch(e){}
-  try{
-    const shared={examples:state.examples,intros:state.intros,materials:state.materials,misc:state.misc,tags:state.tags,aiFields:state.aiFields,nav:state.nav};
-    const priv={brainstorms:state.brainstorms,ideas:state.ideas,crawlFav:state.crawlFav,aiMemory:state.aiCfg?state.aiCfg.aiMemory:""};
-    const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
-    const pId="collab_priv:"+await sha256Hex("collab:"+collabPrivPwd);
-    await Promise.all([
-      deriveKey(collabSharedPwd).then(k=>encBundle(k,shared)).then(p=>sbUpsert(sId,p,ts)),
-      deriveKey(collabPrivPwd).then(k=>encBundle(k,priv)).then(p=>sbUpsert(pId,p,ts))
-    ]);
-    collabSharedUpdatedAt=ts;
-    // 同电脑多窗口即时同步：通知其它窗口立刻拉取（不再等 20 秒云端轮询）
-    if(_collabBC){ try{ _collabBC.postMessage({type:'collab-state', from:_COLLAB_TAB_ID, ts:ts, shared:shared, priv:priv}); }catch(e){} }
-    setSyncStatus("已同步 ✓", true);
-    if(_syncRetryTimer){ clearInterval(_syncRetryTimer); _syncRetryTimer=null; } // 上传成功，停止重试
-  }catch(e){
-    // 上传失败：标记「未同步」，后台每 8 秒自动重试，直到真正传上去（保证朋友那边能看到）
-    setSyncStatus("未同步，重试中…", false);
-    if(!_syncRetryTimer){
-      _syncRetryTimer=setInterval(function(){ save(); }, 8000);
-    }
-  }
-}
-let _loadPromise=null;
-async function load(){
-  if(_loadPromise) return _loadPromise;
-  _loadPromise=(async function(){
-    try{
-      const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
-      const pId="collab_priv:"+await sha256Hex("collab:"+collabPrivPwd);
-      const [sRow,pRow]=await Promise.all([sbGet(sId), sbGet(pId)]);
-      collabSharedUpdatedAt = (sRow && sRow.updated_at) ? sRow.updated_at : null;
-      const shared = sRow ? await decBundle(await deriveKey(collabSharedPwd), sRow.payload) : null;
-      const priv = pRow ? await decBundle(await deriveKey(collabPrivPwd), pRow.payload) : null;
-      const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
-      const cloudState = Object.assign(def, shared||{}, priv||{});
-      // 本地缓存作为「最后已知良好」副本：国内 Supabase 不稳，云端可能连上却为空，绝不能盲从空云端清空本地真实数据
-      let localState=null;
-      try{ const c=localStorage.getItem("dp_collab_cache"); if(c) localState=JSON.parse(c); }catch(e){}
-      const cloudEmpty=isStateEmpty(cloudState), localEmpty=!localState||isStateEmpty(localState);
-      let chosen, localWon=false;
-      if(!cloudEmpty && !localEmpty){
-        // 云端与本地都非空：取数据量更大的一方，避免盲从覆盖导致丢失（相等以云端为同步基准）
-        chosen = (_countItems(localState) > _countItems(cloudState)) ? localState : cloudState;
-        if(chosen===localState) localWon=true;
-      } else if(!cloudEmpty){ chosen=cloudState; }
-      else if(!localEmpty){ chosen=localState; localWon=true; }
-      else { chosen=cloudState; }
-      state = chosen;
-      try{ const a=JSON.parse(localStorage.getItem("dp_collab_aicfg")||"null"); if(a) state.aiCfg=Object.assign(state.aiCfg||{}, a); }catch(e){}
-      state.aiCfg.aiMemory = state.aiMemory||"";
+function load(){
+  if(typeof indexedDB!=="undefined"){
+    return idbGet(IDB_KEY).then(full=>{
+      if(full && full.examples){ state=full; }
+      else { const raw=localStorage.getItem(KEY); if(raw){ try{ state=JSON.parse(raw); }catch(e){ state=null; } } else { state=null; } }
+      if(!state){ seed(); return; }
       migrate();
-      _collabLoadedFromCloud=true; // 成功从云端读取，后续 save 允许空数据上传（用户主动清空场景）
-      try{ localStorage.setItem("dp_collab_cache", JSON.stringify(state)); }catch(e){}
-      // 本地副本更全（云端曾为空/更少）时，立即把本地回写云端恢复，防止下次再被空云端覆盖
-      if(localWon){ try{ save(); }catch(e){} }
-    }catch(e){
-      // 网络失败时读本地缓存兜底，避免空白页
-      const cached=localStorage.getItem("dp_collab_cache");
-      if(cached){
-        try{
-          state=JSON.parse(cached);
-          migrate();
-          /* 协作数据走本地缓存兜底：静默 */
-          return;
-        }catch(_){}
-      }
-      throw e;
-    }
-  })();
-  try{ await _loadPromise; }finally{ _loadPromise=null; }
+    }).catch(()=>{
+      const raw=localStorage.getItem(KEY);
+      if(raw){ try{ state=JSON.parse(raw); }catch(e){ state=null; } }
+      if(!state){ seed(); return; }
+      migrate();
+    });
+  }
+  try{ const raw=localStorage.getItem(KEY); if(raw){ state=JSON.parse(raw); migrate(); return Promise.resolve(); } }catch(e){}
+  seed(); return Promise.resolve();
 }
 function migrate(){
   if(Array.isArray(state.tags)){
@@ -1681,7 +1535,7 @@ function renderExamples(){
     const tags=(e.tags||[]).map(id=>{const t=tagById(id);return t?'<span class="tagmini">'+esc(t.name)+'</span>':"";}).join("");
     const snipSrc=(e.content||"").split("\n").slice(0,4).join("\n");
     card.innerHTML='<div class="chead"><span class="cno">#'+no+'</span><h3>'+esc(e.title)+'</h3></div>'+
-      '<p class="snip">'+(esc(snipSrc||"")||"（暂无正文）")+'</p>'+
+      '<p class="snip">'+(esc(snipSrc||"")||"（暂无正文")+')</p>'+
       '<div class="meta">'+tags+(aiHasContent(e.ai)?'<span class="ai-badge">🤖 已分析</span>':"")+'<span>'+esc(e.fileName||"")+'</span><span class="ctime">添加 '+fmtDate(e.createdAt)+'</span></div>';
     card.onclick=()=>openEditor(e.id);
     g.appendChild(card);
@@ -2275,48 +2129,6 @@ function renderMisc(){
 /* ---------- 杂项分类 · AI 自动归类（按字段汇总所有例文的分析内容） ---------- */
 $("#miscTabManual").onclick=()=>{ miscZone="manual"; $("#miscTabManual").classList.add("on"); $("#miscTabAi").classList.remove("on"); renderMisc(); };
 $("#miscTabAi").onclick=()=>{ miscZone="ai"; $("#miscTabAi").classList.add("on"); $("#miscTabManual").classList.remove("on"); renderMisc(); };
-/* ===== 杂项·一键起名 / 一键心死名场面（本地离线生成，无需联网/密钥） ===== */
-const DP_NAME_POOL={
-  "男主":{s:["薄","厉","陆","顾","沈","傅","霍","司","战","裴","靳","贺","祁"],g:["景行","庭深","宴辞","斯年","寒州","妄之","承胤","惊蛰","疏野","砚辞","聿珩","清晏","执"],hint:"前期冷漠/自私，把她的好当理所当然；后期追妻火葬场"},
-  "女主":{s:["沈","林","温","姜","乔","许","阮","叶","苏","纪","池"],g:["晚星","知意","清欢","以沫","念纾","昭","宁","未晞","听澜","挽","疏桐","宛","可"],hint:"一次次失望后彻底心死，温柔但有骨气，离开得干脆"},
-  "白月光":{s:["白","苏","陈","宋","江"],g:["皎","鹭","棠","微","苒","乔","夕"],hint:"他心头的一抹白月光，未必多好，只是他没得到"},
-  "深情男二":{s:["陆","江","程","宋","谢","卫","晏"],g:["照","怀瑾","渡","时砚","听舟","斯远","行止","屿"],hint:"一直默默守着她，在她最狼狈时接住她"}
-};
-function dpPick(a){ return a[Math.floor(Math.random()*a.length)]; }
-function genName(){
-  const roles=Object.keys(DP_NAME_POOL);
-  const role=dpPick(roles);
-  const p=DP_NAME_POOL[role];
-  const name=p.s[Math.floor(Math.random()*p.s.length)]+p.g[Math.floor(Math.random()*p.g.length)];
-  return {name, roleLabel:role, persona:p.hint};
-}
-const DP_DEATH_TPL=[
-  "雨夜她提着行李站在门口，他说：「你又要闹哪出？」她没闹，只把钥匙放在玄关：『{line}』",
-  "她发烧到39度，给他打了七个电话，他正陪{red}在{place}。第二天她自己挂的号，从此不再拨那个号码。",
-  "婚礼请柬摆在他桌上，新娘不是她。他笑着撕了：『幼稚。』后来他在她婚礼上，红了眼。",
-  "他习惯性回头想喊她的名字，身后空无一人——她搬走那天，没留新地址。",
-  "她把聊天记录里他说的「我忙」存了满满一相册，最后一条是：『{line}』她设置了不再接收。",
-  "他应酬到凌晨回家，灯还亮着，饭在桌上凉透。她坐在沙发上轻声说：『{line}』然后关了灯。",
-  "她把备孕的单子折好塞进他外套口袋，他随手扔进公司垃圾桶。后来他在垃圾桶旁站了一整晚。"
-];
-const DP_DEATH_FILL={red:["白月光","客户","兄弟","前任"],place:["酒局","球场","医院","外地"],line:["我走了，别找","这次不闹了，是真的","钥匙还你，人也还你","我们到此为止","我累了，放过彼此吧"]};
-const DP_HOOK=[
-  "后来他学做她爱吃的菜，却再没人坐那张椅子；朋友笑他「以前不是最烦下厨」，他夹着烟没说话。",
-  "他翻遍通讯录用尽借口找她，她只回：『先生，我们好像不熟。』",
-  "他在她公司楼下等了三天，保安都认得他了，她从另一扇门离开。",
-  "他终于读懂她写的每篇日记，最后一页写着：『到此为止，祝好。』",
-  "他捧着她最爱的那束花站在雨里，路人问他等谁，他说：「等我太太。」可她早不是了。",
-  "他学会了对别人温柔，唯独弄丢了那个教会他温柔的人。"
-];
-function genDeathScene(){
-  const tpl=dpPick(DP_DEATH_TPL);
-  const body=tpl.replace("{red}",dpPick(DP_DEATH_FILL.red)).replace("{place}",dpPick(DP_DEATH_FILL.place)).replace("{line}",dpPick(DP_DEATH_FILL.line));
-  const titles=["雨夜的行李箱","第七个未接电话","不是新娘的请柬","身后空无一人","相册里的「我忙」","凉透的晚饭","口袋里的备孕单"];
-  return {title:dpPick(titles), body, hook:dpPick(DP_HOOK)};
-}
-function dpEnsureCat(name){ let c=state.misc.find(m=>m.name===name); if(!c){ c={id:uid(),name,items:[]}; state.misc.push(c);} miscActive=c.id; return c; }
-$("#btnGenName").onclick=()=>{ const n=genName(); const c=dpEnsureCat("💡 起名库"); c.items.push({id:uid(),text:n.name+"（"+n.roleLabel+"）",intro:n.persona}); save(); renderMisc(); toast("已生成起名："+n.name); };
-$("#btnGenDeath").onclick=()=>{ const s=genDeathScene(); const c=dpEnsureCat("💔 心死名场面"); c.items.push({id:uid(),text:s.title,intro:s.body+"\n\n🔁 追妻反差："+s.hook}); save(); renderMisc(); toast("已生成心死名场面"); };
 function renderMiscAi(){
   const box=$("#miscList"); box.innerHTML="";
   const hasAny=state.examples.some(e=>aiHasContent(e.ai));
@@ -2517,7 +2329,7 @@ $("#fileImport").onchange=(e)=>{
   rd.onload=()=>{ try{ const d=JSON.parse(rd.result); if(d&&d.tags){ state=d; migrate(); save(); renderAll(); $("#maskBackup").classList.remove("on"); toast("导入成功"); } else toast("文件格式不对"); }catch(err){ toast("解析失败"); } };
   rd.readAsText(f); e.target.value="";
 };
-$("#btnWipe").onclick=()=>{ if(confirm("确定清空本协作空间的共享与私人内容？此操作不可恢复！")){ state={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:state.aiCfg||{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; save(); renderAll(); $("#maskBackup").classList.remove("on"); toast("已清空"); } };
+$("#btnWipe").onclick=()=>{ if(confirm("确定清空全部数据？此操作不可恢复！")){ localStorage.removeItem(KEY); seed(); renderAll(); $("#maskBackup").classList.remove("on"); toast("已清空"); } };
 
 /* ---------- AI 设置（占位，密钥仅存本机；归纳维度可自定义） ---------- */
 function renderAiFieldManage(){
@@ -2569,10 +2381,10 @@ $("#btnAiSettingsSave").onclick=()=>{
 };
 // 选服务商自动填接口地址 / 模型（用户仍可手动改）
 const AI_PRESETS={
-  "DeepSeek(国内可直连)":{baseUrl:"https://api.deepseek.com/v1", model:"deepseek-v4-flash"},
-  "通义千问(国内可直连)":{baseUrl:"https://dashscope.aliyuncs.com/compatible-mode/v1", model:"qwen-plus"},
-  "智谱 GLM(国内可直连)":{baseUrl:"https://open.bigmodel.cn/api/paas/v4", model:"glm-4-flash"},
-  "OpenAI(需翻墙)":{baseUrl:"https://api.openai.com/v1", model:"gpt-4o-mini"},
+  "DeepSeek":{baseUrl:"https://api.deepseek.com/v1", model:"deepseek-v4-flash"},
+  "OpenAI":{baseUrl:"https://api.openai.com/v1", model:"gpt-4o-mini"},
+  "通义千问":{baseUrl:"https://dashscope.aliyuncs.com/compatible-mode/v1", model:"qwen-plus"},
+  "智谱 GLM":{baseUrl:"https://open.bigmodel.cn/api/paas/v4", model:"glm-4-flash"},
 };
 $("#aiProvider").onchange=()=>{
   const p=$("#aiProvider").value, pr=AI_PRESETS[p];
@@ -2858,99 +2670,27 @@ $$(".ctab").forEach(b=>b.onclick=()=>{
   crawlTab=b.dataset.ctab; renderCrawl();
 });
 
-/* ---------- 启动（协作版：先登录，再加载共享+私有双保险箱）---------- */
-let collabSharedPwd="", collabPrivPwd="";
-let collabSharedUpdatedAt=null, _collabTimer=null;
-function collabStartPoll(){ if(_collabTimer) clearInterval(_collabTimer); _collabTimer=setInterval(collabPoll,20000); }
-async function collabPoll(){
-  if(!collabSharedPwd) return;
-  if(document.querySelector('.mask.on')) return; // 编辑弹窗打开时不打断
-  if(_syncRetryTimer) return; // 本地还有未同步成功的修改，先不拉取覆盖，避免把你刚改的内容冲掉
+/* ---------- 启动 ---------- */
+load().then(function(){
+  renderNav();
+  buildTagPicker($("#matTagPicker"),matTags,()=>{});
+  buildTagPicker($("#brTagPicker"),brTags,()=>{});
+  renderAll();
+  updateFilterBtns();
+  /* 演示种子：首次打开无数据时填充，方便预览（可在模块内清空） */
   try{
-    const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
-    const url=SB_URL.replace(/\/$/,"")+"/rest/v1/sync_vault?vault_id=eq."+encodeURIComponent(sId)+"&select=vault_id,payload,updated_at";
-    const r=await sbFetch(url,{headers:sbHeaders()});
-    if(!r.ok) return;
-    const a=await r.json(); const row=a&&a[0];
-    if(row && row.updated_at!==collabSharedUpdatedAt){
-      const shared=row.payload ? await decBundle(await deriveKey(collabSharedPwd), row.payload) : null;
-      if(shared) Object.assign(state, shared);
-      collabSharedUpdatedAt=row.updated_at;
-      migrate(); renderAll();
-      toast("已同步协作伙伴的最新内容");
+    if(!localStorage.getItem("dp_seed_v1") && state.examples.length===0){
+      var dt=Date.now();
+      state.examples.push({id:uid(),title:"雨夜重逢",content:"她撑着伞站在楼下，雨水顺着伞骨滴成线。他愣了三秒才认出那是阔别七年的她。",createdAt:dt,tags:["追妻","现代"]});
+      state.intros.push({id:uid(),title:"误会解除那一刻",introText:"他终于看见她手机里那张产检单，原来她离开不是不爱，是怕拖累。",createdAt:dt,tags:["心死","反转"]});
+      state.materials.push({id:uid(),title:"巷口早餐铺",idea:"每天同一时间出现的他，和总多给一个茶叶蛋的阿婆。",createdAt:dt,tags:["素材"]});
+      state.brainstorms.push({id:uid(),title:"如果重来一次",idea:"男主用一年时间，把女主走过的路重走一遍。",createdAt:dt,tags:["脑洞"]});
+      save(); localStorage.setItem("dp_seed_v1","1");
+      renderAll();
     }
-  }catch(e){ /* 静默，下个周期再试 */ }
-}
-function collabBoot(){
-  const saved=JSON.parse(localStorage.getItem("dp_collab_remember")||"null");
-  if(saved && saved.share && saved.priv){ $("#collabShare").value=saved.share; $("#collabPriv").value=saved.priv; $("#collabRemember").checked=true; doCollabLogin(true); }
-  else { $("#maskLogin").classList.add("on"); }
-}
-let _loggingIn=false;
-// 进入协作主界面（渲染所有内容），抽成函数便于「本地优先」与「后台同步」复用
-function enterCollabUI(){
-  $("#maskLogin").classList.remove("on");
-  $("#collabBar").style.display="block";
-  setSyncStatus("已同步 ✓", true);
-  collabStartPoll();
-  renderNav(); buildTagPicker($("#matTagPicker"),matTags,()=>{}); buildTagPicker($("#brTagPicker"),brTags,()=>{});
-  renderAll(); updateFilterBtns(); renderIdeasSaved();
-}
-// 最小可用离线状态（仅在明确需要本地空占位时使用，不再自动保存为缓存）
-function offlineCollabState(){
-  return {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
-}
-async function doCollabLogin(silent){
-  if(_loggingIn) return;
-  _loggingIn=true;
-  try{
-    const share=$("#collabShare").value.trim();
-    const priv=$("#collabPriv").value.trim();
-    const msg=$("#collabMsg");
-    if(!share||!priv){ if(msg) msg.textContent="请填写两个口令"; return; }
-    collabSharedPwd=share; collabPrivPwd=priv;
-    if($("#collabRemember").checked){ localStorage.setItem("dp_collab_remember",JSON.stringify({share,priv})); }
-    else { localStorage.removeItem("dp_collab_remember"); }
-
-    // 1) 本地缓存优先：立刻进主界面，绝不空白（即使 Supabase 暂时连不上）
-    const cached=localStorage.getItem("dp_collab_cache");
-    if(cached){
-      try{
-        state=JSON.parse(cached); migrate();
-        enterCollabUI();
-        if(msg) msg.textContent="";
-      }catch(e){ /* 缓存损坏则走下方联网分支 */ }
-    } else {
-      if(msg) msg.textContent="首次进入需联网同步，请稍候…";
-    }
-
-    // 2) 后台静默拉取，不阻塞 UI；成功刷新界面，失败仅在确实无内容时提示
-    load().then(function(){
-      enterCollabUI();
-      if(!silent) toast(cached ? "已同步最新协作内容" : "已进入协作空间");
-    }).catch(function(e){
-      if(!cached){
-        // 首次使用且无法联网：不能进入空界面，也不能保存空缓存，避免后续误上传空数据
-        if(msg) msg.textContent="无法读取协作空间，请检查网络后重试（"+(e.message||e)+"）";
-        toast("首次进入需要联网读取协作空间，请检查网络后重试");
-      } else {
-        if(!silent) toast("后台同步失败，仍显示本地内容："+(e.message||e));
-      }
-    });
-  }finally{
-    _loggingIn=false;
-  }
-}
-function collabLogout(){
-  collabSharedPwd=""; collabPrivPwd="";
-  localStorage.removeItem("dp_collab_remember");
-  $("#collabBar").style.display="none";
-  $("#maskLogin").classList.add("on");
-  $("#collabMsg").textContent="";
-}
-$("#btnCollabLogin").onclick=()=>doCollabLogin(false);
-$("#btnCollabLogout").onclick=()=>collabLogout();
-collabBoot();
+  }catch(e){ /* seed 注入失败：静默降级，不影响使用 */ }
+  renderIdeasSaved();
+}).catch(function(err){ if(location.search.indexOf("debug=1")>=0) console.error("启动失败",err); });
 
 function hardRefresh(){
   var btn=document.getElementById('refreshBtn');

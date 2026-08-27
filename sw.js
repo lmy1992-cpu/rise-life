@@ -1,17 +1,19 @@
 // rise-life Service Worker
-// 缓存名 v6 强制重新拉取新文件
-const CACHE = 'dp-pwa-v6';
+// 缓存名 v33：云同步「以旧覆新」防护——每次打开页面不再无条件用云端旧快照覆盖本机（签到刷新清空的真正根因）；本机一改动 20 秒内自动推送
+const CACHE = 'dp-pwa-v38.21';
 const ASSETS = [
   './',
   './index.html',
-  './整体工作台.html',
-  './短篇工作台.html',
+  './zh-shell.html',
+  './duanpian.html',
   './duanpian-collab.html',
-  './电影手帐.html',
-  './阅读手帐.html',
-  './减肥板块.html',
-  './健康板块.html',
-  './游戏人生.html',
+  './duanpian-pad.html',
+  './duanpian-mobile.html',
+  './movie.html',
+  './reading.html',
+  './weight.html',
+  './health.html',
+  './game.html',
   './mammoth.browser.min.js',
   './crawl-data.js',
   './manifest.json',
@@ -46,7 +48,7 @@ self.addEventListener('fetch', (e) => {
   // 网络优先：有网就用最新文件，离线才回退缓存。
   // 解决了旧 SW 缓存导致改完代码页面不更新的问题。
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, {cache:'no-cache'})
       .then((resp) => {
         // 仅缓存 GET 成功响应
         if (e.request.method === 'GET' && resp && resp.status === 200) {

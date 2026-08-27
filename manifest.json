@@ -3,7 +3,7 @@
   "short_name": "崛起吧人生",
   "description": "跨端人生经营工作台：阅读 / 电影 / 减肥 / 健康 / 游戏 / 短篇 + AI 分析",
   "lang": "zh-CN",
-  "start_url": "./整体工作台.html",
+  "start_url": "./zh-shell.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",

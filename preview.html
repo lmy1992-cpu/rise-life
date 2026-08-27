@@ -2,20 +2,13 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#FF8E72" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="default" />
-<meta name="apple-mobile-web-app-title" content="崛起吧人生" />
-<link rel="manifest" href="./manifest.json" />
-<link rel="apple-touch-icon" href="./icon-180.png" />
-<link rel="icon" href="./icon-192.png" />
-<script>
-if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js').catch(function(){});});}
-</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>崛起吧人生 · 手机预览</title>
 <style>
-  :root{ --bg:#FAF1E1; --ink:#4A3528; --sub:#A89880; --line:#EFE4D2; --brand:#FF8E72; --brand2:#F87058; }
+  :root{
+    --bg:#FAF1E1; --ink:#4A3528; --sub:#A89880; --line:#EFE4D2;
+    --brand:#FF8E72; --brand2:#F87058;
+  }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
   body{font-family:"YouYuan","幼圆","Yuanti SC","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink);padding:24px 18px;line-height:1.6}
@@ -29,21 +22,24 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   .tip{background:#FFF5EC;border:1px dashed var(--brand);border-radius:12px;padding:12px 14px;font-size:12.5px;color:var(--ink);margin-top:18px;line-height:1.7}
   .tip b{color:var(--brand)}
 </style>
+<style id="zoomfix">
+html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+@media (max-width:820px){
+  /* iOS 聚焦小字号输入框会自动放大页面，统一 16px 即可杜绝 */
+  input,textarea,select,button{ font-size:16px !important; }
+  /* 禁止双击/长按缩放，但保留上下滑动 */
+  a,button,input,textarea,select,label{ touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+}
+</style>
 </head>
 <body>
-  <h1>📱 崛起吧人生 · 移动端入口</h1>
-  <div class="sub">你的电脑 IP：192.168.2.200（手机 / iPad 都用这个地址访问下面页面）</div>
+  <h1>📱 崛起吧人生 · 手机预览</h1>
+  <div class="sub">你的电脑 IP：192.168.2.200（用这个地址访问下面页面）</div>
 
   <a class="card" href="./zh-shell.html">
     <span class="arrow">›</span>
     <div class="t">🌟 整体工作台</div>
     <div class="d">概览 / 待办 / 签到 / 阅读手帐 / 电影手帐 / 健康 / 减肥 / 游戏人生</div>
-  </a>
-
-  <a class="card" href="./ipad.html">
-    <span class="arrow">›</span>
-    <div class="t">📲 iPad 版（桌面侧栏排版）</div>
-    <div class="d">左侧常驻模块导航 + 右侧内容区，横竖屏自适应，配色与电脑端一致</div>
   </a>
 
   <a class="card" href="./game.html">
@@ -54,12 +50,11 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
 
   <div class="tip">
     <b>使用方法：</b><br>
-    1. 确认手机 / iPad 和电脑连的是<b>同一个 WiFi</b><br>
-    2. 浏览器地址栏输入：<b>http://192.168.2.200:8765/mobile.html</b><br>
-    3. 点上面的卡片就能进入对应页面（iPad 选「iPad 版」体验最佳）<br>
-    4. iPad 也可直接打开：<b>http://192.168.2.200:8765/ipad.html</b><br>
-    5. 数据存在浏览器本机，第一次打开是空白是正常的（先在电脑用过就会有数据）<br>
-    6. 看完了想关服务，回到电脑告诉我"关掉预览"即可
+    1. 确认手机和电脑连的是<b>同一个 WiFi</b><br>
+    2. 手机浏览器地址栏输入：<b>http://192.168.2.200:8765/preview.html</b><br>
+    3. 点上面的卡片就能进入对应页面<br>
+    4. 数据存在浏览器本机，第一次打开是空白是正常的（先在电脑用过就会有数据）<br>
+    5. 看完了想关服务，回到电脑告诉我"关掉预览"即可
   </div>
 <style>
 #refreshBtn{position:fixed;right:10px;top:75px;z-index:90;display:flex;align-items:center;gap:4px;background:#FF8E72;color:#fff;border:0;border-radius:999px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(248,112,88,.45);font-family:inherit}
