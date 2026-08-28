@@ -1293,6 +1293,15 @@ function load(){
   seed(); return Promise.resolve();
 }
 function migrate(){
+  // 容错：损坏数据可能把数组字段写成 null，先归一化为空数组，避免后续 .forEach 崩溃
+  if(!Array.isArray(state.examples)) state.examples=[];
+  if(!Array.isArray(state.intros)) state.intros=[];
+  if(!Array.isArray(state.materials)) state.materials=[];
+  if(!Array.isArray(state.misc)) state.misc=[];
+  if(!Array.isArray(state.tags)) state.tags=[];
+  if(!Array.isArray(state.brainstorms)) state.brainstorms=[];
+  if(!Array.isArray(state.ideas)) state.ideas=[];
+  if(!Array.isArray(state.crawlFav)) state.crawlFav=[];
   if(Array.isArray(state.tags)){
     state.tags.forEach(t=>{
       if(t.kind) return;
@@ -2765,7 +2774,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.21";
+  var APP_VERSION="v38.22";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
