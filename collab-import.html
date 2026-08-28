@@ -53,8 +53,15 @@
 <script>
 function doImport(cacheStr, aicfgStr, m){
   if(!cacheStr){ m.innerHTML='<span class="err">没有可导入的数据</span>'; return; }
-  try{ JSON.parse(cacheStr); }
+  var state;
+  try{ state = JSON.parse(cacheStr); }
   catch(e){ m.innerHTML='<span class="err">数据格式不对：请确认复制/下载完整（开头 { 结尾 }）。</span>'; return; }
+  if(!state || typeof state !== 'object'){ m.innerHTML='<span class="err">数据不是有效对象</span>'; return; }
+  // 修复旧地址损坏数据：数组字段不可为 null，否则协作版 load 会崩溃
+  ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav'].forEach(function(k){
+    if(!Array.isArray(state[k])) state[k]=[];
+  });
+  cacheStr = JSON.stringify(state);
   try{
     localStorage.setItem('dp_collab_cache', cacheStr);
     if(aicfgStr){
