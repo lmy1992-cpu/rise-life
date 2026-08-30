@@ -1314,7 +1314,9 @@ function _applyBroadcastState(shared, priv, ts){
   if(!shared && !priv) return;
   const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
   state = Object.assign(def, shared||{}, priv||{});
+  ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav'].forEach(function(k){ if(!Array.isArray(state[k])) state[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
   try{ const a=JSON.parse(localStorage.getItem("dp_collab_aicfg")||"null"); if(a) state.aiCfg=Object.assign(state.aiCfg||{}, a); }catch(e){}
+  if(!state.aiCfg || typeof state.aiCfg !== 'object') state.aiCfg={provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""};
   state.aiCfg.aiMemory = state.aiMemory||"";
   migrate();
   if(ts) collabSharedUpdatedAt = ts;
@@ -1337,6 +1339,7 @@ function setSyncStatus(txt, ok){
   if(el){ el.textContent=txt; el.style.color=(ok===false)?"#d23":(ok===true?"#1a8a3c":"#888"); }
 }
 function isStateEmpty(){
+  if(!state || typeof state !== 'object') return true;
   return (!state.examples||!state.examples.length) &&
          (!state.intros||!state.intros.length) &&
          (!state.materials||!state.materials.length) &&
@@ -1352,6 +1355,7 @@ function _countItems(s){
 }
 async function save(){
   if(!collabSharedPwd || !collabPrivPwd) return; // 未登录不写
+  if(!state || typeof state !== 'object'){ state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; }
   // 安全护栏：还没成功读过云端，且当前数据为空，禁止上传覆盖云端（防止首次联网失败时把空数据冲掉）
   if(!_collabLoadedFromCloud && isStateEmpty()){
     setSyncStatus("本地为空，未上传（等待云端数据）", false);
@@ -1397,6 +1401,7 @@ async function load(){
       const priv = pRow ? await decBundle(await deriveKey(collabPrivPwd), pRow.payload) : null;
       const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
       const cloudState = Object.assign(def, shared||{}, priv||{});
+      ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav'].forEach(function(k){ if(!Array.isArray(cloudState[k])) cloudState[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
       // 本地缓存作为「最后已知良好」副本：国内 Supabase 不稳，云端可能连上却为空，绝不能盲从空云端清空本地真实数据
       let localState=null;
       try{ const c=localStorage.getItem("dp_collab_cache"); if(c) localState=JSON.parse(c); }catch(e){}
@@ -1410,6 +1415,8 @@ async function load(){
       else if(!localEmpty){ chosen=localState; localWon=true; }
       else { chosen=cloudState; }
       state = chosen;
+      if(!state || typeof state !== 'object') state = Object.assign({}, def);
+      ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav'].forEach(function(k){ if(!Array.isArray(state[k])) state[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
       try{ const a=JSON.parse(localStorage.getItem("dp_collab_aicfg")||"null"); if(a) state.aiCfg=Object.assign(state.aiCfg||{}, a); }catch(e){}
       state.aiCfg.aiMemory = state.aiMemory||"";
       migrate();
@@ -1434,6 +1441,7 @@ async function load(){
   try{ await _loadPromise; }finally{ _loadPromise=null; }
 }
 function migrate(){
+  if(!state || typeof state !== 'object') state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
   // 容错：损坏数据可能把数组字段写成 null，先归一化为空数组，避免后续 .forEach 崩溃
   if(!Array.isArray(state.examples)) state.examples=[];
   if(!Array.isArray(state.intros)) state.intros=[];
@@ -2980,7 +2988,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.22";
+  var APP_VERSION="v38.23";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;

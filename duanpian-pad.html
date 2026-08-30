@@ -1288,6 +1288,7 @@ function load(){
   seed(); return Promise.resolve();
 }
 function migrate(){
+  if(!state || typeof state !== 'object') state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
   // 容错：损坏数据可能把数组字段写成 null，先归一化为空数组，避免后续 .forEach 崩溃
   if(!Array.isArray(state.examples)) state.examples=[];
   if(!Array.isArray(state.intros)) state.intros=[];
@@ -2720,7 +2721,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.22";
+  var APP_VERSION="v38.23";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
