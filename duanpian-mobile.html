@@ -776,6 +776,35 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 </div>
 
 <!-- 上传例文弹窗 -->
+<!-- 上传预审清单 -->
+<style>
+#maskUploadPreview .up-prev-list{max-height:52vh;overflow:auto;margin:10px 0;border:1px solid #eee;border-radius:10px}
+#maskUploadPreview .up-prev-row{display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid #f3f3f3;cursor:pointer}
+#maskUploadPreview .up-prev-row:last-child{border-bottom:none}
+#maskUploadPreview .up-prev-row.dup{opacity:.6}
+#maskUploadPreview .up-prev-name{flex:1;font-size:13px;word-break:break-all}
+#maskUploadPreview .up-prev-tag{font-size:12px;padding:2px 8px;border-radius:8px;white-space:nowrap}
+#maskUploadPreview .up-prev-tag.new{background:#e8f7ee;color:#1a8a3c}
+#maskUploadPreview .up-prev-tag.dup{background:#fde8e8;color:#d23}
+#maskUploadPreview .up-prev-tools{display:flex;align-items:center;gap:8px;margin:6px 0}
+#maskUploadPreview .up-prev-count{font-size:12px;color:#888;margin-left:auto}
+</style>
+<div class="mask" id="maskUploadPreview">
+  <div class="modal">
+    <h3>上传预审清单</h3>
+    <div class="sub">勾选要收录的例文；「已收录」默认不勾选，只收未收录的即可</div>
+    <div class="up-prev-tools">
+      <button class="btn soft" id="upPrevSelectNew" type="button">全选未收录</button>
+      <button class="btn soft" id="upPrevInvert" type="button">反选</button>
+      <span class="up-prev-count" id="upPrevCount"></span>
+    </div>
+    <div class="up-prev-list" id="upPrevList"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="upPrevCancel" type="button">取消</button>
+      <button class="btn primary" id="upPrevStart" type="button">开始收录选中项</button>
+    </div>
+  </div>
+</div>
 <div class="mask" id="maskUpload">
   <div class="modal">
     <h3>收录例文</h3>
@@ -1911,7 +1940,53 @@ let uploadQueue=[]; let uploadTotal=0; let exSearchKeyword="";
 $("#fileExample").onchange=async (ev)=>{
   const files=[...ev.target.files].filter(f=>/\.(docx|txt)$/i.test(f.name)); ev.target.value="";
   if(!files.length){ if(ev.target.files.length) toast("仅支持 .docx / .txt"); return; }
-  uploadQueue=files.slice(); uploadTotal=files.length;
+  openUploadPreview(files);
+};
+
+
+/* ---------- 上传预审清单 ---------- */
+let previewFiles=[];
+function openUploadPreview(files){
+  previewFiles=files.slice();
+  const existing=new Set(state.examples.map(e=>e.fileName));
+  const list=$("#upPrevList"); list.innerHTML="";
+  previewFiles.forEach((f,i)=>{
+    const isDup=existing.has(f.name);
+    const row=document.createElement("label");
+    row.className="up-prev-row"+(isDup?" dup":"");
+    row.innerHTML='<input type="checkbox" '+(isDup?"":"checked")+' data-i="'+i+'">'+
+      '<span class="up-prev-name">'+esc(f.name)+'</span>'+
+      '<span class="up-prev-tag '+(isDup?"dup":"new")+'">'+(isDup?"已收录":"未收录")+'</span>';
+    list.appendChild(row);
+  });
+  updatePrevCount();
+  $("#maskUploadPreview").classList.add("on");
+}
+function updatePrevCount(){
+  const checked=document.querySelectorAll('#upPrevList input:checked').length;
+  $("#upPrevCount").textContent="已选 "+checked+" / "+previewFiles.length+" 篇";
+}
+$("#upPrevList").addEventListener("change", updatePrevCount);
+$("#upPrevSelectNew").onclick=()=>{
+  document.querySelectorAll('#upPrevList input').forEach(cb=>{
+    const i=+cb.dataset.i; const isDup=state.examples.some(e=>e.fileName===previewFiles[i].name);
+    cb.checked=!isDup;
+  });
+  updatePrevCount();
+};
+$("#upPrevInvert").onclick=()=>{
+  document.querySelectorAll('#upPrevList input').forEach(cb=>cb.checked=!cb.checked);
+  updatePrevCount();
+};
+$("#upPrevCancel").onclick=()=>{ $("#maskUploadPreview").classList.remove("on"); previewFiles=[]; };
+$("#upPrevStart").onclick=()=>{
+  const sel=previewFiles.filter((f,i)=>{
+    const cb=document.querySelector('#upPrevList input[data-i="'+i+'"]');
+    return cb && cb.checked;
+  });
+  $("#maskUploadPreview").classList.remove("on");
+  if(!sel.length){ toast("没有选中要收录的例文"); return; }
+  uploadQueue=sel.slice(); uploadTotal=sel.length;
   processUploadQueue();
 };
 function processUploadQueue(){
@@ -2721,7 +2796,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.23";
+  var APP_VERSION="v38.24";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
