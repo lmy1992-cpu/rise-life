@@ -1326,12 +1326,33 @@ function idbGet(key){
     catch(e){ rej(e); }
   }));
 }
-// 去掉大正文 / 图片，得到仅含元数据的轻量副本（用于写 localStorage，保证快速加载、不撞 5MB）
+// 去掉大正文 / 原始文件 / 图片，得到仅含元数据的轻量副本（用于写 localStorage，保证快速加载、不撞 5MB）
 function metaOnly(st){
   const m=JSON.parse(JSON.stringify(st));
-  (m.examples||[]).forEach(e=>{ delete e.content; });
+  (m.examples||[]).forEach(e=>{ delete e.content; delete e.fileData; });
   (m.materials||[]).forEach(x=>{ if(x.type==="image") delete x.content; });
   return m;
+}
+// 本地落盘（权威函数）：全量进 IndexedDB（突破 5MB 上限），localStorage 只存瘦身副本（快速启动兜底）。
+// 历史教训：直接 JSON.stringify 全量写 localStorage，几十篇例文轻松超 5MB → 写入静默失败 → 刷新即回退。
+// 现在：①IndexedDB 是本地唯一权威全量副本；②localStorage 瘦身版只作快速启动与极端兜底；③失败不再静默吞。
+async function persistLocal(){
+  if(!state || typeof state !== 'object') return false;
+  let idbOk=false, lsOk=false;
+  try{ await idbPut(IDB_KEY, JSON.parse(JSON.stringify(state))); idbOk=true; }
+  catch(e){ try{ console.error("IndexedDB 写入失败", e); }catch(_){} }
+  try{
+    const m=metaOnly(state); m.__ts=Date.now();
+    localStorage.setItem("dp_collab_cache", JSON.stringify(m));
+    lsOk=true;
+  }catch(e){
+    lsOk=false;
+    try{ console.error("localStorage 写入失败", e); }catch(_){}
+  }
+  if(!lsOk && !idbOk){
+    try{ if(!window.__warnedStorageFail){ window.__warnedStorageFail=true; toast("⚠️ 本地存储写入失败：刷新后数据可能丢失！请清理浏览器存储空间后重试"); } }catch(_){}
+  }
+  return lsOk;
 }
 let _syncRetryTimer=null;
 let _collabLoadedFromCloud=false; // 是否已成功从云端读取过一次数据
@@ -1349,7 +1370,7 @@ function _applyBroadcastState(shared, priv, ts){
   state.aiCfg.aiMemory = state.aiMemory||"";
   migrate();
   if(ts) collabSharedUpdatedAt = ts;
-  try{ localStorage.setItem("dp_collab_cache", JSON.stringify(state)); }catch(e){}
+  try{ persistLocal(); }catch(e){}
   renderAll();
 }
 if(_collabBC){
@@ -1389,18 +1410,18 @@ function _countShared(s){ // 只统计共享侧字段（poll 只拉共享行，�
   return (s.examples?s.examples.length:0)+(s.intros?s.intros.length:0)+(s.materials?s.materials.length:0)+(s.misc?s.misc.length:0)+(s.tags?s.tags.length:0);
 }
 async function save(){
-  if(!collabSharedPwd || !collabPrivPwd) return; // 未登录不写
   if(!state || typeof state !== 'object'){ state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; }
+  // 本地落盘不依赖登录：先保证本地有最新副本（IndexedDB 全量 + localStorage 瘦身），刷新绝不回退
+  try{ await persistLocal(); }catch(e){}
+  if(!collabSharedPwd || !collabPrivPwd) return; // 未登录不推云端
   // 安全护栏：还没成功读过云端，且当前数据为空，禁止上传覆盖云端（防止首次联网失败时把空数据冲掉）
   if(!_collabLoadedFromCloud && isStateEmpty()){
     setSyncStatus("本地为空，未上传（等待云端数据）", false);
-    try{ localStorage.setItem("dp_collab_cache", JSON.stringify(state)); }catch(e){}
     return;
   }
   const ts=new Date().toISOString();
-  // 先落本地缓存，再传云端。国内 Supabase 不稳定，必须保证即使上传失败/刷新，本地也有最新副本
+  // AI 密钥独立存 localStorage（体积小）；全量数据已由 persistLocal 落 IndexedDB，这里不再写 localStorage
   try{ localStorage.setItem("dp_collab_aicfg", JSON.stringify(state.aiCfg||{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""})); }catch(e){}
-  try{ localStorage.setItem("dp_collab_cache", JSON.stringify(state)); }catch(e){}
   try{
     const shared={examples:state.examples,intros:state.intros,materials:state.materials,misc:state.misc,tags:state.tags,aiFields:state.aiFields,nav:state.nav};
     const priv={brainstorms:state.brainstorms,ideas:state.ideas,crawlFav:state.crawlFav,aiMemory:state.aiCfg?state.aiCfg.aiMemory:""};
@@ -1437,9 +1458,10 @@ async function load(){
       const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
       const cloudState = Object.assign(def, shared||{}, priv||{});
       ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav'].forEach(function(k){ if(!Array.isArray(cloudState[k])) cloudState[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
-      // 本地缓存作为「最后已知良好」副本：国内 Supabase 不稳，云端可能连上却为空，绝不能盲从空云端清空本地真实数据
+      // 本地缓存作为「最后已知良好」副本：IndexedDB 全量优先（大容量，权威），localStorage 瘦身兜底
       let localState=null;
-      try{ const c=localStorage.getItem("dp_collab_cache"); if(c) localState=JSON.parse(c); }catch(e){}
+      try{ const full=await idbGet(IDB_KEY); if(full && typeof full==='object') localState=full; }catch(e){}
+      if(!localState){ try{ const c=localStorage.getItem("dp_collab_cache"); if(c) localState=JSON.parse(c); }catch(e){} }
       const cloudEmpty=isStateEmpty(cloudState), localEmpty=!localState||isStateEmpty(localState);
       let chosen, localWon=false;
       if(!cloudEmpty && !localEmpty){
@@ -1456,12 +1478,22 @@ async function load(){
       state.aiCfg.aiMemory = state.aiMemory||"";
       migrate();
       _collabLoadedFromCloud=true; // 成功从云端读取，后续 save 允许空数据上传（用户主动清空场景）
-      try{ localStorage.setItem("dp_collab_cache", JSON.stringify(state)); }catch(e){}
+      try{ await persistLocal(); }catch(e){}
       // 本地副本更全（云端曾为空/更少）时，立即把本地回写云端恢复，防止下次再被空云端覆盖
       if(localWon){ try{ save(); }catch(e){} }
     }catch(e){
-      // 网络失败时读本地缓存兜底，避免空白页
-      const cached=localStorage.getItem("dp_collab_cache");
+      // 网络失败时读本地兜底（IndexedDB 全量优先，localStorage 瘦身兜底），避免空白页
+      let cached=null;
+      try{ cached=await idbGet(IDB_KEY); }catch(e){}
+      if(cached && typeof cached==='object'){
+        try{
+          state=cached;
+          migrate();
+          /* 协作数据走本地缓存兜底：静默 */
+          return;
+        }catch(_){}
+      }
+      try{ cached=localStorage.getItem("dp_collab_cache"); }catch(e){}
       if(cached){
         try{
           state=JSON.parse(cached);
@@ -3018,11 +3050,15 @@ async function doCollabLogin(silent){
     if($("#collabRemember").checked){ localStorage.setItem("dp_collab_remember",JSON.stringify({share,priv})); }
     else { localStorage.removeItem("dp_collab_remember"); }
 
-    // 1) 本地缓存优先：立刻进主界面，绝不空白（即使 Supabase 暂时连不上）
-    const cached=localStorage.getItem("dp_collab_cache");
-    if(cached){
+    // 1) 本地缓存优先：立刻进主界面，绝不空白（即使 Supabase 暂时连不上）。IndexedDB 全量优先，localStorage 瘦身兜底
+    let cachedState=null;
+    try{ cachedState=await idbGet(IDB_KEY); }catch(e){}
+    if(!cachedState || typeof cachedState!=='object'){
+      try{ const c=localStorage.getItem("dp_collab_cache"); if(c) cachedState=JSON.parse(c); }catch(e){}
+    }
+    if(cachedState){
       try{
-        state=JSON.parse(cached); migrate();
+        state=cachedState; migrate();
         enterCollabUI();
         if(msg) msg.textContent="";
       }catch(e){ /* 缓存损坏则走下方联网分支 */ }
@@ -3033,9 +3069,9 @@ async function doCollabLogin(silent){
     // 2) 后台静默拉取，不阻塞 UI；成功刷新界面，失败仅在确实无内容时提示
     load().then(function(){
       enterCollabUI();
-      if(!silent) toast(cached ? "已同步最新协作内容" : "已进入协作空间");
+      if(!silent) toast(cachedState ? "已同步最新协作内容" : "已进入协作空间");
     }).catch(function(e){
-      if(!cached){
+      if(!cachedState){
         // 首次使用且无法联网：不能进入空界面，也不能保存空缓存，避免后续误上传空数据
         if(msg) msg.textContent="无法读取协作空间，请检查网络后重试（"+(e.message||e)+"）";
         toast("首次进入需要联网读取协作空间，请检查网络后重试");
@@ -3077,7 +3113,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.24";
+  var APP_VERSION="v38.25";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
