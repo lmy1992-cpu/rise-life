@@ -658,6 +658,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     <div class="spacer"></div>
     <button class="btn sm" id="btnTagEdit">编辑元素标签</button>
     <button class="btn sm" id="btnBackup">备份 / 恢复</button>
+    <button class="btn sm" id="btnSyncNow" onclick="forceSyncNow()" title="立即尝试云端同步">☁️ 同步</button>
     <button class="btn sm" id="refreshBtn" onclick="hardRefresh()">🔄 刷新</button>
   </div>
 </header>
@@ -1386,9 +1387,9 @@ if(_collabBC){
     toast("已同步（来自另一个窗口）");
   };
 }
-function setSyncStatus(txt, ok){
+function setSyncStatus(txt, ok, detail){
   const el=document.getElementById('syncStatus');
-  if(el){ el.textContent=txt; el.style.color=(ok===false)?"#d23":(ok===true?"#1a8a3c":"#888"); }
+  if(el){ el.textContent=txt; el.style.color=(ok===false)?"#d23":(ok===true?"#1a8a3c":"#888"); if(detail) el.title=detail; else el.title=""; }
 }
 function isStateEmpty(){
   if(!state || typeof state !== 'object') return true;
@@ -1411,8 +1412,14 @@ function _countShared(s){ // 只统计共享侧字段（poll 只拉共享行，�
 }
 let _saveUploading=false; // 云端上传进行中标志：防止重试定时器与手动保存叠出并发请求互相踩
 let _savePending=false;   // 上传期间又有新改动：结束后自动补传，绝不漏
-async function save(){
+let _lastSyncError="";    // 最后一次上传失败的简要原因（悬停状态条可见）
+async function save(force=false){
   if(!state || typeof state !== 'object'){ state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; }
+  // 手动强制同步：清掉可能卡死的标志、停止旧重试，立即再试一次
+  if(force){
+    _saveUploading=false;
+    if(_syncRetryTimer){ clearInterval(_syncRetryTimer); _syncRetryTimer=null; }
+  }
   // 本地落盘不依赖登录：先保证本地有最新副本（IndexedDB 全量 + localStorage 瘦身），刷新绝不回退
   try{ await persistLocal(); }catch(e){}
   if(!collabSharedPwd || !collabPrivPwd) return; // 未登录不推云端
@@ -1436,21 +1443,40 @@ async function save(){
       deriveKey(collabPrivPwd).then(k=>encBundle(k,priv)).then(p=>sbUpsert(pId,p,ts))
     ]);
     collabSharedUpdatedAt=ts;
+    _lastSyncError="";
     // 同电脑多窗口即时同步：通知其它窗口立刻拉取（不再等 20 秒云端轮询）
     if(_collabBC){ try{ _collabBC.postMessage({type:'collab-state', from:_COLLAB_TAB_ID, ts:ts, shared:shared, priv:priv}); }catch(e){} }
     setSyncStatus("已同步 ✓", true);
     if(_syncRetryTimer){ clearInterval(_syncRetryTimer); _syncRetryTimer=null; } // 上传成功，停止重试
   }catch(e){
-    // 上传失败：本地已落盘（IndexedDB），数据安全；后台自动重试直到传上去（朋友那边才能看到）
-    // 注意：Supabase 海外节点国内常慢，重试别太频繁（30 秒一次），避免雪上加霜
-    setSyncStatus("云端同步中…（本地已保存，网络恢复后自动上传）", false);
-    if(!_syncRetryTimer){
-      _syncRetryTimer=setInterval(function(){ save(); }, 30000);
+    // 上传失败：本地已落盘（IndexedDB），数据安全；自动重试只对“超时/网络抖动”有意义，4xx/5xx 重试没用，等用户手动同步
+    const msg=String(e&&e.message?e.message:e);
+    _lastSyncError=msg;
+    const isNetError=/aborted|timeout|无法连接|network|fetch|failed/i.test(msg);
+    if(isNetError){
+      setSyncStatus("云端同步中…（本地已保存，网络恢复后自动上传）", false, "最近失败："+msg);
+      if(!_syncRetryTimer){
+        _syncRetryTimer=setInterval(function(){ save(); }, 30000);
+      }
+    } else {
+      setSyncStatus("云端同步失败，请点右上角「☁️ 同步」重试", false, "失败原因："+msg);
+      if(_syncRetryTimer){ clearInterval(_syncRetryTimer); _syncRetryTimer=null; } // 非网络错误，自动重试没用
     }
   }finally{
     _saveUploading=false;
     if(_savePending){ _savePending=false; try{ save(); }catch(e){} } // 上传期间又有新改动，立即补传
   }
+}
+// 手动强制同步：用户点右上角「☁️ 同步」触发，无视卡死标志立即再试
+function forceSyncNow(){
+  const btn=document.getElementById('btnSyncNow');
+  if(btn){ btn.disabled=true; btn.textContent='同步中…'; }
+  setSyncStatus('正在同步…', null, '手动触发中');
+  save(true).then(function(){
+    if(btn){ btn.disabled=false; btn.textContent='☁️ 同步'; }
+  }).catch(function(e){
+    if(btn){ btn.disabled=false; btn.textContent='☁️ 同步'; }
+  });
 }
 let _loadPromise=null;
 async function load(){
@@ -3038,7 +3064,8 @@ function enterCollabUI(){
   $("#maskLogin").classList.remove("on");
   $("#collabBar").style.display="block";
   // 按真实同步状态显示：还有未上传成功的修改时不能谎报「已同步」
-  if(_syncRetryTimer) setSyncStatus("云端同步中…（本地已保存，网络恢复后自动上传）", false);
+  if(_syncRetryTimer) setSyncStatus("云端同步中…（本地已保存，网络恢复后自动上传）", false, _lastSyncError||"");
+  else if(_lastSyncError) setSyncStatus("云端同步失败，请点右上角「☁️ 同步」重试", false, _lastSyncError);
   else setSyncStatus("已同步 ✓", true);
   collabStartPoll();
   renderNav(); buildTagPicker($("#matTagPicker"),matTags,()=>{}); buildTagPicker($("#brTagPicker"),brTags,()=>{});
@@ -3123,7 +3150,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.26";
+  var APP_VERSION="v38.27";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
