@@ -1452,7 +1452,8 @@ async function save(force=false){
     // 上传失败：本地已落盘（IndexedDB），数据安全；自动重试只对“超时/网络抖动”有意义，4xx/5xx 重试没用，等用户手动同步
     const msg=String(e&&e.message?e.message:e);
     _lastSyncError=msg;
-    const isNetError=/aborted|timeout|无法连接|network|fetch|failed/i.test(msg);
+    // 服务端 statement timeout / HTTP 500 等不是网络错误，自动重试只会白白超时
+    const isNetError=/aborted|timeout|无法连接|network|fetch|failed/i.test(msg) && !/HTTP\s+[45]\d\d|57014|statement timeout/i.test(msg);
     if(isNetError){
       setSyncStatus("云端同步中…（本地已保存，网络恢复后自动上传）", false, "最近失败："+msg);
       if(!_syncRetryTimer){
@@ -3150,7 +3151,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.27";
+  var APP_VERSION="v38.28";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
