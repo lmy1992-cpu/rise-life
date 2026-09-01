@@ -568,7 +568,7 @@ async function decBundle(key,str){ const p=str.split("."); if(p.length!==2) thro
 function sbHeaders(){ return {"apikey":SB_ANON,"Authorization":"Bearer "+SB_ANON,"Content-Type":"application/json"}; }
 async function sbFetch(url,opts){
   const controller=new AbortController();
-  const t=setTimeout(function(){ controller.abort(); }, 12000);
+  const t=setTimeout(function(){ controller.abort(); }, 30000); // Supabase 海外节点在国内常慢到 10-15 秒，12 秒会误杀；放宽到 30 秒
   let r;
   try{
     r=await fetch(url, Object.assign({}, opts, {signal: controller.signal}));
@@ -1409,6 +1409,8 @@ function _countShared(s){ // 只统计共享侧字段（poll 只拉共享行，�
   if(!s) return 0;
   return (s.examples?s.examples.length:0)+(s.intros?s.intros.length:0)+(s.materials?s.materials.length:0)+(s.misc?s.misc.length:0)+(s.tags?s.tags.length:0);
 }
+let _saveUploading=false; // 云端上传进行中标志：防止重试定时器与手动保存叠出并发请求互相踩
+let _savePending=false;   // 上传期间又有新改动：结束后自动补传，绝不漏
 async function save(){
   if(!state || typeof state !== 'object'){ state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; }
   // 本地落盘不依赖登录：先保证本地有最新副本（IndexedDB 全量 + localStorage 瘦身），刷新绝不回退
@@ -1419,6 +1421,8 @@ async function save(){
     setSyncStatus("本地为空，未上传（等待云端数据）", false);
     return;
   }
+  if(_saveUploading){ _savePending=true; return; } // 上一轮上传还在跑（Supabase 慢），这轮先落盘，上传结束后自动补传最新版
+  _saveUploading=true;
   const ts=new Date().toISOString();
   // AI 密钥独立存 localStorage（体积小）；全量数据已由 persistLocal 落 IndexedDB，这里不再写 localStorage
   try{ localStorage.setItem("dp_collab_aicfg", JSON.stringify(state.aiCfg||{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""})); }catch(e){}
@@ -1437,11 +1441,15 @@ async function save(){
     setSyncStatus("已同步 ✓", true);
     if(_syncRetryTimer){ clearInterval(_syncRetryTimer); _syncRetryTimer=null; } // 上传成功，停止重试
   }catch(e){
-    // 上传失败：标记「未同步」，后台每 8 秒自动重试，直到真正传上去（保证朋友那边能看到）
-    setSyncStatus("未同步，重试中…", false);
+    // 上传失败：本地已落盘（IndexedDB），数据安全；后台自动重试直到传上去（朋友那边才能看到）
+    // 注意：Supabase 海外节点国内常慢，重试别太频繁（30 秒一次），避免雪上加霜
+    setSyncStatus("云端同步中…（本地已保存，网络恢复后自动上传）", false);
     if(!_syncRetryTimer){
-      _syncRetryTimer=setInterval(function(){ save(); }, 8000);
+      _syncRetryTimer=setInterval(function(){ save(); }, 30000);
     }
+  }finally{
+    _saveUploading=false;
+    if(_savePending){ _savePending=false; try{ save(); }catch(e){} } // 上传期间又有新改动，立即补传
   }
 }
 let _loadPromise=null;
@@ -3029,7 +3037,9 @@ let _loggingIn=false;
 function enterCollabUI(){
   $("#maskLogin").classList.remove("on");
   $("#collabBar").style.display="block";
-  setSyncStatus("已同步 ✓", true);
+  // 按真实同步状态显示：还有未上传成功的修改时不能谎报「已同步」
+  if(_syncRetryTimer) setSyncStatus("云端同步中…（本地已保存，网络恢复后自动上传）", false);
+  else setSyncStatus("已同步 ✓", true);
   collabStartPoll();
   renderNav(); buildTagPicker($("#matTagPicker"),matTags,()=>{}); buildTagPicker($("#brTagPicker"),brTags,()=>{});
   renderAll(); updateFilterBtns(); renderIdeasSaved();
@@ -3113,7 +3123,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.25";
+  var APP_VERSION="v38.26";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
