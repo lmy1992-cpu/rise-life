@@ -1,6 +1,6 @@
 // rise-life Service Worker
 // 缓存名 v33：云同步「以旧覆新」防护——每次打开页面不再无条件用云端旧快照覆盖本机（签到刷新清空的真正根因）；本机一改动 20 秒内自动推送
-const CACHE = 'dp-pwa-v38.28';
+const CACHE = 'dp-pwa-v38.29';
 const ASSETS = [
   './',
   './index.html',
