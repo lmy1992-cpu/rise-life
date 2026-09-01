@@ -581,6 +581,34 @@ async function sbFetch(url,opts){
 }
 async function sbUpsert(vid,payload,ts){ const url=SB_URL.replace(/\/$/,"")+"/rest/v1/sync_vault"; const r=await sbFetch(url,{method:"POST",headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates"}),body:JSON.stringify({vault_id:vid,payload,updated_at:ts||new Date().toISOString()})}); if(!r.ok){ let b=""; try{b=await r.text();}catch(e){} throw new Error("上传失败 HTTP "+r.status+(b?("｜"+b.slice(0,160)):"")); } }
 async function sbGet(vid){ const url=SB_URL.replace(/\/$/,"")+"/rest/v1/sync_vault?vault_id=eq."+encodeURIComponent(vid); const r=await sbFetch(url,{headers:sbHeaders()}); if(!r.ok){ let b=""; try{b=await r.text();}catch(e){} throw new Error("下载失败 HTTP "+r.status+(b?("｜"+b.slice(0,160)):"")); } const a=await r.json(); return (a&&a.length)?a[0]:null; }
+// ---- 分块上传/下载：整包超大的数据拆成小块逐条写，绕开 Supabase 数据库 statement timeout ----
+// 上传：<=250KB 的包仍用原单行格式（旧设备可读）；超过则切成多块，先传块、最后写主行元数据，中途失败云端保持完整旧数据
+const SB_CHUNK_SIZE=250000;
+async function sbUpsertChunked(vid,payload,ts){
+  if(!payload || payload.length<=SB_CHUNK_SIZE) return sbUpsert(vid,payload,ts);
+  const parts=[]; for(let i=0;i<payload.length;i+=SB_CHUNK_SIZE) parts.push(payload.slice(i,i+SB_CHUNK_SIZE));
+  const CONC=4;
+  for(let i=0;i<parts.length;i+=CONC){
+    const chunk=parts.slice(i,i+CONC);
+    await Promise.all(chunk.map(function(c,j){ return sbUpsert(vid+"#"+(i+j),c,ts); }));
+  }
+  return sbUpsert(vid, JSON.stringify({__chunked:true,n:parts.length}), ts);
+}
+// 下载：主行是分块元数据则收集所有块拼接还原；否则按旧格式原样返回
+async function sbGetChunked(vid){
+  const row=await sbGet(vid);
+  if(!row || typeof row.payload!=="string" || row.payload.indexOf('"__chunked"')<0) return row;
+  let meta=null; try{ const m=JSON.parse(row.payload); if(m&&m.__chunked&&typeof m.n==="number") meta=m; }catch(e){}
+  if(!meta) return row;
+  const n=meta.n, blocks=new Array(n), CONC=4;
+  for(let i=0;i<n;i+=CONC){
+    const idxs=[]; for(let k=i;k<Math.min(i+CONC,n);k++) idxs.push(k);
+    const arr=await Promise.all(idxs.map(function(k){ return sbGet(vid+"#"+(k)); }));
+    arr.forEach(function(b,k){ if(!b||typeof b.payload!=="string") throw new Error("云端分块不完整（缺第"+(idxs[k]+1)+"块），可能正在重新上传，稍后重试"); blocks[idxs[k]]=b.payload; });
+  }
+  row.payload=blocks.join("");
+  return row;
+}
 </script>
 <style id="zoomfix">
 html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
@@ -1439,8 +1467,8 @@ async function save(force=false){
     const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
     const pId="collab_priv:"+await sha256Hex("collab:"+collabPrivPwd);
     await Promise.all([
-      deriveKey(collabSharedPwd).then(k=>encBundle(k,shared)).then(p=>sbUpsert(sId,p,ts)),
-      deriveKey(collabPrivPwd).then(k=>encBundle(k,priv)).then(p=>sbUpsert(pId,p,ts))
+      deriveKey(collabSharedPwd).then(k=>encBundle(k,shared)).then(p=>sbUpsertChunked(sId,p,ts)),
+      deriveKey(collabPrivPwd).then(k=>encBundle(k,priv)).then(p=>sbUpsertChunked(pId,p,ts))
     ]);
     collabSharedUpdatedAt=ts;
     _lastSyncError="";
@@ -1486,7 +1514,7 @@ async function load(){
     try{
       const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
       const pId="collab_priv:"+await sha256Hex("collab:"+collabPrivPwd);
-      const [sRow,pRow]=await Promise.all([sbGet(sId), sbGet(pId)]);
+      const [sRow,pRow]=await Promise.all([sbGetChunked(sId), sbGetChunked(pId)]);
       collabSharedUpdatedAt = (sRow && sRow.updated_at) ? sRow.updated_at : null;
       const shared = sRow ? await decBundle(await deriveKey(collabSharedPwd), sRow.payload) : null;
       const priv = pRow ? await decBundle(await deriveKey(collabPrivPwd), pRow.payload) : null;
@@ -3033,10 +3061,7 @@ async function collabPoll(){
   if(_syncRetryTimer) return; // 本地还有未同步成功的修改，先不拉取覆盖，避免把你刚改的内容冲掉
   try{
     const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
-    const url=SB_URL.replace(/\/$/,"")+"/rest/v1/sync_vault?vault_id=eq."+encodeURIComponent(sId)+"&select=vault_id,payload,updated_at";
-    const r=await sbFetch(url,{headers:sbHeaders()});
-    if(!r.ok) return;
-    const a=await r.json(); const row=a&&a[0];
+    const row=await sbGetChunked(sId);
     if(row && row.updated_at!==collabSharedUpdatedAt){
       const shared=row.payload ? await decBundle(await deriveKey(collabSharedPwd), row.payload) : null;
       if(shared && _countShared(shared) < _countShared(state)){
@@ -3151,7 +3176,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.28";
+  var APP_VERSION="v38.29";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
