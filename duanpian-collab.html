@@ -240,13 +240,14 @@
   .modal-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:16px; flex-wrap:wrap}
   /* 阅读模式 */
   .modal.reader{max-width:800px}
-  .reader-head{display:flex; align-items:flex-start; gap:12px; justify-content:space-between; border-bottom:1px solid var(--line); padding-bottom:12px; margin-bottom:14px}
-  .reader-head .reader-t{min-width:0; flex:1}
-  .reader-head h2{margin:0 0 6px; font-size:22px; line-height:1.35}
-  .reader-meta{display:flex; flex-wrap:wrap; gap:6px; align-items:center; font-size:12px; color:var(--sub)}
+  .reader-head{display:flex; flex-direction:column; gap:8px; border-bottom:1px solid var(--line); padding-bottom:12px; margin-bottom:14px}
+  .reader-head .reader-actions{display:flex; gap:6px; flex-wrap:wrap}
+  .reader-head h2{margin:0; font-size:22px; line-height:1.35; font-weight:bold}
+  .reader-meta{display:flex; flex-wrap:wrap; gap:6px; align-items:center; font-size:12px; color:var(--sub); min-height:18px}
   .reader-meta .tagmini{background:var(--soft); color:var(--brand); border-radius:20px; padding:2px 9px; font-size:12px}
-  .reader-meta .wc{background:var(--soft); color:var(--sub); border-radius:20px; padding:2px 9px; font-size:12px}
-  .reader-actions{display:flex; gap:6px; flex-wrap:wrap; flex:0 0 auto}
+  .reader-time{font-size:12px; color:var(--sub); min-height:18px}
+  .reader-wc{display:flex; flex-wrap:wrap; gap:6px; align-items:center; font-size:12px; color:var(--sub); min-height:18px}
+  .reader-wc .wc{background:var(--soft); color:var(--sub); border-radius:20px; padding:2px 9px; font-size:12px}
   .reader-body{max-height:62vh; overflow:auto; padding-right:4px}
   .rd-intro{background:var(--soft); border-left:4px solid var(--brand); border-radius:0 12px 12px 0; padding:14px 16px; margin-bottom:18px; color:var(--ink); font-size:15px; line-height:1.85; white-space:pre-wrap}
   .rd-intro .rd-intro-tag{display:block; font-size:11px; letter-spacing:2px; color:var(--brand); margin-bottom:6px; font-weight:700}
@@ -935,10 +936,6 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 <div class="mask" id="maskEdit">
   <div class="modal reader">
     <div class="reader-head">
-      <div class="reader-t">
-        <h2 id="rdTitle"></h2>
-        <div class="reader-meta" id="rdMeta"></div>
-      </div>
       <div class="reader-actions">
         <button class="btn soft" id="btnRdEditContent">✎ 编辑原文</button>
         <button class="btn soft" id="btnRdEditMeta">✎ 编辑元素</button>
@@ -948,6 +945,10 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
         <button class="btn danger" id="btnRdDelete">删除</button>
         <button class="btn ghost" id="btnRdClose">关闭</button>
       </div>
+      <h2 id="rdTitle"></h2>
+      <div class="reader-meta" id="rdMeta"></div>
+      <div class="reader-time" id="rdTime"></div>
+      <div class="reader-wc" id="rdWc"></div>
     </div>
     <div class="reader-body">
       <!-- 阅读视图 -->
@@ -1872,9 +1873,9 @@ function renderReadingView(){
   const tags=(ex.tags||[]).map(id=>{const t=tagById(id);return t?'<span class="tagmini">'+esc(t.name)+'</span>':"";}).join("");
   const time=ex.createdAt?fmtDate(ex.createdAt):"";
   const wc=(ex.content||"").replace(/\s/g,"").length;
-  let meta=(tags?tags+" ":"")+(time?'<span>添加 '+esc(time)+'</span>':"")+'<span class="wc">字数 '+wc+'</span>';
-  if(aiHasContent(ex.ai)) meta+='<span class="ai-badge">🤖 已分析</span>';
-  $("#rdMeta").innerHTML=meta;
+  $("#rdMeta").innerHTML=tags;
+  $("#rdTime").textContent=time?"添加 "+time:"";
+  $("#rdWc").innerHTML='<span class="wc">字数 '+wc+'</span>'+(aiHasContent(ex.ai)?'<span class="ai-badge">🤖 已分析</span>':"");
   const body=(ex.content||"").trim();
   const ce=$("#rdContent");
   if(body){ ce.textContent=body; ce.classList.remove("empty"); }
@@ -3191,7 +3192,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.30";
+  var APP_VERSION="v38.31";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
