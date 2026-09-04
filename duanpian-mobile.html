@@ -1123,7 +1123,7 @@ function aiChat(messages, useJson, temperature){
 // 对单篇例文执行分析，返回 {raw, parsed}
 async function callAiForExample(ex, extraNote){
   const cfg=ensureAiCfg();
-  if(!cfg || !cfg.key){ toast("请先在「🤖 AI 设置」填写 API Key"); if($("#btnAiSettings") && typeof $("#btnAiSettings").onclick==="function") $("#btnAiSettings").onclick(); return null; }
+  if(!cfg || !cfg.key){ toast("本机还没存过 API Key，填一次保存即可（之后永久记住，不再弹窗）"); if($("#btnAiSettings") && typeof $("#btnAiSettings").onclick==="function") $("#btnAiSettings").onclick(); return null; }
   const fields=aiFields();
   const fieldSpec=fields.map(f=>'"'+f.key+'": "'+f.label+'"').join(", ");
   const userInstruction=(cfg.instruction||"").trim();
@@ -1183,7 +1183,7 @@ function renderAiChat(){
 async function sendAiChat(){
   const ex=curEx(); if(!ex) return;
   const cfg=ensureAiCfg();
-  if(!cfg||!cfg.key){ toast("请先在「🤖 AI 设置」填写 API Key"); return; }
+  if(!cfg||!cfg.key){ toast("本机还没存过 API Key，填一次保存即可（之后永久记住，不再弹窗）"); return; }
   const input=$("#aiChatInput"); const msg=(input.value||"").trim(); if(!msg) return;
   ex.ai=ex.ai||{}; ex.ai.chat=ex.ai.chat||[]; const chat=ex.ai.chat;
   chat.push({role:"user",content:msg}); input.value=""; renderAiChat();
@@ -1315,7 +1315,8 @@ function ensureAiCfg(){
   ['provider','key','baseUrl','model','instruction','aiMemory'].forEach(function(k){
     if(!state.aiCfg[k] && local && local[k]){ state.aiCfg[k]=local[k]; changed=true; }
   });
-  if(changed){ try{ persistLocalAiCfg(state.aiCfg); }catch(e){} }
+  // v38.34：state 里只要有 key 就立刻播种进本机备份（不等 save()）——修「刚加载还没保存过、备份仍为空」时被云端包覆盖后无从恢复
+  if(changed || state.aiCfg.key){ try{ persistLocalAiCfg(state.aiCfg); }catch(e){} }
   return state.aiCfg;
 }
 function save(){
@@ -1825,7 +1826,7 @@ async function callAiForTags(ex){
 }
 async function runAiTagSuggestion(ex){
   const cfg=ensureAiCfg();
-  if(!cfg || !cfg.key){ toast("请先在「🤖 AI 设置」填写 API Key"); if($("#btnAiSettings") && $("#btnAiSettings").onclick) $("#btnAiSettings").onclick(); return; }
+  if(!cfg || !cfg.key){ toast("本机还没存过 API Key，填一次保存即可（之后永久记住，不再弹窗）"); if($("#btnAiSettings") && $("#btnAiSettings").onclick) $("#btnAiSettings").onclick(); return; }
   const btn=$("#btnAiTagRun"); if(btn){ btn.disabled=true; btn.textContent="分析中…"; }
   const box=$("#aiTagList"); if(box) box.innerHTML='<div class="empty" style="padding:14px 0">AI 正在分析正文，请稍候…</div>';
   try{
@@ -2469,6 +2470,7 @@ function renderAiFieldManage(){
   });
 }
 $("#btnAiSettings").onclick=()=>{
+  try{ ensureAiCfg(); }catch(e){} // v38.34：打开设置前先从本机备份补全，弹窗自动带出已存的 key
   $("#aiProvider").value=state.aiCfg.provider||"";
   $("#aiBaseUrl").value=state.aiCfg.baseUrl||"";
   $("#aiKey").value=state.aiCfg.key||"";
@@ -2835,7 +2837,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.33";
+  var APP_VERSION="v38.34";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
