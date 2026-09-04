@@ -1127,7 +1127,7 @@ function aiChat(messages, useJson, temperature){
 }
 // 对单篇例文执行分析，返回 {raw, parsed}
 async function callAiForExample(ex, extraNote){
-  const cfg=state.aiCfg;
+  const cfg=ensureAiCfg();
   if(!cfg || !cfg.key){ toast("请先在「🤖 AI 设置」填写 API Key"); if($("#btnAiSettings") && typeof $("#btnAiSettings").onclick==="function") $("#btnAiSettings").onclick(); return null; }
   const fields=aiFields();
   const fieldSpec=fields.map(f=>'"'+f.key+'": "'+f.label+'"').join(", ");
@@ -1187,7 +1187,7 @@ function renderAiChat(){
 }
 async function sendAiChat(){
   const ex=curEx(); if(!ex) return;
-  const cfg=state.aiCfg;
+  const cfg=ensureAiCfg();
   if(!cfg||!cfg.key){ toast("请先在「🤖 AI 设置」填写 API Key"); return; }
   const input=$("#aiChatInput"); const msg=(input.value||"").trim(); if(!msg) return;
   ex.ai=ex.ai||{}; ex.ai.chat=ex.ai.chat||[]; const chat=ex.ai.chat;
@@ -1292,6 +1292,37 @@ function metaOnly(st){
   (m.materials||[]).forEach(x=>{ if(x.type==="image") delete x.content; });
   return m;
 }
+// v38.33：AI 设置单独本地备份，防止全量 state 被覆盖时 key 丢失
+function loadLocalAiCfg(){
+  try{
+    const raw=localStorage.getItem("duanpian_aicfg");
+    if(raw){
+      const c=JSON.parse(raw);
+      if(c && typeof c==='object') return c;
+    }
+  }catch(e){}
+  return {provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""};
+}
+function persistLocalAiCfg(cfg){
+  try{
+    const safe=Object.assign({provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""}, cfg||{});
+    const old=loadLocalAiCfg();
+    if(!safe.key && old.key) safe.key=old.key; // 禁止空 key 覆盖已保存的 key
+    localStorage.setItem("duanpian_aicfg", JSON.stringify(safe));
+  }catch(e){}
+}
+// v38.33：AI 调用前的最后防线 + 恢复唯一入口（补空语义）——本机备份只「补 state 的空位」，绝不覆盖已有非空字段
+function ensureAiCfg(){
+  if(!state || typeof state!=='object') return null;
+  if(!state.aiCfg || typeof state.aiCfg!=='object') state.aiCfg={provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""};
+  const local=loadLocalAiCfg();
+  let changed=false;
+  ['provider','key','baseUrl','model','instruction','aiMemory'].forEach(function(k){
+    if(!state.aiCfg[k] && local && local[k]){ state.aiCfg[k]=local[k]; changed=true; }
+  });
+  if(changed){ try{ persistLocalAiCfg(state.aiCfg); }catch(e){} }
+  return state.aiCfg;
+}
 function save(){
   let full, meta;
   try{ localStorage.setItem("__ts__"+KEY, String(Date.now())); }catch(_){}
@@ -1304,6 +1335,7 @@ function save(){
     // IDB 不可用（如隐私模式）：回退完整存 localStorage，保证不丢数据
     try{ localStorage.setItem(KEY, JSON.stringify(full)); }catch(e){}
   });
+  try{ persistLocalAiCfg(state.aiCfg); }catch(e){}
 }
 function load(){
   if(typeof indexedDB!=="undefined"){
@@ -1312,14 +1344,16 @@ function load(){
       else { const raw=localStorage.getItem(KEY); if(raw){ try{ state=JSON.parse(raw); }catch(e){ state=null; } } else { state=null; } }
       if(!state){ seed(); return; }
       migrate();
+      ensureAiCfg(); // v38.33：state 里 key 若丢失，从 duanpian_aicfg 备份找回
     }).catch(()=>{
       const raw=localStorage.getItem(KEY);
       if(raw){ try{ state=JSON.parse(raw); }catch(e){ state=null; } }
       if(!state){ seed(); return; }
       migrate();
+      ensureAiCfg(); // v38.33：同上
     });
   }
-  try{ const raw=localStorage.getItem(KEY); if(raw){ state=JSON.parse(raw); migrate(); return Promise.resolve(); } }catch(e){}
+  try{ const raw=localStorage.getItem(KEY); if(raw){ state=JSON.parse(raw); migrate(); ensureAiCfg(); return Promise.resolve(); } }catch(e){}
   seed(); return Promise.resolve();
 }
 function migrate(){
@@ -1346,6 +1380,10 @@ function migrate(){
   if(!Array.isArray(state.aiFields)) state.aiFields=DEFAULT_AI_FIELDS.map(f=>({...f}));
   state.examples.forEach(e=>{ if(!e.ai) e.ai={}; aiFields().forEach(f=>{ if(e.ai[f.key]===undefined) e.ai[f.key]=""; }); if(e.ai.done===undefined) e.ai.done=false; });
   if(!state.aiCfg) state.aiCfg={provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""};
+  if(typeof state.aiCfg.provider!=="string") state.aiCfg.provider="";
+  if(typeof state.aiCfg.key!=="string") state.aiCfg.key="";
+  if(typeof state.aiCfg.baseUrl!=="string") state.aiCfg.baseUrl="";
+  if(typeof state.aiCfg.model!=="string") state.aiCfg.model="";
   if(typeof state.aiCfg.instruction!=="string") state.aiCfg.instruction="";
   if(typeof state.aiCfg.aiMemory!=="string") state.aiCfg.aiMemory="";
   if(!Array.isArray(state.misc)) state.misc=[];
@@ -1791,7 +1829,7 @@ async function callAiForTags(ex){
   return parsed;
 }
 async function runAiTagSuggestion(ex){
-  const cfg=state.aiCfg;
+  const cfg=ensureAiCfg();
   if(!cfg || !cfg.key){ toast("请先在「🤖 AI 设置」填写 API Key"); if($("#btnAiSettings") && $("#btnAiSettings").onclick) $("#btnAiSettings").onclick(); return; }
   const btn=$("#btnAiTagRun"); if(btn){ btn.disabled=true; btn.textContent="分析中…"; }
   const box=$("#aiTagList"); if(box) box.innerHTML='<div class="empty" style="padding:14px 0">AI 正在分析正文，请稍候…</div>';
@@ -2851,7 +2889,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.32";
+  var APP_VERSION="v38.33";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
