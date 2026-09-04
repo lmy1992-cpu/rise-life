@@ -1198,7 +1198,7 @@ function aiChat(messages, useJson, temperature){
 }
 // 对单篇例文执行分析，返回 {raw, parsed}
 async function callAiForExample(ex, extraNote){
-  const cfg=state.aiCfg;
+  const cfg=await ensureAiCfg();
   if(!cfg || !cfg.key){ toast("请先在「🤖 AI 设置」填写 API Key"); if($("#btnAiSettings") && typeof $("#btnAiSettings").onclick==="function") $("#btnAiSettings").onclick(); return null; }
   const fields=aiFields();
   const fieldSpec=fields.map(f=>'"'+f.key+'": "'+f.label+'"').join(", ");
@@ -1258,7 +1258,7 @@ function renderAiChat(){
 }
 async function sendAiChat(){
   const ex=curEx(); if(!ex) return;
-  const cfg=state.aiCfg;
+  const cfg=await ensureAiCfg();
   if(!cfg||!cfg.key){ toast("请先在「🤖 AI 设置」填写 API Key"); return; }
   const input=$("#aiChatInput"); const msg=(input.value||"").trim(); if(!msg) return;
   ex.ai=ex.ai||{}; ex.ai.chat=ex.ai.chat||[]; const chat=ex.ai.chat;
@@ -1363,6 +1363,40 @@ function metaOnly(st){
   (m.materials||[]).forEach(x=>{ if(x.type==="image") delete x.content; });
   return m;
 }
+// v38.33：安全读写本机 AI 设置，禁止云端/广播的空 key 覆盖已保存的 key
+async function loadLocalAiCfg(){
+  let fromIdb=null, fromLs=null;
+  try{ fromIdb=await idbGet("duanpian_aicfg"); }catch(e){}
+  try{ fromLs=JSON.parse(localStorage.getItem("dp_collab_aicfg")||"null"); }catch(e){}
+  const base={provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""};
+  const merged=Object.assign({}, base, fromLs||{}, fromIdb||{});
+  const anyKey=(fromIdb&&fromIdb.key)||(fromLs&&fromLs.key);
+  if(anyKey && !merged.key) merged.key=anyKey;
+  return merged;
+}
+async function persistLocalAiCfg(cfg){
+  const safe=Object.assign({provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""}, cfg||{});
+  const old=await loadLocalAiCfg();
+  if(!safe.key && old.key) safe.key=old.key; // 禁止空 key 覆盖已保存的 key
+  try{ await idbPut("duanpian_aicfg", JSON.parse(JSON.stringify(safe))); }catch(e){}
+  try{ localStorage.setItem("dp_collab_aicfg", JSON.stringify(safe)); }catch(e){}
+}
+// v38.33：AI 调用前的最后防线 + 恢复唯一入口（补空语义）——
+// 本机备份只「补 state 的空位」，绝不覆盖 state 里已有的非空字段：
+//   ① key 被云端/轮询/广播抹空 → 从备份找回；
+//   ② 云端同步来的 instruction/baseUrl 等非空字段 → 保留云端值，不被旧备份覆盖。
+async function ensureAiCfg(){
+  if(!state || typeof state!=='object') return null;
+  if(!state.aiCfg || typeof state.aiCfg!=='object') state.aiCfg={provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""};
+  let local=null;
+  try{ local=await loadLocalAiCfg(); }catch(e){}
+  let changed=false;
+  ['provider','key','baseUrl','model','instruction','aiMemory'].forEach(function(k){
+    if(!state.aiCfg[k] && local && local[k]){ state.aiCfg[k]=local[k]; changed=true; }
+  });
+  if(changed){ try{ await persistLocalAiCfg(state.aiCfg); }catch(e){} }
+  return state.aiCfg;
+}
 // 本地落盘（权威函数）：全量进 IndexedDB（突破 5MB 上限），localStorage 只存瘦身副本（快速启动兜底）。
 // 历史教训：直接 JSON.stringify 全量写 localStorage，几十篇例文轻松超 5MB → 写入静默失败 → 刷新即回退。
 // 现在：①IndexedDB 是本地唯一权威全量副本；②localStorage 瘦身版只作快速启动与极端兜底；③失败不再静默吞。
@@ -1372,7 +1406,7 @@ async function persistLocal(){
   try{ await idbPut(IDB_KEY, JSON.parse(JSON.stringify(state))); idbOk=true; }
   catch(e){ try{ console.error("IndexedDB 写入失败", e); }catch(_){} }
   // AI 密钥/设置单独双写：全量 state 里已有 aiCfg，这里再单独存一份便于云端覆盖后快速恢复
-  try{ await idbPut("duanpian_aicfg", JSON.parse(JSON.stringify(state.aiCfg||{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""}))); }catch(e){}
+  try{ await persistLocalAiCfg(state.aiCfg); }catch(e){}
   try{
     const m=metaOnly(state); m.__ts=Date.now();
     localStorage.setItem("dp_collab_cache", JSON.stringify(m));
@@ -1403,15 +1437,10 @@ async function _applyBroadcastState(shared, priv, ts){
   const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
   state = Object.assign(def, shared||{}, priv||{});
   ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav'].forEach(function(k){ if(!Array.isArray(state[k])) state[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
-  // 恢复本地 AI 设置：云端/广播包不含 key，必须从本机双存储恢复；IDB 优先
-  let localAiCfg=null;
-  try{ localAiCfg=await idbGet("duanpian_aicfg"); }catch(e){}
-  if(!localAiCfg){ try{ localAiCfg=JSON.parse(localStorage.getItem("dp_collab_aicfg")||"null"); }catch(e){} }
-  if(localAiCfg || state.aiCfg){
-    state.aiCfg=Object.assign({provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""}, state.aiCfg||{}, localAiCfg||{});
-  }
+  // v38.33：恢复本地 AI 设置（补空语义）：云端/广播包不含 key，本机备份补回空位——key 永不丢、云端非空字段不被旧备份覆盖
+  await ensureAiCfg();
   if(!state.aiCfg || typeof state.aiCfg !== 'object') state.aiCfg={provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""};
-  state.aiCfg.aiMemory = state.aiMemory||"";
+  state.aiCfg.aiMemory = state.aiCfg.aiMemory||"";
   migrate();
   if(ts) collabSharedUpdatedAt = ts;
   try{ await persistLocal(); }catch(e){}
@@ -1474,7 +1503,7 @@ async function save(force=false){
   _saveUploading=true;
   const ts=new Date().toISOString();
   // AI 密钥独立存 localStorage（体积小）；全量数据已由 persistLocal 落 IndexedDB，这里不再写 localStorage
-  try{ localStorage.setItem("dp_collab_aicfg", JSON.stringify(state.aiCfg||{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""})); }catch(e){}
+  try{ await persistLocalAiCfg(state.aiCfg); }catch(e){}
   try{
     const shared={examples:state.examples,intros:state.intros,materials:state.materials,misc:state.misc,tags:state.tags,aiFields:state.aiFields,nav:state.nav,
       aiCfg:state.aiCfg?{provider:state.aiCfg.provider,baseUrl:state.aiCfg.baseUrl,model:state.aiCfg.model,instruction:state.aiCfg.instruction}:null};
@@ -1606,14 +1635,9 @@ async function load(){
       state = chosen;
       if(!state || typeof state !== 'object') state = Object.assign({}, def);
       ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav'].forEach(function(k){ if(!Array.isArray(state[k])) state[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
-      // 恢复本地 AI 设置：云端包不含 key，必须从本机双存储恢复；IDB 优先，本地 key 覆盖云端空 key
-      let localAiCfg=null;
-      try{ localAiCfg=await idbGet("duanpian_aicfg"); }catch(e){}
-      if(!localAiCfg){ try{ localAiCfg=JSON.parse(localStorage.getItem("dp_collab_aicfg")||"null"); }catch(e){} }
-      if(localAiCfg || state.aiCfg){
-        state.aiCfg=Object.assign({provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""}, state.aiCfg||{}, localAiCfg||{});
-      }
-      state.aiCfg.aiMemory = state.aiMemory||"";
+      // v38.33：恢复本地 AI 设置（补空语义）：云端包不含 key，本机备份补回空位——key 永不丢
+      await ensureAiCfg();
+      state.aiCfg.aiMemory = state.aiCfg.aiMemory||"";
       migrate();
       _collabLoadedFromCloud=true; // 成功从云端读取，后续 save 允许空数据上传（用户主动清空场景）
       try{ await persistLocal(); }catch(e){}
@@ -1661,6 +1685,10 @@ function migrate(){
   if(!Array.isArray(state.aiFields)) state.aiFields=DEFAULT_AI_FIELDS.map(f=>({...f}));
   state.examples.forEach(e=>{ if(!e.ai) e.ai={}; aiFields().forEach(f=>{ if(e.ai[f.key]===undefined) e.ai[f.key]=""; }); if(e.ai.done===undefined) e.ai.done=false; });
   if(!state.aiCfg) state.aiCfg={provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""};
+  if(typeof state.aiCfg.provider!=="string") state.aiCfg.provider="";
+  if(typeof state.aiCfg.key!=="string") state.aiCfg.key="";
+  if(typeof state.aiCfg.baseUrl!=="string") state.aiCfg.baseUrl="";
+  if(typeof state.aiCfg.model!=="string") state.aiCfg.model="";
   if(typeof state.aiCfg.instruction!=="string") state.aiCfg.instruction="";
   if(typeof state.aiCfg.aiMemory!=="string") state.aiCfg.aiMemory="";
   if(!Array.isArray(state.misc)) state.misc=[];
@@ -2106,7 +2134,7 @@ async function callAiForTags(ex){
   return parsed;
 }
 async function runAiTagSuggestion(ex){
-  const cfg=state.aiCfg;
+  const cfg=await ensureAiCfg();
   if(!cfg || !cfg.key){ toast("请先在「🤖 AI 设置」填写 API Key"); if($("#btnAiSettings") && $("#btnAiSettings").onclick) $("#btnAiSettings").onclick(); return; }
   const btn=$("#btnAiTagRun"); if(btn){ btn.disabled=true; btn.textContent="分析中…"; }
   const box=$("#aiTagList"); if(box) box.innerHTML='<div class="empty" style="padding:14px 0">AI 正在分析正文，请稍候…</div>';
@@ -3145,7 +3173,11 @@ async function collabPoll(){
       const shared=row.payload ? await decBundle(await deriveKey(collabSharedPwd), row.payload) : null;
       // v38.32：不再用「条数比本地少就反推」——那会把正常删除误判成回退攻击、回滚其它设备的删除。
       // 云端 updated_at 前进 = 其它设备有新写入（增/删/改），直接应用；本地未上传改动已由 _pendingLocal 在上方挡掉。
-      if(shared) Object.assign(state, shared);
+      if(shared){
+        Object.assign(state, shared);
+        // v38.33：云端共享包不含 AI key，直接 assign 会把本机 key 抹空 → 补空找回（不覆盖云端非空字段）
+        try{ await ensureAiCfg(); }catch(e){}
+      }
       collabSharedUpdatedAt=row.updated_at;
       _collabLoadedFromCloud=true;
       migrate(); renderAll();
@@ -3197,6 +3229,8 @@ async function doCollabLogin(silent){
     if(cachedState){
       try{
         state=cachedState; migrate();
+        // v38.33：本地缓存的 aiCfg 可能为空 key，必须从专用备份恢复（补空语义）
+        try{ await ensureAiCfg(); }catch(e){}
         enterCollabUI();
         if(msg) msg.textContent="";
       }catch(e){ /* 缓存损坏则走下方联网分支 */ }
@@ -3260,7 +3294,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.32";
+  var APP_VERSION="v38.33";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
