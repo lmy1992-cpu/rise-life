@@ -588,7 +588,7 @@ const SB_CHUNK_SIZE=250000;
 async function sbUpsertChunked(vid,payload,ts){
   if(!payload || payload.length<=SB_CHUNK_SIZE) return sbUpsert(vid,payload,ts);
   const parts=[]; for(let i=0;i<payload.length;i+=SB_CHUNK_SIZE) parts.push(payload.slice(i,i+SB_CHUNK_SIZE));
-  const CONC=4;
+  const CONC=8;
   for(let i=0;i<parts.length;i+=CONC){
     const chunk=parts.slice(i,i+CONC);
     await Promise.all(chunk.map(function(c,j){ return sbUpsert(vid+"#"+(i+j),c,ts); }));
@@ -601,7 +601,7 @@ async function sbGetChunked(vid){
   if(!row || typeof row.payload!=="string" || row.payload.indexOf('"__chunked"')<0) return row;
   let meta=null; try{ const m=JSON.parse(row.payload); if(m&&m.__chunked&&typeof m.n==="number") meta=m; }catch(e){}
   if(!meta) return row;
-  const n=meta.n, blocks=new Array(n), CONC=4;
+  const n=meta.n, blocks=new Array(n), CONC=8;
   for(let i=0;i<n;i+=CONC){
     const idxs=[]; for(let k=i;k<Math.min(i+CONC,n);k++) idxs.push(k);
     const arr=await Promise.all(idxs.map(function(k){ return sbGet(vid+"#"+(k)); }));
@@ -1388,6 +1388,12 @@ async function persistLocal(){
 }
 let _syncRetryTimer=null;
 let _collabLoadedFromCloud=false; // 是否已成功从云端读取过一次数据
+let _pendingLocal=false; // 本机是否有改动尚未成功上传到云端（跨页面持久化于 dp_collab_pending，退出登录时清零）
+try{ _pendingLocal = localStorage.getItem("dp_collab_pending")==="1"; }catch(e){}
+function setPendingLocal(v){
+  _pendingLocal=!!v;
+  try{ localStorage.setItem("dp_collab_pending", _pendingLocal?"1":"0"); }catch(e){}
+}
 /* 同电脑多窗口即时同步：一台电脑开多个协作版窗口时，一个窗口保存后，其它窗口立刻同步，
    不再等 20 秒云端轮询、也不依赖海外 Supabase 网络（跨设备仍走云端）。 */
 const _COLLAB_TAB_ID = (Math.random().toString(36) + Date.now().toString(36)).slice(2);
@@ -1416,9 +1422,7 @@ if(_collabBC){
     const d = ev && ev.data;
     if(!d || d.type!=='collab-state' || d.from===_COLLAB_TAB_ID) return;
     if(document.querySelector('.mask.on')) return;   // 正在编辑，不打断，避免覆盖你正在写的内容
-    if(_syncRetryTimer) return;                       // 本窗口还有未同步修改，先不拉，避免把刚改的冲掉
-    // 防回退护栏：广播来的数据条数比本地少（残留旧窗口的过期数据），直接忽略，防止旧数据覆盖本地缓存
-    if(_countItems(d.shared||{}) + _countItems(d.priv||{}) < _countItems(state)) return;
+    if(_syncRetryTimer || _saveUploading || _savePending || _pendingLocal) return; // 本窗口还有改动在同步：先不拉，避免把刚改的冲掉（v38.32 不再按条数拦截正常删除）
     await _applyBroadcastState(d.shared, d.priv, d.ts);
     setSyncStatus("已同步 ✓", true);
     toast("已同步（来自另一个窗口）");
@@ -1465,6 +1469,7 @@ async function save(force=false){
     setSyncStatus("本地为空，未上传（等待云端数据）", false);
     return;
   }
+  setPendingLocal(true); // 标记本机有改动待上传：本窗口 poll/load 见此会保护本地内容，不被云端旧包覆盖
   if(_saveUploading){ _savePending=true; return; } // 上一轮上传还在跑（Supabase 慢），这轮先落盘，上传结束后自动补传最新版
   _saveUploading=true;
   const ts=new Date().toISOString();
@@ -1482,6 +1487,7 @@ async function save(force=false){
     ]);
     collabSharedUpdatedAt=ts;
     _lastSyncError="";
+    setPendingLocal(false); // 上传成功：本机改动已到云端，可放心应用云端最新数据
     // 同电脑多窗口即时同步：通知其它窗口立刻拉取（不再等 20 秒云端轮询）
     if(_collabBC){ try{ _collabBC.postMessage({type:'collab-state', from:_COLLAB_TAB_ID, ts:ts, shared:shared, priv:priv}); }catch(e){} }
     setSyncStatus("已同步 ✓", true);
@@ -1511,13 +1517,63 @@ function forceSyncNow(){
   const btn=document.getElementById('btnSyncNow');
   if(btn){ btn.disabled=true; btn.textContent='同步中…'; }
   setSyncStatus('正在同步…', null, '手动触发中');
-  save(true).then(function(){
-    if(btn){ btn.disabled=false; btn.textContent='☁️ 同步'; }
-  }).catch(function(e){
-    if(btn){ btn.disabled=false; btn.textContent='☁️ 同步'; }
-  });
+  const done=function(){ if(btn){ btn.disabled=false; btn.textContent='☁️ 同步'; } };
+  const doSave=function(){ save(true).then(done).catch(done); };
+  if(!_collabLoadedFromCloud && collabSharedPwd){
+    // 本次进入还没成功连上云端（当前可能是本地缓存）：先拉云端合并，确认过云端状态再上传，避免旧缓存盲传覆盖云端
+    load().then(function(ok){
+      if(ok===false){
+        done();
+        setSyncStatus("云端未连接，未上传（避免旧数据覆盖云端）", false, "请检查网络后点「☁️ 同步」重试");
+        return;
+      }
+      doSave();
+    }).catch(done);
+  } else {
+    doSave();
+  }
 }
 let _loadPromise=null;
+/* ---- v38.32 合并引擎：以「本机是否有未上传改动 + 云端逐字段优先」取代旧的「条数多者胜」----
+   旧逻辑坑：本地缓存条数≥云端时整体丢弃云端更新（含正常删除），甚至反推旧数据覆盖云端。
+   新逻辑：
+   ① 本机有未上传改动(_pendingLocal) → 本地优先保护 + 把云端里本地没有的条目(id级)并进来 → 回推；
+   ② 否则云端是同步基准：每个字段云端有数据就用云端（其它设备的增/删/改都能同步），
+      云端为空的字段才用本地补（防空覆盖）并回推补齐；
+   ③ 云端全空 → 本地兜底并回推；两边全空 → 空状态。 */
+const _DATA_KEYS=['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav'];
+function _unionById(base,extra){
+  const seen={}, out=[];
+  (base||[]).forEach(function(x){ out.push(x); if(x&&x.id!=null) seen[x.id]=1; });
+  (extra||[]).forEach(function(x){ if(x&&x.id!=null){ if(!seen[x.id]){ seen[x.id]=1; out.push(x); } } else { out.push(x); } });
+  return out;
+}
+function _pickCloudState(cloud,local){
+  // 云端字段优先；云端为空的字段用本地补（防空覆盖）→ 返回 {state, localUsed}
+  const s=Object.assign({}, cloud||{}); let localUsed=false;
+  _DATA_KEYS.forEach(function(k){
+    const ck=(cloud&&cloud[k])||null, lk=(local&&local[k])||null;
+    if(ck&&ck.length){ s[k]=ck; }
+    else if(lk&&lk.length){ s[k]=lk; localUsed=true; }
+    else s[k]=ck||lk||[];
+  });
+  if(localUsed && local){
+    if(local.aiFields) s.aiFields=local.aiFields;
+    if(local.nav) s.nav=local.nav;
+  }
+  return {state:s, localUsed:localUsed};
+}
+function _pickLocalState(local,cloud){
+  // 本地优先（保护未上传改动）：本地全量保留 + 吸收云端本地没有的条目（他人新增不丢）
+  const s=Object.assign({}, local||{});
+  _DATA_KEYS.forEach(function(k){
+    const lk=(local&&local[k])||null, ck=(cloud&&cloud[k])||null;
+    s[k]=_unionById(lk||[], ck||[]);
+  });
+  if(!s.aiFields && cloud&&cloud.aiFields) s.aiFields=cloud.aiFields;
+  if(!s.nav && cloud&&cloud.nav) s.nav=cloud.nav;
+  return s;
+}
 async function load(){
   if(_loadPromise) return _loadPromise;
   _loadPromise=(async function(){
@@ -1536,14 +1592,17 @@ async function load(){
       try{ const full=await idbGet(IDB_KEY); if(full && typeof full==='object') localState=full; }catch(e){}
       if(!localState){ try{ const c=localStorage.getItem("dp_collab_cache"); if(c) localState=JSON.parse(c); }catch(e){} }
       const cloudEmpty=isStateEmpty(cloudState), localEmpty=!localState||isStateEmpty(localState);
-      let chosen, localWon=false;
-      if(!cloudEmpty && !localEmpty){
-        // 云端与本地都非空：取数据量更大的一方，避免盲从覆盖导致丢失（相等以云端为同步基准）
-        chosen = (_countItems(localState) > _countItems(cloudState)) ? localState : cloudState;
-        if(chosen===localState) localWon=true;
-      } else if(!cloudEmpty){ chosen=cloudState; }
-      else if(!localEmpty){ chosen=localState; localWon=true; }
+      let chosen=null, localWon=false;
+      if(_pendingLocal && !localEmpty){
+        // 本机有未上传改动：本地优先保护，并吸收云端新增，随后回推 → 本机改动与伙伴新增都不丢
+        chosen=_pickLocalState(localState, cloudState); localWon=true;
+      } else if(!cloudEmpty){
+        // 云端为同步基准：逐字段应用云端（含其它设备的删除/修改），云端缺失字段用本地补
+        const r=_pickCloudState(cloudState, localState);
+        chosen=r.state; localWon=r.localUsed;
+      } else if(!localEmpty){ chosen=_pickLocalState(localState, null); localWon=true; }
       else { chosen=cloudState; }
+      if(_pendingLocal && localEmpty) setPendingLocal(false); // 本地已无内容可传，清掉残留的未上传标志
       state = chosen;
       if(!state || typeof state !== 'object') state = Object.assign({}, def);
       ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav'].forEach(function(k){ if(!Array.isArray(state[k])) state[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
@@ -1558,33 +1617,25 @@ async function load(){
       migrate();
       _collabLoadedFromCloud=true; // 成功从云端读取，后续 save 允许空数据上传（用户主动清空场景）
       try{ await persistLocal(); }catch(e){}
-      // 本地副本更全（云端曾为空/更少）时，立即把本地回写云端恢复，防止下次再被空云端覆盖
+      // 本地有云端没有的内容（未上传改动/云端缺失字段/云端全空）时，立即回写云端，防止下次再被覆盖
       if(localWon){ try{ save(); }catch(e){} }
+      return true; // 成功应用云端/本地合并结果
     }catch(e){
-      // 网络失败时读本地兜底（IndexedDB 全量优先，localStorage 瘦身兜底），避免空白页
+      // 网络/云端失败：读本地兜底（IndexedDB 全量优先，localStorage 瘦身兜底），但不谎报成功——
+      // 返回 false 表示「当前显示的是本地内容」，调用方据此诚实提示并安排自动重试
       let cached=null;
       try{ cached=await idbGet(IDB_KEY); }catch(e){}
       if(cached && typeof cached==='object'){
-        try{
-          state=cached;
-          migrate();
-          /* 协作数据走本地缓存兜底：静默 */
-          return;
-        }catch(_){}
+        try{ state=cached; migrate(); return false; }catch(_){}
       }
       try{ cached=localStorage.getItem("dp_collab_cache"); }catch(e){}
       if(cached){
-        try{
-          state=JSON.parse(cached);
-          migrate();
-          /* 协作数据走本地缓存兜底：静默 */
-          return;
-        }catch(_){}
+        try{ state=JSON.parse(cached); migrate(); return false; }catch(_){}
       }
-      throw e;
+      throw e; // 本地也无缓存（首次且无网络）：交调用方提示
     }
   })();
-  try{ await _loadPromise; }finally{ _loadPromise=null; }
+  try{ return await _loadPromise; }finally{ _loadPromise=null; }
 }
 function migrate(){
   if(!state || typeof state !== 'object') state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
@@ -3070,27 +3121,35 @@ $$(".ctab").forEach(b=>b.onclick=()=>{
 /* ---------- 启动（协作版：先登录，再加载共享+私有双保险箱）---------- */
 let collabSharedPwd="", collabPrivPwd="";
 let collabSharedUpdatedAt=null, _collabTimer=null;
+let _loadRetryTimer=null; // 进入时云端未连上：每 10s 自动重拉，直到成功，用户无需「退出重进」碰运气
+function stopLoadRetry(){ if(_loadRetryTimer){ clearInterval(_loadRetryTimer); _loadRetryTimer=null; } }
+function startLoadRetry(){
+  if(_loadRetryTimer) return;
+  _loadRetryTimer=setInterval(async function(){
+    if(!collabSharedPwd){ stopLoadRetry(); return; }
+    try{
+      const ok=await load();
+      if(ok!==false){ stopLoadRetry(); enterCollabUI(); toast("云端已连接，已更新到最新内容"); }
+    }catch(e){ /* 仍失败：继续等下一轮自动重试 */ }
+  },10000);
+}
 function collabStartPoll(){ if(_collabTimer) clearInterval(_collabTimer); _collabTimer=setInterval(collabPoll,20000); }
 async function collabPoll(){
   if(!collabSharedPwd) return;
   if(document.querySelector('.mask.on')) return; // 编辑弹窗打开时不打断
-  if(_syncRetryTimer) return; // 本地还有未同步成功的修改，先不拉取覆盖，避免把你刚改的内容冲掉
+  if(_syncRetryTimer || _saveUploading || _savePending || _pendingLocal) return; // 本机还有改动在同步：先不拉取，避免把你刚改的内容冲掉（传完下个周期自然一致）
   try{
     const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
     const row=await sbGetChunked(sId);
     if(row && row.updated_at!==collabSharedUpdatedAt){
       const shared=row.payload ? await decBundle(await deriveKey(collabSharedPwd), row.payload) : null;
-      if(shared && _countShared(shared) < _countShared(state)){
-        // 防回退护栏：云端条数比本地少 = 有旧窗口/旧设备在往云端塞过期数据。
-        // 绝不应用旧数据，反手把本地最新数据推回云端，夺回主导权（本地为准）
-        try{ save(); }catch(e){}
-        const _now=Date.now();
-        if(_now - (window.__lastRollbackWarn||0) > 300000){ window.__lastRollbackWarn=_now; toast("检测到旧数据试图覆盖，已自动保住本地最新数据"); }
-        return;
-      }
+      // v38.32：不再用「条数比本地少就反推」——那会把正常删除误判成回退攻击、回滚其它设备的删除。
+      // 云端 updated_at 前进 = 其它设备有新写入（增/删/改），直接应用；本地未上传改动已由 _pendingLocal 在上方挡掉。
       if(shared) Object.assign(state, shared);
       collabSharedUpdatedAt=row.updated_at;
+      _collabLoadedFromCloud=true;
       migrate(); renderAll();
+      try{ await persistLocal(); }catch(e){}
       toast("已同步协作伙伴的最新内容");
     }
   }catch(e){ /* 静默，下个周期再试 */ }
@@ -3145,8 +3204,15 @@ async function doCollabLogin(silent){
       if(msg) msg.textContent="首次进入需联网同步，请稍候…";
     }
 
-    // 2) 后台静默拉取，不阻塞 UI；成功刷新界面，失败仅在确实无内容时提示
-    load().then(function(){
+    // 2) 后台静默拉取，不阻塞 UI；load() 返回 false = 云端没连上、当前显示本地内容（v38.32 不再谎报「已同步」）
+    load().then(function(ok){
+      if(ok===false){
+        // 云端暂不可达：如实显示本地内容 + 自动重试（用户无需退出重进），直到连上云端
+        setSyncStatus("本地内容 · 云端未连接，自动重试中…", false, _lastSyncError||"网络不可达，正在每 10 秒自动重试");
+        startLoadRetry();
+        if(!silent) toast("暂时无法连接云端，正在自动重试（当前显示本地内容）…");
+        return;
+      }
       enterCollabUI();
       if(!silent) toast(cachedState ? "已同步最新协作内容" : "已进入协作空间");
     }).catch(function(e){
@@ -3165,6 +3231,8 @@ async function doCollabLogin(silent){
 function collabLogout(){
   collabSharedPwd=""; collabPrivPwd="";
   localStorage.removeItem("dp_collab_remember");
+  setPendingLocal(false); // 清「未上传改动」标志：防换新口令进入时把旧空间内容回推到新空间
+  stopLoadRetry();
   $("#collabBar").style.display="none";
   $("#maskLogin").classList.add("on");
   $("#collabMsg").textContent="";
@@ -3192,7 +3260,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.31";
+  var APP_VERSION="v38.32";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
