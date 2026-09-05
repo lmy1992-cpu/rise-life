@@ -1800,7 +1800,7 @@ function seed(){
 }
 
 /* ---------- 标签 ---------- */
-function tagById(id){ return (state.tags||[]).find(t=>t.id===id); }
+function tagById(id){ return ((state&&state.tags)||[]).find(t=>t.id===id); }
 function renderFilterChips(){
   const box=$("#exFilterChips"); if(!box) return; box.innerHTML="";
   let anyTag=false;
@@ -1955,7 +1955,7 @@ function matchesSearch(e){
 }
 function renderExamples(){
   const g=$("#examplesGrid"); g.innerHTML="";
-  const list=state.examples.filter(e=>matchesTags(e.tags)&&matchesSearch(e)).slice().reverse();
+  const list=((state&&state.examples)||[]).filter(e=>matchesTags(e.tags)&&matchesSearch(e)).slice().reverse();
   if(!list.length){
     let msg="还没有例文，点击右上「上传例文」";
     if(filterSel.length && exSearchKeyword) msg="无匹配当前筛选和搜索的例文";
@@ -1986,15 +1986,23 @@ function renderExamples(){
 
 /* ---------- 编辑例文 ---------- */
 function openEditor(id){
-  const ex=(state.examples||[]).find(x=>x.id===id); if(!ex) return;
+  const ex=((state&&state.examples)||[]).find(x=>x.id===id); if(!ex) return;
   editCur={exId:ex.id};
   try{ if(!state.tags) state.tags=[]; }catch(e){}
-  // v38.35：渲染任何一步抛异常都会导致弹窗不显示（表现＝点了没反应）。
-  // 改为逐段容错，最后无论如何都把弹窗打开，并把错误记进诊断面板。
+  // v38.36：渲染任何一步抛异常都兜底，最后无论如何都保证弹窗打开（防「点了没反应」）。
   try{ $("#btnRdDelete").classList.remove("armed"); $("#btnRdDelete").textContent="删除"; }catch(e){ if(window._err) window._err("openEditor.resetDelete",e); }
   try{ renderReadingView(); }catch(e){ if(window._err) window._err("openEditor.renderReadingView",e); }
   try{ showReaderView("read"); }catch(e){ if(window._err) window._err("openEditor.showReaderView",e); }
-  try{ $("#maskEdit").classList.add("on"); }catch(e){ if(window._err) window._err("openEditor.mask",e); }
+  openMaskEdit();
+}
+function openMaskEdit(){
+  try{
+    const m=document.getElementById("maskEdit"); if(!m) return;
+    m.classList.add("on");
+  }catch(e){
+    if(window._err) window._err("openEditor.mask",e);
+    try{ const m=document.getElementById("maskEdit"); if(m){ m.style.display="flex"; m.classList.add("on"); } }catch(e2){}
+  }
 }
 function renderReadingView(){
   const ex=curEx(); if(!ex) return;
@@ -3386,7 +3394,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.35";
+  var APP_VERSION="v38.36";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
