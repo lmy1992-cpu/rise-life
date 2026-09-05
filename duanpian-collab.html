@@ -253,6 +253,15 @@
   .rd-intro .rd-intro-tag{display:block; font-size:11px; letter-spacing:2px; color:var(--brand); margin-bottom:6px; font-weight:700}
   .rd-content{font-size:16px; line-height:1.95; color:var(--ink); white-space:pre-wrap; word-break:break-word}
   .rd-content.empty{color:var(--sub); font-style:italic}
+/* 教程阅读视图：一级/二级/三级标题按文档层级显示大字号 */
+.tut-h{margin:.7em 0 .35em;line-height:1.35;color:var(--ink,#222);word-break:break-word}
+.tut-h1{font-size:1.9em;font-weight:700}
+.tut-h2{font-size:1.6em;font-weight:700}
+.tut-h3{font-size:1.35em;font-weight:700}
+.tut-h4{font-size:1.18em;font-weight:700}
+.tut-h5{font-size:1.06em;font-weight:700}
+.tut-h6{font-size:1em;font-weight:700}
+.tut-p{font-size:1em;line-height:1.95;margin:.35em 0;word-break:break-word}
   @media (max-width:600px){
     .reader-head{flex-direction:column}
     .reader-actions{width:100%}
@@ -726,6 +735,26 @@ window.addEventListener("unhandledrejection",function(ev){ window._err("unhandle
       <div class="grid" id="examplesGrid"></div>
     </section>
 
+    <!-- 教程（与例文同模式：卡片列表 + 批量上传 + 点开阅读/编辑；区别：分类 + 标题层级渲染；纳入单口令共享包，朋友可见） -->
+    <section class="sec" id="sec-tutorials">
+      <div class="sec-head">
+        <h2>教程</h2>
+        <span class="hint">上传 Word(.docx) 或 txt，将收录为「教程」；支持 Markdown（# / ## / ###）与 Word 标题样式，自动按层级显示大字号；点开可编辑 / 下载 / 删除；朋友用同一协作口令可见</span>
+        <span class="spacer"></span>
+        <input type="text" id="tutSearch" placeholder="🔍 搜索教程标题 / 文件名" style="min-width:160px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px;margin-right:8px" />
+        <select id="tutCat" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px;margin-right:8px">
+          <option value="">全部分类</option>
+          <option value="短篇教程">短篇教程</option>
+          <option value="遣词造句">遣词造句</option>
+          <option value="直播链接">直播链接</option>
+          <option value="其他">其他</option>
+        </select>
+        <button class="btn primary" id="btnUploadTutorial">+ 上传教程（可批量）</button>
+        <input type="file" id="fileTutorial" class="hidden-file" accept=".docx,.txt" multiple />
+      </div>
+      <div class="grid" id="tutorialsGrid"></div>
+    </section>
+
     <!-- 二、素材收集 -->
     <section class="sec" id="sec-materials">
       <div class="sec-head">
@@ -901,13 +930,22 @@ window.addEventListener("unhandledrejection",function(ev){ window._err("unhandle
     <div class="sub" id="uploadFileName"></div>
     <div id="upWarn"></div>
     <div class="field"><label>标题（第一行）</label><input type="text" id="upTitle" /></div>
-    <div class="field">
+    <div class="field" id="upTagField">
       <label>元素标签（搜索挑选，可多选）</label>
       <div class="tag-searchbox">
         <input type="text" id="upTagSearch" placeholder="输入关键词搜索，回车添加第一个匹配，例如「现代」" />
         <div class="tag-cand" id="upTagCand"></div>
       </div>
       <div class="chips" id="upTagPicker"></div>
+    </div>
+    <div class="field" id="upTutCatWrap" style="display:none">
+      <label>分类</label>
+      <select id="upTutCat" style="padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:14px">
+        <option value="短篇教程">短篇教程</option>
+        <option value="遣词造句">遣词造句</option>
+        <option value="直播链接">直播链接</option>
+        <option value="其他">其他</option>
+      </select>
     </div>
     <div class="field" id="upBodyField">
       <label>正文（原文，可编辑）</label><button class="btn soft" id="btnUpFmt" style="margin-left:8px;font-size:12px;padding:4px 10px">🧹 一键排版（去空行·顶格）</button>
@@ -941,6 +979,44 @@ window.addEventListener("unhandledrejection",function(ev){ window._err("unhandle
     <div id="exFilterChips"></div>
     <div class="modal-actions">
       <button class="btn primary" id="btnExFilterClose">完成</button>
+    </div>
+  </div>
+</div>
+
+<!-- 教程阅读/编辑弹窗 -->
+<div class="mask" id="maskEditTut">
+  <div class="modal reader">
+    <div class="reader-head">
+      <div class="reader-actions">
+        <button class="btn soft" id="btnTutEditContent">✎ 编辑</button>
+        <button class="btn soft" id="btnTutDownload">⬇️ 下载</button>
+        <button class="btn danger" id="btnTutDelete">删除</button>
+        <button class="btn ghost" id="btnTutClose">关闭</button>
+      </div>
+      <h2 id="tutTitle"></h2>
+      <div class="reader-meta" id="tutCat"></div>
+      <div class="reader-wc" id="tutWc"></div>
+    </div>
+    <div class="reader-body">
+      <div id="tutView">
+        <div class="rd-content" id="tutContent"></div>
+      </div>
+      <div id="tutEditContent" style="display:none">
+        <div class="field"><label>标题</label><input type="text" id="tutEdTitle" /></div>
+        <div class="field"><label>分类</label>
+          <select id="tutEdCat" style="padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:14px">
+            <option value="短篇教程">短篇教程</option>
+            <option value="遣词造句">遣词造句</option>
+            <option value="直播链接">直播链接</option>
+            <option value="其他">其他</option>
+          </select>
+        </div>
+        <div class="field"><label>正文（可用 # / ## / ### 表示一 / 二 / 三级标题；Word 标题样式会自动转成 # 标题）</label><textarea id="tutEdContent" style="min-height:300px"></textarea></div>
+        <div class="modal-actions">
+          <button class="btn ghost" id="btnTutContentCancel">取消</button>
+          <button class="btn primary" id="btnTutContentSave">保存</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -1448,7 +1524,7 @@ const _COLLAB_TAB_ID = (Math.random().toString(36) + Date.now().toString(36)).sl
 const _collabBC = ('BroadcastChannel' in window) ? new BroadcastChannel('duanpian-collab') : null;
 async function _applyBroadcastState(shared, priv, ts){
   if(!shared && !priv) return;
-  const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
+  const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
   // v38.35：以当前 state 为合并基础——只覆盖包里真正带过来的字段，包里没有的保留本机内容（防旧版本包/另一窗口把脑洞想法清空）
   state = Object.assign({}, def, state||{}, shared||{}, priv||{});
   ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav'].forEach(function(k){ if(!Array.isArray(state[k])) state[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
@@ -1499,7 +1575,7 @@ let _saveUploading=false; // 云端上传进行中标志：防止重试定时器
 let _savePending=false;   // 上传期间又有新改动：结束后自动补传，绝不漏
 let _lastSyncError="";    // 最后一次上传失败的简要原因（悬停状态条可见）
 async function save(force=false){
-  if(!state || typeof state !== 'object'){ state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; }
+  if(!state || typeof state !== 'object'){ state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; }
   // 手动强制同步：清掉可能卡死的标志、停止旧重试，立即再试一次
   if(force){
     _saveUploading=false;
@@ -1521,7 +1597,7 @@ async function save(force=false){
   try{ await persistLocalAiCfg(state.aiCfg); }catch(e){}
   try{
     // v38.35 单保险箱：原私有字段（脑洞/想法拓展/抓取收藏/AI 记忆）与 AI 密钥一并进共享包，一个口令全共享
-    const shared={examples:state.examples||[],intros:state.intros||[],materials:state.materials||[],misc:state.misc||[],tags:state.tags||[],aiFields:state.aiFields||[],nav:state.nav||[],
+    const shared={examples:state.examples||[],intros:state.intros||[],materials:state.materials||[],misc:state.misc||[],tags:state.tags||[],tutorials:state.tutorials||[],aiFields:state.aiFields||[],nav:state.nav||[],
       brainstorms:state.brainstorms||[],ideas:state.ideas||[],crawlFav:state.crawlFav||[],
       aiCfg:state.aiCfg?{provider:state.aiCfg.provider||"",key:state.aiCfg.key||"",baseUrl:state.aiCfg.baseUrl||"",model:state.aiCfg.model||"",instruction:state.aiCfg.instruction||"",aiMemory:state.aiCfg.aiMemory||""}:null};
     const priv=null; // 私有保险箱已取消：保留变量只为兼容旧的广播消息格式
@@ -1583,7 +1659,7 @@ let _loadPromise=null;
    ② 否则云端是同步基准：每个字段云端有数据就用云端（其它设备的增/删/改都能同步），
       云端为空的字段才用本地补（防空覆盖）并回推补齐；
    ③ 云端全空 → 本地兜底并回推；两边全空 → 空状态。 */
-const _DATA_KEYS=['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav'];
+const _DATA_KEYS=['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','tutorials'];
 function _unionById(base,extra){
   const seen={}, out=[];
   (base||[]).forEach(function(x){ out.push(x); if(x&&x.id!=null) seen[x.id]=1; });
@@ -1634,13 +1710,13 @@ async function load(){
           if(pRow){ priv=await decBundle(await deriveKey(oldPriv), pRow.payload); if(priv) try{ localStorage.setItem("dp_collab_priv_migrated","1"); }catch(e){} }
         }
       }catch(e){}
-      const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
+      const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
       const cloudState = Object.assign(def, shared||{});
       if(priv){
         ['brainstorms','ideas','crawlFav'].forEach(function(k){ if(Array.isArray(priv[k])&&priv[k].length) cloudState[k]=_unionById(cloudState[k]||[], priv[k]); });
         if(priv.aiMemory && !(cloudState.aiCfg&&cloudState.aiCfg.aiMemory)) cloudState.aiCfg=Object.assign({},cloudState.aiCfg||{},{aiMemory:priv.aiMemory});
       }
-      ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav'].forEach(function(k){ if(!Array.isArray(cloudState[k])) cloudState[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
+      ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','tutorials','aiFields','nav'].forEach(function(k){ if(!Array.isArray(cloudState[k])) cloudState[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
       // 本地缓存作为「最后已知良好」副本：IndexedDB 全量优先（大容量，权威），localStorage 瘦身兜底
       let localState=null;
       try{ const full=await idbGet(IDB_KEY); if(full && typeof full==='object') localState=full; }catch(e){}
@@ -1710,7 +1786,7 @@ async function load(){
   try{ return await _loadPromise; }finally{ _loadPromise=null; }
 }
 function migrate(){
-  if(!state || typeof state !== 'object') state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
+  if(!state || typeof state !== 'object') state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
   // 容错：损坏数据可能把数组字段写成 null，先归一化为空数组，避免后续 .forEach 崩溃
   if(!Array.isArray(state.examples)) state.examples=[];
   if(!Array.isArray(state.intros)) state.intros=[];
@@ -1745,10 +1821,18 @@ function migrate(){
   if(!Array.isArray(state.crawlFav)) state.crawlFav=[];
   if(Array.isArray(state.nav)) state.nav=state.nav.filter(n=>n.sec!=="intros");
   if(!Array.isArray(state.nav)||!state.nav.length) state.nav=DEFAULT_NAV.map(x=>({...x}));
+  if(Array.isArray(state.nav) && !state.nav.some(n=>n.sec==="tutorials")){
+    const exIdx=state.nav.findIndex(n=>n.sec==="examples");
+    const tutEntry={sec:"tutorials", name:"教程"};
+    if(exIdx>=0) state.nav.splice(exIdx+1,0,tutEntry); else state.nav.push(tutEntry);
+  }
+  if(!Array.isArray(state.tutorials)) state.tutorials=[];
+  state.tutorials.forEach(t=>{ if(!t.category) t.category="其他"; if(!t.createdAt) t.createdAt=Date.now(); if(typeof t.content!=="string") t.content=""; });
   mergeXlsx();
 }
 const DEFAULT_NAV=[
   {sec:"examples", name:"例文"},
+  {sec:"tutorials", name:"教程"},
   {sec:"materials", name:"素材收集"},
   {sec:"brainstorms", name:"脑洞想法"},
   {sec:"misc", name:"杂项分类"},
@@ -1891,7 +1975,7 @@ function wireTagSearch(inputId, candId, containerId, getSelected, onChange){
 /* ---------- 左侧导航（可排序 / 重命名） ---------- */
 function cnOrd(n){ const d=["零","一","二","三","四","五","六","七","八","九","十"]; if(n<=10) return d[n]; if(n<20) return "十"+d[n-10]; if(n===20) return "二十"; return ""+n; }
 function fmtDate(ts){ if(!ts) return "—"; const d=new Date(ts); const p=n=>String(n).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes()); }
-const NAV_SUB={examples:"上传 word / txt",materials:"文字 / 图片 / 链接",brainstorms:"标题 / 想法 / 拓展",misc:"大项导览",tagmanage:"类型 / 核心梗",crawl:"每日全网热点",ideas:"组合成篇"};
+const NAV_SUB={examples:"上传 word / txt",tutorials:"上传 word / txt",materials:"文字 / 图片 / 链接",brainstorms:"标题 / 想法 / 拓展",misc:"大项导览",tagmanage:"类型 / 核心梗",crawl:"每日全网热点",ideas:"组合成篇"};
 let currentSec="examples";
 function switchSec(sec){
   currentSec=sec;
@@ -2333,8 +2417,17 @@ function bufToB64(buf){ let bin=""; const bytes=new Uint8Array(buf); const chunk
 function b64ToBytes(b64){ const bin=atob(b64); const len=bin.length; const bytes=new Uint8Array(len); for(let i=0;i<len;i++) bytes[i]=bin.charCodeAt(i); return bytes; }
 function extFromType(t){ if(/wordprocessingml|docx/i.test(t||"")) return ".docx"; return ".txt"; }
 function triggerDownload(blob, name){ const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 1000); }
-function triggerUpload(){ $("#fileExample").click(); }
-$("#btnUploadExample").onclick=triggerUpload;
+let uploadTarget="examples";
+function onFilesPicked(ev, target){
+  uploadTarget=target;
+  const files=[...ev.target.files].filter(f=>/\.(docx|txt)$/i.test(f.name)); ev.target.value="";
+  if(!files.length){ if(ev.target.files && ev.target.files.length) toast("仅支持 .docx / .txt"); return; }
+  openUploadPreview(files);
+}
+$("#btnUploadExample").onclick=()=>{ uploadTarget="examples"; $("#fileExample").click(); };
+$("#btnUploadTutorial").onclick=()=>{ uploadTarget="tutorials"; $("#fileTutorial").click(); };
+$("#fileExample").onchange=(ev)=>onFilesPicked(ev,"examples");
+$("#fileTutorial").onchange=(ev)=>onFilesPicked(ev,"tutorials");
 const exSearchEl=$("#exSearch"); if(exSearchEl){ exSearchEl.oninput=(e)=>{ exSearchKeyword=e.target.value.trim().toLowerCase(); renderExamples(); }; }
 $$(".btnFilter").forEach(b=>b.onclick=openExFilter);
 $("#btnExFilterClose").onclick=()=>$("#maskExFilter").classList.remove("on");
@@ -2344,18 +2437,13 @@ $$("#modeSeg2 button").forEach(b=>b.onclick=()=>{
   filterMode=b.dataset.mode; renderAll();
 });
 let uploadQueue=[]; let uploadTotal=0; let exSearchKeyword="";
-$("#fileExample").onchange=async (ev)=>{
-  const files=[...ev.target.files].filter(f=>/\.(docx|txt)$/i.test(f.name)); ev.target.value="";
-  if(!files.length){ if(ev.target.files.length) toast("仅支持 .docx / .txt"); return; }
-  openUploadPreview(files);
-};
 
 
 /* ---------- 上传预审清单 ---------- */
 let previewFiles=[];
 function openUploadPreview(files){
   previewFiles=files.slice();
-  const existing=new Set(state.examples.map(e=>e.fileName));
+  const existing=new Set(state[uploadTarget].map(e=>e.fileName));
   const list=$("#upPrevList"); list.innerHTML="";
   previewFiles.forEach((f,i)=>{
     const isDup=existing.has(f.name);
@@ -2376,7 +2464,7 @@ function updatePrevCount(){
 $("#upPrevList").addEventListener("change", updatePrevCount);
 $("#upPrevSelectNew").onclick=()=>{
   document.querySelectorAll('#upPrevList input').forEach(cb=>{
-    const i=+cb.dataset.i; const isDup=state.examples.some(e=>e.fileName===previewFiles[i].name);
+    const i=+cb.dataset.i; const isDup=state[uploadTarget].some(e=>e.fileName===previewFiles[i].name);
     cb.checked=!isDup;
   });
   updatePrevCount();
@@ -2397,7 +2485,7 @@ $("#upPrevStart").onclick=()=>{
   processUploadQueue();
 };
 function processUploadQueue(){
-  if(!uploadQueue.length){ const t=uploadTotal; uploadTotal=0; closeUpload(); if(t) toast("已收录 "+t+" 篇例文"); return; }
+  if(!uploadQueue.length){ const t=uploadTotal; uploadTotal=0; closeUpload(); if(t) toast("已收录 "+t+" 篇"+(uploadTarget==="tutorials"?"教程":"例文")); return; }
   const f=uploadQueue[0]; const remaining=uploadQueue.length;
   parseFile(f).then(parsed=>{ openUploadModal(f.name, parsed, remaining, uploadTotal); })
     .catch(()=>{ uploadQueue.shift(); processUploadQueue(); });
@@ -2413,50 +2501,86 @@ function decodeTxt(buf){
 async function parseFile(f){
   const buf=await f.arrayBuffer();
   let text="";
-  if(f.name.toLowerCase().endsWith(".txt")) text=decodeTxt(buf);
-  else if(f.name.toLowerCase().endsWith(".docx")){
+  const isDocx=f.name.toLowerCase().endsWith(".docx");
+  if(isDocx){
     if(typeof mammoth==="undefined"){ toast("Word 解析库未加载，请联网后重试"); return Promise.reject(); }
-    const r=await mammoth.extractRawText({arrayBuffer:buf});
-    text=r.value;
-  } else { toast("仅支持 .docx / .txt"); return Promise.reject(); }
+    if(uploadTarget==="tutorials"){ text=await mammothToHeadingText(buf); } // 教程：Word 标题样式 → # 一级/二级标题
+    else { const r=await mammoth.extractRawText({arrayBuffer:buf}); text=r.value; }
+  } else if(f.name.toLowerCase().endsWith(".txt")){ text=decodeTxt(buf); }
+  else { toast("仅支持 .docx / .txt"); return Promise.reject(); }
   const parsed=parseText(text);
   parsed.fileData=bufToB64(buf);
-  parsed.fileType=f.type||(/\.docx$/i.test(f.name)?"application/vnd.openxmlformats-officedocument.wordprocessingml.document":"text/plain");
+  parsed.fileType=f.type||(isDocx?"application/vnd.openxmlformats-officedocument.wordprocessingml.document":"text/plain");
   parsed.title=((f.name||"").replace(/\.[^.]+$/,"").trim())||parsed.title||"未命名"; // 文章名取文件名（去扩展名），而非正文第一行
   return parsed;
 }
+// 教程：把 Word 的标题样式转成 Markdown 的 # / ## / ###，使阅读视图能按层级显示大字号
+async function mammothToHeadingText(buf){
+  try{
+    const r=await mammoth.convertToHtml({arrayBuffer:buf, styleMap:[
+      "p[style-name='Heading 1'] => h1:fresh", "p[style-name='标题 1'] => h1:fresh",
+      "p[style-name='Heading 2'] => h2:fresh", "p[style-name='标题 2'] => h2:fresh",
+      "p[style-name='Heading 3'] => h3:fresh", "p[style-name='标题 3'] => h3:fresh",
+      "p[style-name='Heading 4'] => h4:fresh", "p[style-name='标题 4'] => h4:fresh",
+      "p[style-name='Heading 5'] => h5:fresh", "p[style-name='标题 5'] => h5:fresh",
+      "p[style-name='Heading 6'] => h6:fresh", "p[style-name='标题 6'] => h6:fresh"
+    ]});
+    return htmlToMarkdownHeadings(r.value);
+  }catch(e){
+    try{ const r2=await mammoth.extractRawText({arrayBuffer:buf}); return r2.value; }catch(_){ return ""; }
+  }
+}
+function htmlToMarkdownHeadings(html){
+  const d=document.createElement("div"); d.innerHTML=html||"";
+  const out=[];
+  d.childNodes.forEach(n=>{
+    if(n.nodeType===3){ const t=(n.textContent||"").trim(); if(t) out.push(t); return; }
+    const tag=(n.tagName||"").toLowerCase();
+    if(/^h[1-6]$/.test(tag)){ const lvl=+tag[1]; out.push("#".repeat(lvl)+" "+(n.textContent||"").trim()); }
+    else { const t=(n.textContent||"").trim(); if(t) out.push(t); }
+  });
+  return out.join("\n");
+}
 function openUploadModal(fileName, parsed, remaining, total){
   pendingUpload={fileName, ...parsed};
+  if(uploadTarget==="tutorials") pendingUpload.category="短篇教程";
   $("#uploadFileName").textContent="来源："+fileName + (total>1 ? "　（第 "+(total-remaining+1)+" / "+total+" 篇）" : "");
   $("#upTitle").value=parsed.title;
   $("#upContent").value=pendingUpload.body||"";
   const _ubf=$("#upBodyField"); if(_ubf) _ubf.style.display="";
-  const dup=state.examples.find(e=>e.fileName===fileName);
+  const isTut=uploadTarget==="tutorials";
+  $("#upTagField").style.display = isTut ? "none" : "";
+  $("#upTutCatWrap").style.display = isTut ? "" : "none";
+  const dup=state[uploadTarget].find(e=>e.fileName===fileName);
   let warnHtml = parsed.markerFound ? "" : '<div class="warn">未检测到「1. / 1、 / 1）」等编号，已把整篇作为正文。如只需部分，可在确认后点「编辑原文」裁剪。</div>';
-  if(dup){ warnHtml = '<div class="warn">⚠️ 已存在同名例文「'+esc(dup.title)+'」（'+fmtDate(dup.createdAt)+'）。确认收录将保留两篇，不会覆盖旧文。</div>' + warnHtml; }
+  if(dup){ warnHtml = '<div class="warn">⚠️ 已存在同名'+(isTut?"教程":"例文")+'「'+esc(dup.title)+'」（'+fmtDate(dup.createdAt)+'）。确认收录将保留两篇，不会覆盖旧文。</div>' + warnHtml; }
   $("#upWarn").innerHTML = warnHtml;
-  buildTagPicker($("#upTagPicker"), pendingUpload.tags=[], ()=>{});
-  wireTagSearch("upTagSearch","upTagCand","upTagPicker",()=>pendingUpload.tags,()=>{});
-  if(total>1 && remaining>1){ $("#upBatchWrap").style.display="flex"; $("#upBatchText").textContent="后续 "+(remaining-1)+" 篇沿用本标签并自动收录"; }
+  if(isTut){ $("#upTutCat").value=pendingUpload.category||"短篇教程"; }
+  else { buildTagPicker($("#upTagPicker"), pendingUpload.tags=[], ()=>{}); wireTagSearch("upTagSearch","upTagCand","upTagPicker",()=>pendingUpload.tags,()=>{}); }
+  if(total>1 && remaining>1){ $("#upBatchWrap").style.display="flex"; $("#upBatchText").textContent="后续 "+(remaining-1)+" 篇沿用本"+(isTut?"分类":"标签")+"并自动收录"; }
   else { $("#upBatchWrap").style.display="none"; $("#upBatchSame").checked=false; }
   $("#btnUploadSkip").style.display = (total>1) ? "" : "none";
   $("#maskUpload").classList.add("on");
 }
 function closeUpload(){ $("#maskUpload").classList.remove("on"); pendingUpload=null; }
 function saveOneUpload(){
-  exPage=1;
-  const exId=uid();
+  if(uploadTarget==="tutorials"){ tutPage=1; } else { exPage=1; }
+  const id=uid();
   const title=$("#upTitle").value.trim()||"未命名";
   const bodyText=($("#upContent")&&$("#upContent").value!=null)?$("#upContent").value:pendingUpload.body;
-  state.examples.push({id:exId,title,fileName:pendingUpload.fileName,fileData:pendingUpload.fileData,fileType:pendingUpload.fileType,tags:[...pendingUpload.tags],createdAt:Date.now(),content:bodyText});
+  const item={id,title,fileName:pendingUpload.fileName,fileData:pendingUpload.fileData,fileType:pendingUpload.fileType,createdAt:Date.now(),content:bodyText};
+  if(uploadTarget==="tutorials") item.category=($("#upTutCat").value)||"其他"; else item.tags=[...pendingUpload.tags];
+  state[uploadTarget].push(item);
   save();
-  renderExamples(); updateFilterBtns();
+  if(uploadTarget==="tutorials"){ renderTutorials(); } else { renderExamples(); updateFilterBtns(); }
   pendingUpload=null;
 }
-function saveUploadRaw(fileName, parsed, tags){
-  const exId=uid();
+function saveUploadRaw(fileName, parsed, tags, category){
+  const id=uid();
   const title=parsed.title||"未命名";
-  state.examples.push({id:exId,title,fileName,tags:[...tags],createdAt:Date.now(),content:parsed.body,fileData:parsed.fileData,fileType:parsed.fileType});
+  const item={id,title,fileName,tags:[...(tags||[])],createdAt:Date.now(),content:parsed.body,fileData:parsed.fileData,fileType:parsed.fileType};
+  if(category) item.category=category;
+  state[uploadTarget].push(item);
   save();
 }
 $("#btnUploadCancel").onclick=()=>{ uploadQueue=[]; uploadTotal=0; closeUpload(); };
@@ -2466,22 +2590,128 @@ $("#btnUploadConfirm").onclick=()=>{
   const reuse = ($("#upBatchWrap").style.display!=="none") && $("#upBatchSame").checked;
   if(reuse){
     const tags=[...pendingUpload.tags];
+    const cat=(uploadTarget==="tutorials")?($("#upTutCat").value||"其他"):undefined;
     saveOneUpload();
     const rest=uploadQueue.slice(1);
     uploadQueue=[]; closeUpload();
     let done=0;
     (async()=>{
       for(const f of rest){
-        try{ const parsed=await parseFile(f); saveUploadRaw(f.name, parsed, tags); done++; }catch(e){}
+        try{ const parsed=await parseFile(f); saveUploadRaw(f.name, parsed, tags, cat); done++; }catch(e){}
       }
       toast("已收录 "+(done+1)+" 篇（含本篇）");
-      renderExamples(); updateFilterBtns();
+      if(uploadTarget==="tutorials"){ renderTutorials(); } else { renderExamples(); updateFilterBtns(); }
     })();
     return;
   }
   saveOneUpload();
   uploadQueue.shift(); processUploadQueue();
 };
+
+/* ---------- 教程（与例文同模式；区别：分类 + 标题层级渲染） ---------- */
+let tutPage=1; const TUT_PAGE_SIZE=24;
+let tutCatFilter=""; let tutSearchKeyword="";
+function matchesTutSearch(t){
+  if(!tutSearchKeyword) return true;
+  const kw=tutSearchKeyword;
+  return ((t.title||"").toLowerCase().includes(kw)) || ((t.fileName||"").toLowerCase().includes(kw));
+}
+function tutCatMatch(t){ if(!tutCatFilter) return true; return (t.category||"其他")===tutCatFilter; }
+function curTut(){ return (editCur&&editCur.tutId) ? state.tutorials.find(x=>x.id===editCur.tutId) : null; }
+function renderTutorials(){
+  const g=$("#tutorialsGrid"); if(!g) return; g.innerHTML="";
+  const list=state.tutorials.filter(t=>tutCatMatch(t)&&matchesTutSearch(t)).slice().reverse();
+  if(!list.length){
+    let msg="还没有教程，点击右上「上传教程」";
+    if(tutCatFilter&&tutSearchKeyword) msg="无匹配当前分类和搜索的教程";
+    else if(tutCatFilter) msg="「"+tutCatFilter+"」分类下还没有教程";
+    else if(tutSearchKeyword) msg="无匹配搜索的教程";
+    g.innerHTML='<div class="empty">'+msg+'</div>';
+    return;
+  }
+  const shown=list.slice(0, tutPage*TUT_PAGE_SIZE);
+  shown.forEach(t=>{
+    const card=document.createElement("div"); card.className="card";
+    const no=list.indexOf(t)+1;
+    const snip=(t.content||"").split("\n").slice(0,3).join("\n");
+    card.innerHTML='<div class="chead"><span class="cno">#'+no+'</span><h3>'+esc(t.title)+'</h3></div>'+
+      '<p class="snip">'+(esc(snip)||"（暂无正文")+')</p>'+
+      '<div class="meta"><span class="tagmini">'+esc(t.category||"其他")+'</span><span>'+esc(t.fileName||"")+'</span><span class="ctime">添加 '+fmtDate(t.createdAt)+'</span></div>';
+    card.onclick=()=>openTutorialEditor(t.id);
+    g.appendChild(card);
+  });
+  if(list.length>shown.length){
+    const more=document.createElement("button"); more.className="btn primary"; more.style.margin="16px auto 0"; more.style.display="block";
+    more.textContent="加载更多（已显示 "+shown.length+" / "+list.length+" 篇）";
+    more.onclick=()=>{ tutPage++; renderTutorials(); };
+    g.appendChild(more);
+  }
+}
+// 教程正文：Markdown（# / ## / ###）与 Word 标题样式转出的 # 标记，按层级渲染大字号
+function renderTutorialBody(text){
+  const lines=(text||"").split("\n");
+  const out=[]; let para=[];
+  const flush=()=>{ if(para.length){ out.push('<p class="tut-p">'+para.map(l=>esc(l)).join("<br>")+'</p>'); para=[]; } };
+  for(const raw of lines){
+    const line=raw.replace(/\r/g,"");
+    const h=line.match(/^ {0,3}(#{1,6})\s+(.*)$/);
+    if(h){ flush(); const lvl=h[1].length; out.push('<h'+lvl+' class="tut-h tut-h'+lvl+'">'+esc(h[2].trim())+'</h'+lvl+'>'); continue; }
+    if(line.trim()===""){ flush(); continue; }
+    para.push(line);
+  }
+  flush();
+  return out.length ? out.join("") : '<div class="empty">（无正文预览）</div>';
+}
+function renderTutorialReading(){
+  const t=curTut(); if(!t) return;
+  $("#tutTitle").textContent=t.title||"未命名";
+  $("#tutCat").innerHTML='<span class="tagmini">'+esc(t.category||"其他")+'</span>';
+  const wc=(t.content||"").replace(/\s/g,"").length;
+  $("#tutWc").textContent='字数 '+wc;
+  const ce=$("#tutContent");
+  if((t.content||"").trim()){ ce.innerHTML=renderTutorialBody(t.content); ce.classList.remove("empty"); }
+  else { ce.innerHTML="（无正文预览）"; ce.classList.add("empty"); }
+}
+function showTutorialReaderView(which){ $("#tutView").style.display = which==="read" ? "" : "none"; $("#tutEditContent").style.display = which==="content" ? "" : "none"; }
+function openTutorialEditor(id){
+  const t=state.tutorials.find(x=>x.id===id); if(!t) return;
+  editCur={tutId:t.id};
+  renderTutorialReading(); showTutorialReaderView("read");
+  $("#maskEditTut").classList.add("on");
+}
+function tutorialDownload(){
+  const t=curTut(); if(!t) return;
+  let blob, name;
+  if(t.fileData){
+    blob=new Blob([b64ToBytes(t.fileData)], {type: t.fileType||"application/octet-stream"});
+    name=t.fileName || ((t.title||"未命名")+extFromType(t.fileType));
+  } else {
+    blob=new Blob([t.content||""], {type:"text/plain;charset=utf-8"});
+    const fn=t.fileName||"";
+    name=(/\.txt$/i.test(fn))? fn : ((t.title||"未命名")+".txt");
+  }
+  triggerDownload(blob, name); toast("已开始下载："+name);
+}
+$("#btnTutClose").onclick=()=>$("#maskEditTut").classList.remove("on");
+$("#btnTutEditContent").onclick=()=>{ const t=curTut(); if(!t) return; $("#tutEdTitle").value=t.title||""; $("#tutEdCat").value=t.category||"其他"; $("#tutEdContent").value=t.content||""; showTutorialReaderView("content"); };
+$("#btnTutContentCancel").onclick=()=>showTutorialReaderView("read");
+$("#btnTutContentSave").onclick=()=>{
+  const t=curTut(); if(!t) return;
+  t.title=$("#tutEdTitle").value.trim()||"未命名";
+  t.category=$("#tutEdCat").value||"其他";
+  t.content=$("#tutEdContent").value;
+  save(); renderTutorialReading(); showTutorialReaderView("read"); renderAll(); toast("已保存");
+};
+$("#btnTutDownload").onclick=tutorialDownload;
+$("#btnTutDelete").onclick=()=>{
+  const t=curTut(); if(!t) return;
+  armDelete($("#btnTutDelete"), ()=>{
+    state.tutorials=state.tutorials.filter(x=>x.id!==t.id);
+    save(); $("#maskEditTut").classList.remove("on"); renderAll(); toast("已删除");
+  });
+};
+const tutSearchEl=$("#tutSearch"); if(tutSearchEl){ tutSearchEl.oninput=(e)=>{ tutSearchKeyword=e.target.value.trim().toLowerCase(); renderTutorials(); }; }
+const tutCatEl=$("#tutCat"); if(tutCatEl){ tutCatEl.onchange=(e)=>{ tutCatFilter=e.target.value; tutPage=1; renderTutorials(); }; }
 
 /* ---------- 三、素材收集 ---------- */
 $("#matType").onchange=(e)=>{
@@ -2863,7 +3093,7 @@ $("#fileImport").onchange=(e)=>{
   rd.onload=()=>{ try{ const d=JSON.parse(rd.result); if(d&&d.tags){ state=d; migrate(); save(); renderAll(); $("#maskBackup").classList.remove("on"); toast("导入成功"); } else toast("文件格式不对"); }catch(err){ toast("解析失败"); } };
   rd.readAsText(f); e.target.value="";
 };
-$("#btnWipe").onclick=()=>{ if(confirm("确定清空本协作空间的全部内容（例文/素材/杂项/元素/脑洞/想法/收藏）？此操作不可恢复！")){ state={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:state.aiCfg||{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; save(); renderAll(); $("#maskBackup").classList.remove("on"); toast("已清空"); } };
+$("#btnWipe").onclick=()=>{ if(confirm("确定清空本协作空间的全部内容（例文/素材/杂项/元素/脑洞/想法/收藏）？此操作不可恢复！")){ state={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],aiMemory:"",aiCfg:state.aiCfg||{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; save(); renderAll(); $("#maskBackup").classList.remove("on"); toast("已清空"); } };
 
 /* ---------- AI 设置（占位，密钥仅存本机；归纳维度可自定义） ---------- */
 function renderAiFieldManage(){
@@ -3265,7 +3495,7 @@ function enterCollabUI(){
 }
 // 最小可用离线状态（仅在明确需要本地空占位时使用，不再自动保存为缓存）
 function offlineCollabState(){
-  return {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
+  return {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
 }
 async function doCollabLogin(silent){
   if(_loggingIn) return;
@@ -3394,7 +3624,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.36";
+  var APP_VERSION="v38.37";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
