@@ -626,9 +626,9 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 <div class="mask" id="maskLogin" style="z-index:999">
   <div class="modal" style="max-width:440px">
     <h3>🔗 短篇协作版</h3>
-    <div class="sub">和好友共用例文 / 素材 / 杂项 / 元素；各自的脑洞想法、想法拓展、抓取收藏则独立保存，互不覆盖。共享内容用「协作空间口令」打开；私人内容用「我的私有口令」打开，只在你当前设备上解密。</div>
+    <div class="sub">和好友共用全部内容：例文 / 素材 / 杂项 / 元素 / 脑洞想法 / 想法拓展 / 抓取收藏 / AI 设置，两台设备实时同步。只需一个「协作空间口令」就能打开。</div>
     <div class="field"><label>协作空间口令（两人约定同一个词）</label><input id="collabShare" type="password" placeholder="例如 rose2026" /></div>
-    <div class="field"><label>我的私有口令（只有你自己知道）</label><input id="collabPriv" type="password" placeholder="例如 my-rose-88" /></div>
+    <input id="collabPriv" type="hidden" value="" />
     <label class="up-batch"><input type="checkbox" id="collabRemember" /> <span>记住口令（仅存本机浏览器，方便下次直接进）</span></label>
     <div id="collabMsg" style="color:#c0392b;font-size:13px;min-height:18px;margin:6px 0"></div>
     <div class="modal-actions"><button class="btn primary" id="btnCollabLogin">进入协作空间</button></div>
@@ -636,6 +636,19 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 </div>
 <div id="collabBar" style="display:none;position:fixed;right:12px;bottom:12px;z-index:60;background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.12)">🔗 协作中 · <span id="syncStatus" style="color:#1a8a3c">已同步 ✓</span> · <a href="javascript:void(0)" id="btnCollabLogout" style="color:var(--brand);font-weight:600">退出</a></div>
 <script>if(window.self!==window.top && !/[?&]ipad=/.test(location.search)){document.body.className+=" embedded";}</script>
+<script>
+/* v38.35：早期错误捕获——把页面运行中的异常记下来，供「点状态栏看诊断」排查（朋友端出问题不用再靠猜） */
+window.__ERRS=[];
+window._err=function(tag,e){
+  try{
+    var m=(e&&(e.stack||e.message))||String(e||"");
+    window.__ERRS.push((new Date()).toLocaleString()+" | "+tag+" | "+m);
+    if(window.__ERRS.length>40) window.__ERRS.shift();
+  }catch(_){}
+};
+window.addEventListener("error",function(ev){ window._err("onerror: "+(ev&&ev.message)+" @line "+(ev&&ev.lineno), ev&&ev.error); });
+window.addEventListener("unhandledrejection",function(ev){ window._err("unhandledrejection", ev&&ev.reason); });
+</script>
 <script src="crawl-data.js"></script>
 <script>
 (function(){
@@ -1436,7 +1449,8 @@ const _collabBC = ('BroadcastChannel' in window) ? new BroadcastChannel('duanpia
 async function _applyBroadcastState(shared, priv, ts){
   if(!shared && !priv) return;
   const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
-  state = Object.assign(def, shared||{}, priv||{});
+  // v38.35：以当前 state 为合并基础——只覆盖包里真正带过来的字段，包里没有的保留本机内容（防旧版本包/另一窗口把脑洞想法清空）
+  state = Object.assign({}, def, state||{}, shared||{}, priv||{});
   ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav'].forEach(function(k){ if(!Array.isArray(state[k])) state[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
   // v38.33：恢复本地 AI 设置（补空语义）：云端/广播包不含 key，本机备份补回空位——key 永不丢、云端非空字段不被旧备份覆盖
   await ensureAiCfg();
@@ -1493,7 +1507,7 @@ async function save(force=false){
   }
   // 本地落盘不依赖登录：先保证本地有最新副本（IndexedDB 全量 + localStorage 瘦身），刷新绝不回退
   try{ await persistLocal(); }catch(e){}
-  if(!collabSharedPwd || !collabPrivPwd) return; // 未登录不推云端
+  if(!collabSharedPwd) return; // v38.35 单口令：未登录不推云端
   // 安全护栏：还没成功读过云端，且当前数据为空，禁止上传覆盖云端（防止首次联网失败时把空数据冲掉）
   if(!_collabLoadedFromCloud && isStateEmpty()){
     setSyncStatus("本地为空，未上传（等待云端数据）", false);
@@ -1506,15 +1520,13 @@ async function save(force=false){
   // AI 密钥独立存 localStorage（体积小）；全量数据已由 persistLocal 落 IndexedDB，这里不再写 localStorage
   try{ await persistLocalAiCfg(state.aiCfg); }catch(e){}
   try{
-    const shared={examples:state.examples,intros:state.intros,materials:state.materials,misc:state.misc,tags:state.tags,aiFields:state.aiFields,nav:state.nav,
-      aiCfg:state.aiCfg?{provider:state.aiCfg.provider,baseUrl:state.aiCfg.baseUrl,model:state.aiCfg.model,instruction:state.aiCfg.instruction}:null};
-    const priv={brainstorms:state.brainstorms,ideas:state.ideas,crawlFav:state.crawlFav,aiMemory:state.aiCfg?state.aiCfg.aiMemory:""};
+    // v38.35 单保险箱：原私有字段（脑洞/想法拓展/抓取收藏/AI 记忆）与 AI 密钥一并进共享包，一个口令全共享
+    const shared={examples:state.examples||[],intros:state.intros||[],materials:state.materials||[],misc:state.misc||[],tags:state.tags||[],aiFields:state.aiFields||[],nav:state.nav||[],
+      brainstorms:state.brainstorms||[],ideas:state.ideas||[],crawlFav:state.crawlFav||[],
+      aiCfg:state.aiCfg?{provider:state.aiCfg.provider||"",key:state.aiCfg.key||"",baseUrl:state.aiCfg.baseUrl||"",model:state.aiCfg.model||"",instruction:state.aiCfg.instruction||"",aiMemory:state.aiCfg.aiMemory||""}:null};
+    const priv=null; // 私有保险箱已取消：保留变量只为兼容旧的广播消息格式
     const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
-    const pId="collab_priv:"+await sha256Hex("collab:"+collabPrivPwd);
-    await Promise.all([
-      deriveKey(collabSharedPwd).then(k=>encBundle(k,shared)).then(p=>sbUpsertChunked(sId,p,ts)),
-      deriveKey(collabPrivPwd).then(k=>encBundle(k,priv)).then(p=>sbUpsertChunked(pId,p,ts))
-    ]);
+    await deriveKey(collabSharedPwd).then(k=>encBundle(k,shared)).then(p=>sbUpsertChunked(sId,p,ts));
     collabSharedUpdatedAt=ts;
     _lastSyncError="";
     setPendingLocal(false); // 上传成功：本机改动已到云端，可放心应用云端最新数据
@@ -1609,13 +1621,25 @@ async function load(){
   _loadPromise=(async function(){
     try{
       const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
-      const pId="collab_priv:"+await sha256Hex("collab:"+collabPrivPwd);
-      const [sRow,pRow]=await Promise.all([sbGetChunked(sId), sbGetChunked(pId)]);
+      const sRow=await sbGetChunked(sId);
       collabSharedUpdatedAt = (sRow && sRow.updated_at) ? sRow.updated_at : null;
       const shared = sRow ? await decBundle(await deriveKey(collabSharedPwd), sRow.payload) : null;
-      const priv = pRow ? await decBundle(await deriveKey(collabPrivPwd), pRow.payload) : null;
+      // v38.35：一次性迁移旧「私有保险箱」内容——本机若还记得旧私有口令，读出来并入共享包，之后只走单一共享包
+      let priv=null;
+      try{
+        const rem=JSON.parse(localStorage.getItem("dp_collab_remember")||"null");
+        const oldPriv=(rem&&rem.priv&&rem.priv!==collabSharedPwd)?rem.priv:"";
+        if(oldPriv && !localStorage.getItem("dp_collab_priv_migrated")){
+          const pRow=await sbGetChunked("collab_priv:"+await sha256Hex("collab:"+oldPriv));
+          if(pRow){ priv=await decBundle(await deriveKey(oldPriv), pRow.payload); if(priv) try{ localStorage.setItem("dp_collab_priv_migrated","1"); }catch(e){} }
+        }
+      }catch(e){}
       const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
-      const cloudState = Object.assign(def, shared||{}, priv||{});
+      const cloudState = Object.assign(def, shared||{});
+      if(priv){
+        ['brainstorms','ideas','crawlFav'].forEach(function(k){ if(Array.isArray(priv[k])&&priv[k].length) cloudState[k]=_unionById(cloudState[k]||[], priv[k]); });
+        if(priv.aiMemory && !(cloudState.aiCfg&&cloudState.aiCfg.aiMemory)) cloudState.aiCfg=Object.assign({},cloudState.aiCfg||{},{aiMemory:priv.aiMemory});
+      }
       ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav'].forEach(function(k){ if(!Array.isArray(cloudState[k])) cloudState[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
       // 本地缓存作为「最后已知良好」副本：IndexedDB 全量优先（大容量，权威），localStorage 瘦身兜底
       let localState=null;
@@ -1633,6 +1657,29 @@ async function load(){
       } else if(!localEmpty){ chosen=_pickLocalState(localState, null); localWon=true; }
       else { chosen=cloudState; }
       if(_pendingLocal && localEmpty) setPendingLocal(false); // 本地已无内容可传，清掉残留的未上传标志
+      // v38.35 迁移保护：首次升级到单保险箱时，原私有字段一律「本机 ∪ 云端 ∪ 旧私有包」并集合并——你这边的内容一条都不会因为切换口令而丢失
+      try{
+        if(chosen && !localStorage.getItem("dp_collab_merged_v3835")){
+          ['brainstorms','ideas','crawlFav'].forEach(function(k){
+            chosen[k]=_unionById((localState&&localState[k])||[], (chosen&&chosen[k])||[]);
+          });
+          if(!chosen.aiCfg || typeof chosen.aiCfg!=='object') chosen.aiCfg={provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""};
+          if(!chosen.aiCfg.aiMemory){
+            const lm=(localState&&localState.aiCfg&&localState.aiCfg.aiMemory)||"";
+            const cm=(chosen.aiCfg&&chosen.aiCfg.aiMemory)||"";
+            chosen.aiCfg.aiMemory=(lm.length>=cm.length)?lm:cm;
+          }
+          try{ localStorage.setItem("dp_collab_merged_v3835","1"); }catch(e){}
+        }
+      }catch(e){}
+      // v38.35：AI 密钥共享——云端包带 key 时以云端为准（两人共用同一密钥）；云端无 key 时保留本机，交给 ensureAiCfg 从备份补
+      try{
+        if(cloudState && cloudState.aiCfg && cloudState.aiCfg.key){
+          if(!chosen.aiCfg || typeof chosen.aiCfg!=='object') chosen.aiCfg={provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""};
+          chosen.aiCfg.key=cloudState.aiCfg.key;
+          ['provider','baseUrl','model','instruction'].forEach(function(k){ if(cloudState.aiCfg[k] && !chosen.aiCfg[k]) chosen.aiCfg[k]=cloudState.aiCfg[k]; });
+        }
+      }catch(e){}
       state = chosen;
       if(!state || typeof state !== 'object') state = Object.assign({}, def);
       ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav'].forEach(function(k){ if(!Array.isArray(state[k])) state[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
@@ -1753,7 +1800,7 @@ function seed(){
 }
 
 /* ---------- 标签 ---------- */
-function tagById(id){ return state.tags.find(t=>t.id===id); }
+function tagById(id){ return (state.tags||[]).find(t=>t.id===id); }
 function renderFilterChips(){
   const box=$("#exFilterChips"); if(!box) return; box.innerHTML="";
   let anyTag=false;
@@ -1939,13 +1986,15 @@ function renderExamples(){
 
 /* ---------- 编辑例文 ---------- */
 function openEditor(id){
-  const ex=state.examples.find(x=>x.id===id); if(!ex) return;
-  let intro=state.intros.find(it=>it.exampleId===id);
+  const ex=(state.examples||[]).find(x=>x.id===id); if(!ex) return;
   editCur={exId:ex.id};
-  $("#btnRdDelete").classList.remove("armed"); $("#btnRdDelete").textContent="删除";
-  renderReadingView();
-  showReaderView("read");
-  $("#maskEdit").classList.add("on");
+  try{ if(!state.tags) state.tags=[]; }catch(e){}
+  // v38.35：渲染任何一步抛异常都会导致弹窗不显示（表现＝点了没反应）。
+  // 改为逐段容错，最后无论如何都把弹窗打开，并把错误记进诊断面板。
+  try{ $("#btnRdDelete").classList.remove("armed"); $("#btnRdDelete").textContent="删除"; }catch(e){ if(window._err) window._err("openEditor.resetDelete",e); }
+  try{ renderReadingView(); }catch(e){ if(window._err) window._err("openEditor.renderReadingView",e); }
+  try{ showReaderView("read"); }catch(e){ if(window._err) window._err("openEditor.showReaderView",e); }
+  try{ $("#maskEdit").classList.add("on"); }catch(e){ if(window._err) window._err("openEditor.mask",e); }
 }
 function renderReadingView(){
   const ex=curEx(); if(!ex) return;
@@ -2806,7 +2855,7 @@ $("#fileImport").onchange=(e)=>{
   rd.onload=()=>{ try{ const d=JSON.parse(rd.result); if(d&&d.tags){ state=d; migrate(); save(); renderAll(); $("#maskBackup").classList.remove("on"); toast("导入成功"); } else toast("文件格式不对"); }catch(err){ toast("解析失败"); } };
   rd.readAsText(f); e.target.value="";
 };
-$("#btnWipe").onclick=()=>{ if(confirm("确定清空本协作空间的共享与私人内容？此操作不可恢复！")){ state={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:state.aiCfg||{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; save(); renderAll(); $("#maskBackup").classList.remove("on"); toast("已清空"); } };
+$("#btnWipe").onclick=()=>{ if(confirm("确定清空本协作空间的全部内容（例文/素材/杂项/元素/脑洞/想法/收藏）？此操作不可恢复！")){ state={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:state.aiCfg||{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; save(); renderAll(); $("#maskBackup").classList.remove("on"); toast("已清空"); } };
 
 /* ---------- AI 设置（占位，密钥仅存本机；归纳维度可自定义） ---------- */
 function renderAiFieldManage(){
@@ -3190,7 +3239,7 @@ async function collabPoll(){
 }
 function collabBoot(){
   const saved=JSON.parse(localStorage.getItem("dp_collab_remember")||"null");
-  if(saved && saved.share && saved.priv){ $("#collabShare").value=saved.share; $("#collabPriv").value=saved.priv; $("#collabRemember").checked=true; doCollabLogin(true); }
+  if(saved && saved.share){ $("#collabShare").value=saved.share; if($("#collabPriv")) $("#collabPriv").value=saved.priv||saved.share; $("#collabRemember").checked=true; doCollabLogin(true); }
   else { $("#maskLogin").classList.add("on"); }
 }
 let _loggingIn=false;
@@ -3217,9 +3266,9 @@ async function doCollabLogin(silent){
     const share=$("#collabShare").value.trim();
     const priv=$("#collabPriv").value.trim();
     const msg=$("#collabMsg");
-    if(!share||!priv){ if(msg) msg.textContent="请填写两个口令"; return; }
-    collabSharedPwd=share; collabPrivPwd=priv;
-    if($("#collabRemember").checked){ localStorage.setItem("dp_collab_remember",JSON.stringify({share,priv})); }
+    if(!share){ if(msg) msg.textContent="请填写协作口令"; return; }
+    collabSharedPwd=share; collabPrivPwd=share; // v38.35 单口令：私有保险箱取消，变量保留只为兼容旧代码路径
+    if($("#collabRemember").checked){ localStorage.setItem("dp_collab_remember",JSON.stringify({share,priv:share})); }
     else { localStorage.removeItem("dp_collab_remember"); }
 
     // 1) 本地缓存优先：立刻进主界面，绝不空白（即使 Supabase 暂时连不上）。IndexedDB 全量优先，localStorage 瘦身兜底
@@ -3264,6 +3313,46 @@ async function doCollabLogin(silent){
     _loggingIn=false;
   }
 }
+// v38.35：诊断面板——点协作状态栏弹出，含版本/地址/云端状态/数据条数/最近错误，可一键复制
+function showDiag(){
+  try{
+    var m=document.getElementById("maskDiag");
+    if(!m){
+      m=document.createElement("div");
+      m.id="maskDiag"; m.className="mask";
+      m.innerHTML='<div class="modal" style="max-width:600px"><h3>🩺 连接诊断</h3>'+
+        '<div class="sub">把这个内容复制发给对方，就能定位问题。点空白处关闭。</div>'+
+        '<pre id="diagBody" style="white-space:pre-wrap;word-break:break-all;font-size:12px;line-height:1.6;max-height:52vh;overflow:auto;background:#f7f7f7;padding:12px;border-radius:8px;margin:10px 0"></pre>'+
+        '<div class="modal-actions"><button class="btn" id="diagCopy">📋 复制诊断信息</button><button class="btn primary" id="diagClose">关闭</button></div></div>';
+      document.body.appendChild(m);
+      m.addEventListener("click",function(e){ if(e.target===m) m.classList.remove("on"); });
+      document.getElementById("diagClose").onclick=function(){ m.classList.remove("on"); };
+      document.getElementById("diagCopy").onclick=function(){
+        var t=document.getElementById("diagBody").textContent||"";
+        var done=false;
+        try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t); done=true; } }catch(e){}
+        if(!done){ try{ var ta=document.createElement("textarea"); ta.value=t; ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); done=true; }catch(e){} }
+        toast(done?"已复制，发给对方即可":"复制失败，请长按选中后手动复制");
+      };
+    }
+    var st=(typeof state!=='undefined'&&state)?state:{};
+    var errs=(window.__ERRS||[]).slice(-15);
+    var ver="";
+    try{ var mv=document.body.innerHTML.match(/APP_VERSION\s*=\s*["']([^"']+)["']/); ver=mv?mv[1]:""; }catch(e){}
+    if(!ver){ try{ ver=(typeof APP_VERSION!=='undefined')?APP_VERSION:""; }catch(e){} }
+    document.getElementById("diagBody").textContent=
+      "版本："+(ver||"未知")+"\n"+
+      "地址："+location.href+"\n"+
+      "时间："+(new Date()).toLocaleString()+"\n"+
+      "云端状态："+((document.getElementById("syncStatus")||{}).textContent||"")+"\n"+
+      "最近同步错误："+((typeof _lastSyncError!=='undefined'&&_lastSyncError)||"无")+"\n"+
+      "登录："+((typeof collabSharedPwd!=='undefined'&&collabSharedPwd)?"已登录":"未登录")+"\n"+
+      "数据条数：例文 "+((st.examples||[]).length)+" ｜ 脑洞 "+((st.brainstorms||[]).length)+" ｜ 想法 "+((st.ideas||[]).length)+" ｜ 素材 "+((st.materials||[]).length)+" ｜ 标签 "+((st.tags||[]).length)+"\n"+
+      "AI 密钥："+(st.aiCfg&&st.aiCfg.key?("已填（"+String(st.aiCfg.key).slice(0,6)+"…）"):"未填")+"\n"+
+      "\n--- 最近错误（最多 15 条）---\n"+(errs.length?errs.join("\n"):"无");
+    m.classList.add("on");
+  }catch(e){ try{ toast("诊断面板出错："+(e&&e.message||e)); }catch(_){} }
+}
 function collabLogout(){
   collabSharedPwd=""; collabPrivPwd="";
   localStorage.removeItem("dp_collab_remember");
@@ -3275,6 +3364,7 @@ function collabLogout(){
 }
 $("#btnCollabLogin").onclick=()=>doCollabLogin(false);
 $("#btnCollabLogout").onclick=()=>collabLogout();
+try{ var _ss=document.getElementById("syncStatus"); if(_ss){ _ss.style.cursor="pointer"; _ss.title="点一下看连接诊断（可复制发给对方）"; _ss.onclick=showDiag; } }catch(e){}
 collabBoot();
 
 function hardRefresh(){
@@ -3296,7 +3386,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.34";
+  var APP_VERSION="v38.35";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
