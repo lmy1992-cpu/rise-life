@@ -1149,7 +1149,14 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
       <button class="btn" id="btnPersonalSyncClose">关闭</button>
       <button class="btn primary" id="btnPersonalSyncNow">立即同步</button>
     </div>
-    <div class="navset-hint">控制台需做：① 建 CloudBase 环境（数据库类型保持默认 PostgreSQL，套餐可先选免费体验版）② 开启匿名登录 ③ 把 lmy1992-cpu.github.io 加进 Web 安全域名 ④ 在 PostgreSQL 控制台「SQL 编辑器」执行：<br><code style="display:block;white-space:pre-wrap;background:#f8f8f8;padding:6px;border-radius:6px;margin:4px 0">CREATE TABLE IF NOT EXISTS sync_vault (vault_id TEXT PRIMARY KEY, payload TEXT, updated_at TIMESTAMPTZ DEFAULT now());\nALTER TABLE sync_vault ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS anon_rw ON sync_vault;\nCREATE POLICY anon_rw ON sync_vault FOR ALL TO authenticated USING (true) WITH CHECK (true);\nGRANT ALL ON sync_vault TO authenticated;</code><br>不开启同步则本工具完全本地使用，数据不离开此浏览器。</div>
+    <div class="navset-hint">控制台需做：① 建 CloudBase 环境（数据库类型保持默认 PostgreSQL；套餐需升级「个人版」——免费体验版加不了 Web 安全域名）② 开启匿名登录 ③ 把 lmy1992-cpu.github.io 加进 Web 安全域名 ④ 在 PostgreSQL 控制台「SQL 编辑器」执行：<br><code style="display:block;white-space:pre-wrap;background:#f8f8f8;padding:6px;border-radius:6px;margin:4px 0">CREATE TABLE IF NOT EXISTS sync_vault (
+  vault_id TEXT PRIMARY KEY,
+  payload TEXT,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE sync_vault ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS anon_rw ON sync_vault;
+CREATE POLICY anon_rw ON sync_vault FOR ALL USING (true) WITH CHECK (true);</code><br>不开启同步则本工具完全本地使用，数据不离开此浏览器。</div>
   </div>
 </div>
 
@@ -3287,7 +3294,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.41";
+  var APP_VERSION="v38.42";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
