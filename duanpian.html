@@ -2513,8 +2513,25 @@ function renderTutorialBody(text){
   flush();
   return out.length ? out.join("") : '<div class="empty">（无正文预览）</div>';
 }
-function renderTutorialReading(){
+// 已有 Word 教程（v38.50 前只有纯文本）首次打开时，自动从 fileData 还原 HTML 格式
+async function ensureTutorialHtml(t){
+  if(!t || (t.htmlContent||"").trim() || !(t.fileData||"").trim()) return;
+  if(typeof mammoth==="undefined") return;
+  try{
+    const r=await mammoth.convertToHtml({arrayBuffer:b64ToBytes(t.fileData), styleMap:[
+      "p[style-name='Heading 1'] => h1:fresh", "p[style-name='标题 1'] => h1:fresh",
+      "p[style-name='Heading 2'] => h2:fresh", "p[style-name='标题 2'] => h2:fresh",
+      "p[style-name='Heading 3'] => h3:fresh", "p[style-name='标题 3'] => h3:fresh",
+      "p[style-name='Heading 4'] => h4:fresh", "p[style-name='标题 4'] => h4:fresh",
+      "p[style-name='Heading 5'] => h5:fresh", "p[style-name='标题 5'] => h5:fresh",
+      "p[style-name='Heading 6'] => h6:fresh", "p[style-name='标题 6'] => h6:fresh"
+    ]});
+    if(r.value){ t.htmlContent=r.value; save(); }
+  }catch(e){}
+}
+async function renderTutorialReading(){
   const t=curTut(); if(!t) return;
+  await ensureTutorialHtml(t);
   $("#tutTitle").textContent=t.title||"未命名";
   $("#tutCat").innerHTML='<span class="tagmini">'+esc(t.category||"其他")+'</span>';
   const wc=(t.content||"").replace(/\s/g,"").length;
@@ -2525,10 +2542,10 @@ function renderTutorialReading(){
   else { ce.innerHTML="（无正文预览）"; ce.classList.add("empty"); }
 }
 function showTutorialReaderView(which){ $("#tutView").style.display = which==="read" ? "" : "none"; $("#tutEditContent").style.display = which==="content" ? "" : "none"; }
-function openTutorialEditor(id){
+async function openTutorialEditor(id){
   const t=state.tutorials.find(x=>x.id===id); if(!t) return;
   editCur={tutId:t.id};
-  renderTutorialReading(); showTutorialReaderView("read");
+  await renderTutorialReading(); showTutorialReaderView("read");
   $("#maskEditTut").classList.add("on");
 }
 function tutorialDownload(){
@@ -2547,13 +2564,13 @@ function tutorialDownload(){
 $("#btnTutClose").onclick=()=>$("#maskEditTut").classList.remove("on");
 $("#btnTutEditContent").onclick=()=>{ const t=curTut(); if(!t) return; $("#tutEdTitle").value=t.title||""; $("#tutEdCat").value=t.category||"其他"; $("#tutEdContent").value=t.content||""; showTutorialReaderView("content"); };
 $("#btnTutContentCancel").onclick=()=>showTutorialReaderView("read");
-$("#btnTutContentSave").onclick=()=>{
+$("#btnTutContentSave").onclick=async()=>{
   const t=curTut(); if(!t) return;
   t.title=$("#tutEdTitle").value.trim()||"未命名";
   t.category=$("#tutEdCat").value||"其他";
   t.content=$("#tutEdContent").value;
   t.htmlContent=renderTutorialBody(t.content);
-  save(); renderTutorialReading(); showTutorialReaderView("read"); renderAll(); toast("已保存");
+  save(); await renderTutorialReading(); showTutorialReaderView("read"); renderAll(); toast("已保存");
 };
 $("#btnTutDownload").onclick=tutorialDownload;
 $("#btnTutDelete").onclick=()=>{
@@ -3336,7 +3353,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.50";
+  var APP_VERSION = "v38.51";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
