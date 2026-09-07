@@ -1170,9 +1170,9 @@ async function decBundle(key,str){ const p=str.split("."); if(p.length!==2) thro
 function cbEnvId(){ try{ return (localStorage.getItem("dp_sync_cb_env")||"").trim(); }catch(e){ return ""; } }
 function cbRegion(){ try{ return (localStorage.getItem("dp_sync_cb_region")||"ap-shanghai").trim(); }catch(e){ return "ap-shanghai"; } }
 function cbPkey(){ try{ return (localStorage.getItem("dp_sync_cb_pkey")||"").trim(); }catch(e){ return ""; } }
-let __cbApp=null, __cbSigned=false;
+let __cbApp=null, __cbSigned=false, __cbPkeyNow="";
 async function ensureCB(){
-  if(__cbApp && __cbSigned) return;
+  if(__cbApp && __cbSigned && __cbPkeyNow===cbPkey()) return;
   const envId=cbEnvId(); if(!envId) throw new Error("未配置 CloudBase 环境 ID，请先点 ☁️ 填写");
   if(!window.cloudbase){
     await new Promise(function(res,rej){
@@ -1185,7 +1185,7 @@ async function ensureCB(){
   const pkey=cbPkey();
   const _opts={ env: envId, region: cbRegion() };
   if(pkey) _opts.accessKey=pkey;
-  if(!__cbApp) __cbApp = window.cloudbase.init(_opts);
+  if(!__cbApp || __cbPkeyNow!==pkey){ __cbApp = window.cloudbase.init(_opts); __cbPkeyNow=pkey; __cbSigned=false; }
   if(!pkey){ await __cbApp.auth().signInAnonymously(); }
   __cbSigned=true;
 }
@@ -3261,7 +3261,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.44";
+  var APP_VERSION = "v38.45";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
