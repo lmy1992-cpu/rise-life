@@ -646,18 +646,40 @@ async function ensureCB(){
   if(!pkey){ await __cbApp.auth().signInAnonymously(); }
   __cbSigned=true;
 }
-async function cbUpsert(vid,payload,ts){
+async function cbToken(){
   await ensureCB();
-  const db=__cbApp.rdb();
-  const r=await db.from("sync_vault").upsert({ vault_id:vid, payload:payload||"", updated_at:ts||new Date().toISOString() }, { onConflict:"vault_id" });
-  if(r && r.error) throw new Error("CloudBase 上传失败："+(r.error.message||JSON.stringify(r.error)));
+  return await __cbApp.auth().getAccessToken();
+}
+function cbBaseUrl(){
+  return "https://"+cbEnvId()+".api.tcloudbasegateway.com/v1/rdb/rest";
+}
+async function cbUpsert(vid,payload,ts){
+  const token=await cbToken();
+  const url=cbBaseUrl()+"/sync_vault?on_conflict=vault_id";
+  const body=JSON.stringify([{vault_id:vid, payload:payload||"", updated_at:ts||new Date().toISOString()}]);
+  const r=await fetch(url,{
+    method:"POST",
+    headers:{"Authorization":"Bearer "+token, "Content-Type":"application/json", "Accept":"application/json", "Prefer":"resolution=merge-duplicates"},
+    body:body
+  });
+  if(!r.ok){
+    const txt=await r.text();
+    throw new Error("CloudBase 上传失败："+r.status+" "+txt);
+  }
 }
 async function cbGet(vid){
-  await ensureCB();
-  const db=__cbApp.rdb();
-  const r=await db.from("sync_vault").select("payload,updated_at").eq("vault_id", vid).limit(1);
-  if(r && r.error) throw new Error("CloudBase 下载失败："+(r.error.message||JSON.stringify(r.error)));
-  if(r && r.data && r.data.length) return { payload:r.data[0].payload, updated_at:r.data[0].updated_at };
+  const token=await cbToken();
+  const url=cbBaseUrl()+"/sync_vault?select=payload,updated_at&vault_id=eq."+encodeURIComponent(vid)+"&limit=1";
+  const r=await fetch(url,{
+    method:"GET",
+    headers:{"Authorization":"Bearer "+token, "Accept":"application/json"}
+  });
+  if(!r.ok){
+    const txt=await r.text();
+    throw new Error("CloudBase 下载失败："+r.status+" "+txt);
+  }
+  const data=await r.json();
+  if(data && data.length) return { payload:data[0].payload, updated_at:data[0].updated_at };
   return null;
 }
 async function cbUpsertChunked(vid,payload,ts){
@@ -3775,7 +3797,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.43";
+  var APP_VERSION = "v38.44";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
