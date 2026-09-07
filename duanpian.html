@@ -1142,6 +1142,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     <div class="sub">用腾讯云 CloudBase 让你电脑 / 平板 / 手机三端的「短篇工作台」数据互通。数据在你浏览器里客户端加密后再上传，腾讯云只存密文。设置一次，三端填<strong>同一个</strong>「环境 ID」+「个人同步口令」即可。</div>
     <div class="field"><label>CloudBase 环境 ID（envId）</label><input id="dpSyncCbEnv" placeholder="在腾讯云控制台复制" /></div>
     <div class="field"><label>地域（默认 ap-shanghai）</label><input id="dpSyncCbRegion" placeholder="ap-shanghai" /></div>
+    <div class="field"><label>CloudBase 公钥（Publishable Key，可选）</label><input id="dpSyncCbPkey" type="password" placeholder="控制台「身份源 / 密钥」复制" /></div>
     <div class="field"><label>个人同步口令（三端相同，自己定）</label><input id="dpPersonalKey" type="password" placeholder="例如 myrise2026" /></div>
     <label class="up-batch"><input type="checkbox" id="dpPersonalSyncOn" /> <span>开启个人云端同步</span></label>
     <div id="personalSyncStatus" style="color:#1a8a3c;font-size:13px;min-height:18px;margin:6px 0"></div>
@@ -1175,6 +1176,7 @@ async function encBundle(key,obj){ const iv=crypto.getRandomValues(new Uint8Arra
 async function decBundle(key,str){ const p=str.split("."); if(p.length!==2) throw new Error("密文格式错误"); const iv=new Uint8Array(b64to(p[0])); const ct=b64to(p[1]); const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv},key,ct); return JSON.parse(new TextDecoder().decode(pt)); }
 function cbEnvId(){ try{ return (localStorage.getItem("dp_sync_cb_env")||"").trim(); }catch(e){ return ""; } }
 function cbRegion(){ try{ return (localStorage.getItem("dp_sync_cb_region")||"ap-shanghai").trim(); }catch(e){ return "ap-shanghai"; } }
+function cbPkey(){ try{ return (localStorage.getItem("dp_sync_cb_pkey")||"").trim(); }catch(e){ return ""; } }
 let __cbApp=null, __cbSigned=false;
 async function ensureCB(){
   if(__cbApp && __cbSigned) return;
@@ -1187,8 +1189,11 @@ async function ensureCB(){
     });
   }
   if(!window.cloudbase) throw new Error("CloudBase SDK 不可用");
-  if(!__cbApp) __cbApp = window.cloudbase.init({ env: envId, region: cbRegion() });
-  await __cbApp.auth().signInAnonymously();
+  const pkey=cbPkey();
+  const _opts={ env: envId, region: cbRegion() };
+  if(pkey) _opts.accessKey=pkey;
+  if(!__cbApp) __cbApp = window.cloudbase.init(_opts);
+  if(!pkey){ await __cbApp.auth().signInAnonymously(); }
   __cbSigned=true;
 }
 async function cbUpsert(vid,payload,ts){
@@ -1818,6 +1823,7 @@ $("#btnPersonalSync").onclick=function(){
   try{
     document.getElementById("dpSyncCbEnv").value=localStorage.getItem("dp_sync_cb_env")||"";
     document.getElementById("dpSyncCbRegion").value=localStorage.getItem("dp_sync_cb_region")||"ap-shanghai";
+    document.getElementById("dpSyncCbPkey").value=localStorage.getItem("dp_sync_cb_pkey")||"";
     document.getElementById("dpPersonalKey").value=localStorage.getItem("dp_personal_sync_key")||"";
     document.getElementById("dpPersonalSyncOn").checked=localStorage.getItem("dp_personal_sync_on")==="1";
   }catch(e){}
@@ -1832,6 +1838,7 @@ $("#btnPersonalSyncNow").onclick=function(){
     var on=document.getElementById("dpPersonalSyncOn").checked?"1":"0";
     localStorage.setItem("dp_sync_cb_env",env);
     localStorage.setItem("dp_sync_cb_region",region);
+    localStorage.setItem("dp_sync_cb_pkey",(document.getElementById("dpSyncCbPkey").value||"").trim());
     localStorage.setItem("dp_personal_sync_key",key);
     localStorage.setItem("dp_personal_sync_on",on);
   }catch(e){}
@@ -3294,7 +3301,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.42";
+  var APP_VERSION="v38.43";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
