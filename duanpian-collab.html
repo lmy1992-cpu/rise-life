@@ -565,9 +565,11 @@
   }
 </style>
 <script>
-/* ===== 协作版：Supabase 同步（共享 + 私有双保险箱）===== */
+/* ===== 协作版：云端同步（可切换 Supabase / CloudBase）===== */
 const SB_URL="https://ailxzvbbjybezfoaqsit.supabase.co";
 const SB_ANON="sb_publishable_AQbq_KfBipQcYrlX5UL3Qg_ZIB1P_nx";
+const DEFAULT_SYNC_BACKEND="cloudbase";
+const CB_CDN="https://static.cloudbase.net/cloudbase-js-sdk/2.27.1/cloudbase.full.js";
 const SYNC_SALT="rise-life-collab-v1";
 async function sha256Hex(s){ const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
 async function deriveKey(pass){ const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pass),"PBKDF2",false,["deriveKey"]); return crypto.subtle.deriveKey({name:"PBKDF2",salt:new TextEncoder().encode(SYNC_SALT),iterations:150000,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]); }
@@ -619,6 +621,67 @@ async function sbGetChunked(vid){
   row.payload=blocks.join("");
   return row;
 }
+// ---- CloudBase 同步后端（国内直连）----
+function syncBackend(){ try{ return localStorage.getItem("dp_sync_backend") || DEFAULT_SYNC_BACKEND; }catch(e){ return DEFAULT_SYNC_BACKEND; } }
+function setSyncBackend(b){ try{ localStorage.setItem("dp_sync_backend", b||DEFAULT_SYNC_BACKEND); }catch(e){} }
+function cbEnvId(){ try{ return (localStorage.getItem("dp_sync_cb_env")||"").trim(); }catch(e){ return ""; } }
+function cbRegion(){ try{ return (localStorage.getItem("dp_sync_cb_region")||"ap-shanghai").trim(); }catch(e){ return "ap-shanghai"; } }
+let __cbApp=null, __cbSigned=false;
+async function ensureCB(){
+  if(__cbApp && __cbSigned) return;
+  const envId=cbEnvId(); if(!envId) throw new Error("未配置 CloudBase 环境 ID，请先在「协作设置」里填写");
+  if(!window.cloudbase){
+    await new Promise(function(res,rej){
+      const s=document.createElement("script"); s.src=CB_CDN; s.async=true;
+      s.onload=res; s.onerror=function(){ rej(new Error("CloudBase SDK 加载失败，请检查网络或 CDN 是否可达")); };
+      (document.head||document.documentElement).appendChild(s);
+    });
+  }
+  if(!window.cloudbase) throw new Error("CloudBase SDK 不可用");
+  if(!__cbApp) __cbApp = window.cloudbase.init({ env: envId, region: cbRegion() });
+  await __cbApp.auth().signInAnonymously();
+  __cbSigned=true;
+}
+async function cbUpsert(vid,payload,ts){
+  await ensureCB();
+  const db=__cbApp.database();
+  await db.collection("sync_vault").doc(vid).set({ payload:payload||"", updated_at:ts||new Date().toISOString() });
+}
+async function cbGet(vid){
+  await ensureCB();
+  const db=__cbApp.database();
+  const res=await db.collection("sync_vault").doc(vid).get();
+  const d=(res&&res.data)?res.data:null;
+  if(!d || (d.payload===undefined && d.updated_at===undefined && !d._id)) return null;
+  return { payload:d.payload, updated_at:d.updated_at };
+}
+async function cbUpsertChunked(vid,payload,ts){
+  if(!payload || payload.length<=SB_CHUNK_SIZE) return cbUpsert(vid,payload,ts);
+  const parts=[]; for(let i=0;i<payload.length;i+=SB_CHUNK_SIZE) parts.push(payload.slice(i,i+SB_CHUNK_SIZE));
+  const CONC=8;
+  for(let i=0;i<parts.length;i+=CONC){
+    const chunk=parts.slice(i,i+CONC);
+    await Promise.all(chunk.map(function(c,j){ return cbUpsert(vid+"#"+(i+j),c,ts); }));
+  }
+  return cbUpsert(vid, JSON.stringify({__chunked:true,n:parts.length}), ts);
+}
+async function cbGetChunked(vid){
+  const row=await cbGet(vid);
+  if(!row || typeof row.payload!=="string" || row.payload.indexOf('"__chunked"')<0) return row;
+  let meta=null; try{ const m=JSON.parse(row.payload); if(m&&m.__chunked&&typeof m.n==="number") meta=m; }catch(e){}
+  if(!meta) return row;
+  const n=meta.n, blocks=new Array(n), CONC=8;
+  for(let i=0;i<n;i+=CONC){
+    const idxs=[]; for(let k=i;k<Math.min(i+CONC,n);k++) idxs.push(k);
+    const arr=await Promise.all(idxs.map(function(k){ return cbGet(vid+"#"+(k)); }));
+    arr.forEach(function(b,k){ if(!b||typeof b.payload!=="string") throw new Error("云端分块不完整（缺第"+(idxs[k]+1)+"块），可能正在重新上传，稍后重试"); blocks[idxs[k]]=b.payload; });
+  }
+  row.payload=blocks.join(""); return row;
+}
+async function syncUpsert(vid,payload,ts){ const b=syncBackend(); if(b==="cloudbase") return cbUpsert(vid,payload,ts); return sbUpsert(vid,payload,ts); }
+async function syncGet(vid){ const b=syncBackend(); if(b==="cloudbase") return cbGet(vid); return sbGet(vid); }
+async function syncUpsertChunked(vid,payload,ts){ const b=syncBackend(); if(b==="cloudbase") return cbUpsertChunked(vid,payload,ts); return sbUpsertChunked(vid,payload,ts); }
+async function syncGetChunked(vid){ const b=syncBackend(); if(b==="cloudbase") return cbGetChunked(vid); return sbGetChunked(vid); }
 </script>
 <style id="zoomfix">
 html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
@@ -643,7 +706,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     <div class="modal-actions"><button class="btn primary" id="btnCollabLogin">进入协作空间</button></div>
   </div>
 </div>
-<div id="collabBar" style="display:none;position:fixed;right:12px;bottom:12px;z-index:60;background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.12)">🔗 协作中 · <span id="syncStatus" style="color:#1a8a3c">已同步 ✓</span> · <a href="javascript:void(0)" id="btnCollabLogout" style="color:var(--brand);font-weight:600">退出</a></div>
+<div id="collabBar" style="display:none;position:fixed;right:12px;bottom:12px;z-index:60;background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.12)">🔗 协作中 · <span id="syncStatus" style="color:#1a8a3c">已同步 ✓</span> · <a href="javascript:void(0)" id="btnSyncSettings" title="同步设置" style="color:#666;margin:0 6px">⚙️</a> · <a href="javascript:void(0)" id="btnCollabLogout" style="color:var(--brand);font-weight:600">退出</a></div>
 <script>if(window.self!==window.top && !/[?&]ipad=/.test(location.search)){document.body.className+=" embedded";}</script>
 <script>
 /* v38.35：早期错误捕获——把页面运行中的异常记下来，供「点状态栏看诊断」排查（朋友端出问题不用再靠猜） */
@@ -1216,6 +1279,39 @@ window.addEventListener("unhandledrejection",function(ev){ window._err("unhandle
   </div>
 </div>
 
+<!-- 同步后端设置弹窗 -->
+<div class="mask" id="maskSyncSet">
+  <div class="modal" style="max-width:460px">
+    <h3>☁️ 同步设置</h3>
+    <div class="sub">已默认使用腾讯云 CloudBase（国内直连、个人版 ¥19.9/月）。建环境时「数据库类型」选默认的【云数据库/文档型】（别选 PostgreSQL）。控制台四步：① 开通 CloudBase 个人版环境 ② 身份认证里开启「匿名登录」③ 环境配置→安全配置，把 <code>lmy1992-cpu.github.io</code> 加进 Web 安全域名 ④ 数据库里新建集合 <code>sync_vault</code>，权限设为「所有用户可读写」（见下方提示）。填好环境 ID 即可同步。</div>
+    <div class="field" style="margin-top:10px">
+      <label>同步后端</label>
+      <select id="selSyncBackend" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#fff">
+        <option value="supabase">Supabase（默认，海外）</option>
+        <option value="cloudbase">腾讯云 CloudBase（国内直连）</option>
+      </select>
+    </div>
+    <div class="field" id="cbEnvField" style="margin-top:10px;display:none">
+      <label>CloudBase 环境 ID</label>
+      <input id="inpCbEnvId" type="text" placeholder="例如：your-env-id-xxx" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px" />
+      <div class="sub" style="margin-top:6px">在腾讯云 CloudBase 控制台「环境」页面复制「环境 ID」。</div>
+    </div>
+    <div class="field" id="cbRegionField" style="margin-top:10px;display:none">
+      <label>CloudBase 地域（默认上海）</label>
+      <select id="selCbRegion" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#fff">
+        <option value="ap-shanghai" selected>上海（ap-shanghai）</option>
+        <option value="ap-guangzhou">广州（ap-guangzhou）</option>
+        <option value="ap-beijing">北京（ap-beijing）</option>
+      </select>
+    </div>
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="btn" id="btnSyncSetCancel">取消</button>
+      <button class="btn primary" id="btnSyncSetSave">保存并尝试同步</button>
+    </div>
+    <div class="navset-hint">控制台四步：① 开通 CloudBase 个人版环境（数据库类型选默认的【云数据库/文档型】）② 身份认证里开启「匿名登录」③ 环境配置→安全配置，把 <code>lmy1992-cpu.github.io</code> 加进 Web 安全域名（约 10 分钟生效）④ 数据库里新建集合 <code>sync_vault</code>，点该集合「权限设置」→ 安全规则，填入并保存：<br><code>{ "read": true, "write": true }</code><br>（或选「所有用户可读写」模板）。数据已在本地用协作口令加密，云端只存密文，匿名可读写是安全的。切换后端不会删除本地数据。</div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="crawl-data.js"></script>
@@ -1602,7 +1698,7 @@ async function save(force=false){
       aiCfg:state.aiCfg?{provider:state.aiCfg.provider||"",key:state.aiCfg.key||"",baseUrl:state.aiCfg.baseUrl||"",model:state.aiCfg.model||"",instruction:state.aiCfg.instruction||"",aiMemory:state.aiCfg.aiMemory||""}:null};
     const priv=null; // 私有保险箱已取消：保留变量只为兼容旧的广播消息格式
     const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
-    await deriveKey(collabSharedPwd).then(k=>encBundle(k,shared)).then(p=>sbUpsertChunked(sId,p,ts));
+    await deriveKey(collabSharedPwd).then(k=>encBundle(k,shared)).then(p=>syncUpsertChunked(sId,p,ts));
     collabSharedUpdatedAt=ts;
     _lastSyncError="";
     setPendingLocal(false); // 上传成功：本机改动已到云端，可放心应用云端最新数据
@@ -1697,7 +1793,7 @@ async function load(){
   _loadPromise=(async function(){
     try{
       const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
-      const sRow=await sbGetChunked(sId);
+      const sRow=await syncGetChunked(sId);
       collabSharedUpdatedAt = (sRow && sRow.updated_at) ? sRow.updated_at : null;
       const shared = sRow ? await decBundle(await deriveKey(collabSharedPwd), sRow.payload) : null;
       // v38.35：一次性迁移旧「私有保险箱」内容——本机若还记得旧私有口令，读出来并入共享包，之后只走单一共享包
@@ -1706,7 +1802,7 @@ async function load(){
         const rem=JSON.parse(localStorage.getItem("dp_collab_remember")||"null");
         const oldPriv=(rem&&rem.priv&&rem.priv!==collabSharedPwd)?rem.priv:"";
         if(oldPriv && !localStorage.getItem("dp_collab_priv_migrated")){
-          const pRow=await sbGetChunked("collab_priv:"+await sha256Hex("collab:"+oldPriv));
+          const pRow=await syncGetChunked("collab_priv:"+await sha256Hex("collab:"+oldPriv));
           if(pRow){ priv=await decBundle(await deriveKey(oldPriv), pRow.payload); if(priv) try{ localStorage.setItem("dp_collab_priv_migrated","1"); }catch(e){} }
         }
       }catch(e){}
@@ -3457,7 +3553,7 @@ async function collabPoll(){
   if(_syncRetryTimer || _saveUploading || _savePending || _pendingLocal) return; // 本机还有改动在同步：先不拉取，避免把你刚改的内容冲掉（传完下个周期自然一致）
   try{
     const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
-    const row=await sbGetChunked(sId);
+    const row=await syncGetChunked(sId);
     if(row && row.updated_at!==collabSharedUpdatedAt){
       const shared=row.payload ? await decBundle(await deriveKey(collabSharedPwd), row.payload) : null;
       // v38.32：不再用「条数比本地少就反推」——那会把正常删除误判成回退攻击、回滚其它设备的删除。
@@ -3600,8 +3696,44 @@ function collabLogout(){
   $("#maskLogin").classList.add("on");
   $("#collabMsg").textContent="";
 }
+function openSyncSettings(){
+  const m=$("#maskSyncSet"); if(!m) return;
+  const s=$("#selSyncBackend"), e=$("#inpCbEnvId"), r=$("#selCbRegion");
+  if(s) s.value=syncBackend();
+  if(e) e.value=cbEnvId();
+  if(r) r.value=cbRegion();
+  syncSettingsUi();
+  m.classList.add("on");
+}
+function closeSyncSettings(){ const m=$("#maskSyncSet"); if(m) m.classList.remove("on"); }
+function syncSettingsUi(){
+  const isCb=(syncBackend()==="cloudbase");
+  const ef=$("#cbEnvField"), rf=$("#cbRegionField");
+  if(ef) ef.style.display=isCb?"block":"none";
+  if(rf) rf.style.display=isCb?"block":"none";
+}
+async function saveSyncSettings(){
+  const s=$("#selSyncBackend"), e=$("#inpCbEnvId"), r=$("#selCbRegion");
+  if(!s) return;
+  const backend=s.value || "supabase";
+  setSyncBackend(backend);
+  try{ if(e) localStorage.setItem("dp_sync_cb_env", (e.value||"").trim()); }catch(_){}
+  try{ if(r) localStorage.setItem("dp_sync_cb_region", (r.value||"ap-shanghai").trim()); }catch(_){}
+  // 切到 CloudBase 时重置缓存的 app 实例，下次同步用新配置
+  __cbApp=null; __cbSigned=false;
+  closeSyncSettings();
+  toast("已保存同步设置");
+  // 立即尝试一次同步
+  if(collabSharedPwd){
+    try{ setSyncStatus("正在用新后端同步…", null, ""); forceSyncNow(); }catch(err){}
+  }
+}
 $("#btnCollabLogin").onclick=()=>doCollabLogin(false);
 $("#btnCollabLogout").onclick=()=>collabLogout();
+try{ const _bss=$("#btnSyncSettings"); if(_bss) _bss.onclick=openSyncSettings; }catch(e){}
+try{ $("#btnSyncSetCancel").onclick=closeSyncSettings; }catch(e){}
+try{ $("#btnSyncSetSave").onclick=saveSyncSettings; }catch(e){}
+try{ const _ssb=$("#selSyncBackend"); if(_ssb) _ssb.onchange=syncSettingsUi; }catch(e){}
 try{ var _ss=document.getElementById("syncStatus"); if(_ss){ _ss.style.cursor="pointer"; _ss.title="点一下看连接诊断（可复制发给对方）"; _ss.onclick=showDiag; } }catch(e){}
 collabBoot();
 
@@ -3624,7 +3756,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.37";
+  var APP_VERSION="v38.38";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
