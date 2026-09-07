@@ -896,7 +896,7 @@ navCfg = navCfg.filter(function(x){ return ["inbox","timeline","mood","recycle"]
   }
 })();
 
-const APP_VERSION="v38.42";
+const APP_VERSION="v38.43";
 // ===== 健壮存储层：localStorage 不可用时自动回退 IndexedDB（防止刷新丢数据）=====
 // 内部状态挂在 window 上，避免跨 <script> 块时 let 的暂时性死区（TDZ）报错
 // —— 存储层 v2：每条记录带写入时间戳，读取/合并时"取最新"，杜绝旧空值覆盖新数据 ——
@@ -2656,6 +2656,7 @@ function renderSettings(){
     '<p class="hint" style="color:var(--sub);font-size:12px;margin:0 0 10px">数据先在浏览器用「同步密码」加密成密文再上传，云端只存密文、包括服务商在内谁都解不开。电脑/手机/iPad 三端填<b>同一个环境 ID + 同一个密码</b>即共享同一份数据（腾讯云 CloudBase，国内直连）。</p>'+
     '<div class="field"><label>CloudBase 环境 ID（envId）</label><input id="cbEnv" placeholder="env-xxxxxxxx" onchange="saveSyncCfgUI()"></div>'+
     '<div class="field"><label>地域（默认 ap-shanghai，按你建环境时选的填）</label><input id="cbRegion" placeholder="ap-shanghai" onchange="saveSyncCfgUI()"></div>'+
+    '<div class="field"><label>CloudBase 公钥（Publishable Key，可选）</label><input id="cbPkey" type="password" placeholder="控制台「身份源 / 密钥」复制" onchange="saveSyncCfgUI()"></div>'+
     '<div class="field"><label>同步密码（三端一致；遗忘=永久无法解密）</label><div class="pw-wrap"><input id="syncPass" type="password" placeholder="设一个强密码" oninput="showVaultId()" onchange="saveSyncCfgUI()"><button type="button" class="pw-eye" title="显示 / 隐藏密码" onclick="togglePassVis(\'syncPass\',this)">👁</button></div><div class="hint" style="font-size:12px;color:var(--sub);margin-top:5px">点右边的眼睛可以看清自己输的密码，方便核对三端是否一致。</div></div>'+
     '<div style="display:flex;gap:16px;flex-wrap:wrap;margin:4px 0 12px;font-size:13px;color:var(--sub)">'+
     '<label><input type="checkbox" id="rememberPass" onchange="saveSyncCfgUI()"> 本机记住密码（方便自动同步，但本机留密码副本）</label>'+
@@ -3080,7 +3081,7 @@ window.addEventListener("load", function(){
 /* ============ 云端同步（端到端加密，零知识） ============ */
 const SYNC_KEY="workbench_sync_cfg_v1"; // 仅存 CloudBase 同步配置（本机）
 const SYNC_SALT="life-workbench-sync-v1";
-let syncCfg = load(SYNC_KEY, {cbEnv:"", cbRegion:"ap-shanghai", auto:false, rememberPass:false, pass:"", lastSyncText:""});
+let syncCfg = load(SYNC_KEY, {cbEnv:"", cbRegion:"ap-shanghai", cbPkey:"", auto:false, rememberPass:false, pass:"", lastSyncText:""});
 function saveSyncCfg(){ persist(SYNC_KEY, syncCfg); }
 // 滴答清单配置独立缓存键，与同步配置解耦（避免同步逻辑改动波及）
 const DIDA_KEY="workbench_dida_cfg_v1";
@@ -3138,6 +3139,7 @@ async function decBundle(key, str){
 const CB_CDN="https://static.cloudbase.net/cloudbase-js-sdk/2.27.1/cloudbase.full.js";
 function cbEnvId(){ return String((syncCfg && syncCfg.cbEnv) || "").trim(); }
 function cbRegion(){ return String((syncCfg && syncCfg.cbRegion) || "ap-shanghai").trim(); }
+function cbPkey(){ return String((syncCfg && syncCfg.cbPkey) || "").trim(); }
 let __cbApp=null, __cbSigned=false, __cbEnvNow="";
 async function ensureCB(){
   const envId=cbEnvId();
@@ -3151,8 +3153,11 @@ async function ensureCB(){
     });
   }
   if(!window.cloudbase) throw new Error("CloudBase SDK 不可用");
-  if(!__cbApp || __cbEnvNow!==envId){ __cbApp=window.cloudbase.init({env:envId, region:cbRegion()}); __cbEnvNow=envId; __cbSigned=false; }
-  await __cbApp.auth().signInAnonymously();
+  const pkey=cbPkey();
+  const _opts={ env: envId, region: cbRegion() };
+  if(pkey) _opts.accessKey=pkey;
+  if(!__cbApp || __cbEnvNow!==envId){ __cbApp=window.cloudbase.init(_opts); __cbEnvNow=envId; __cbSigned=false; }
+  if(!pkey){ await __cbApp.auth().signInAnonymously(); }
   __cbSigned=true;
 }
 async function cbUpsert(vid,payload,ts){
@@ -3495,6 +3500,7 @@ function togglePassVis(id, btn){
 function saveSyncCfgUI(){
   syncCfg.cbEnv=$("cbEnv").value.trim();
   syncCfg.cbRegion=($("cbRegion").value.trim()||"ap-shanghai");
+  syncCfg.cbPkey=($("cbPkey").value.trim()||"");
   syncCfg.rememberPass=$("rememberPass").checked;
   syncCfg.auto=$("autoSync").checked;
   const p=$("syncPass").value; if(syncCfg.rememberPass) syncCfg.pass=p; else syncCfg.pass="";
@@ -3540,6 +3546,7 @@ function importSyncCfg(input){
       saveSyncCfg();
       if($("cbEnv")) $("cbEnv").value=syncCfg.cbEnv;
       if($("cbRegion")) $("cbRegion").value=syncCfg.cbRegion;
+      if($("cbPkey")) $("cbPkey").value=syncCfg.cbPkey;
       if($("rememberPass")) $("rememberPass").checked=syncCfg.rememberPass;
       if($("autoSync")) $("autoSync").checked=syncCfg.auto;
       setSyncStatus("已导入连接配置 ✓ 同步密码仍需手动输入");
@@ -3560,7 +3567,7 @@ function rehydrateGlobals(){
   try{ TASK_BIG_BONUS      = load(TASK_BONUS_KEY,   TASK_BIG_BONUS); }catch(e){}
   try{ TASK_ALLDONE_BONUS  = load(TASK_ALLDONE_KEY, TASK_ALLDONE_BONUS); }catch(e){}
   try{
-    var scDef = {cbEnv:"", cbRegion:"ap-shanghai", auto:false, rememberPass:false, pass:"", lastSyncText:""};
+    var scDef = {cbEnv:"", cbRegion:"ap-shanghai", cbPkey:"", auto:false, rememberPass:false, pass:"", lastSyncText:""};
     var sc = load(SYNC_KEY, null);
     if(sc && typeof sc === "object"){
       syncCfg = Object.assign({}, scDef, sc);
