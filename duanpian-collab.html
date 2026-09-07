@@ -730,7 +730,11 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     <div class="sub">和好友共用全部内容：例文 / 素材 / 杂项 / 元素 / 脑洞想法 / 想法拓展 / 抓取收藏 / AI 设置，两台设备实时同步。只需一个「协作空间口令」就能打开。</div>
     <div class="field"><label>协作空间口令（两人约定同一个词）</label><input id="collabShare" type="password" placeholder="例如 rose2026" /></div>
     <input id="collabPriv" type="hidden" value="" />
-    <label class="up-batch"><input type="checkbox" id="collabRemember" /> <span>记住口令（仅存本机浏览器，方便下次直接进）</span></label>
+    <details style="margin:10px 0;color:#666;font-size:13px">
+      <summary style="cursor:pointer">⚙️ 高级：CloudBase 环境配置（首次使用需填写）</summary>
+      <div class="field" style="margin-top:8px"><label>环境 ID（envId，创建者提供）</label><input id="collabEnvId" type="text" placeholder="rise-life-xxxxxxx" /></div>
+      <div class="field"><label>CloudBase 公钥（Publishable Key，创建者提供）</label><input id="collabPkey" type="password" placeholder="ey..." /></div>
+    </details>
     <div id="collabMsg" style="color:#c0392b;font-size:13px;min-height:18px;margin:6px 0"></div>
     <div class="modal-actions"><button class="btn primary" id="btnCollabLogin">进入协作空间</button></div>
   </div>
@@ -3615,6 +3619,13 @@ function collabBoot(){
   const saved=JSON.parse(localStorage.getItem("dp_collab_remember")||"null");
   if(saved && saved.share){ $("#collabShare").value=saved.share; if($("#collabPriv")) $("#collabPriv").value=saved.priv||saved.share; $("#collabRemember").checked=true; doCollabLogin(true); }
   else { $("#maskLogin").classList.add("on"); }
+  // v38.48：入口弹窗回填 CloudBase 配置（方便检查/修改）
+  try{
+    const cbEnv=localStorage.getItem("dp_sync_cb_env")||"";
+    const cbPk=localStorage.getItem("dp_sync_cb_pkey")||"";
+    if($("#collabEnvId")) $("#collabEnvId").value=cbEnv;
+    if($("#collabPkey")) $("#collabPkey").value=cbPk;
+  }catch(e){}
 }
 let _loggingIn=false;
 // 进入协作主界面（渲染所有内容），抽成函数便于「本地优先」与「后台同步」复用
@@ -3639,8 +3650,13 @@ async function doCollabLogin(silent){
   try{
     const share=$("#collabShare").value.trim();
     const priv=$("#collabPriv").value.trim();
+    const envId=$("#collabEnvId") ? $("#collabEnvId").value.trim() : "";
+    const pkey=$("#collabPkey") ? $("#collabPkey").value.trim() : "";
     const msg=$("#collabMsg");
     if(!share){ if(msg) msg.textContent="请填写协作口令"; return; }
+    // v38.48：朋友端首次可在入口弹窗直接填写 CloudBase 配置，不必先找设置页
+    if(envId){ try{ localStorage.setItem("dp_sync_cb_env", envId); }catch(e){} }
+    if(pkey){ try{ localStorage.setItem("dp_sync_cb_pkey", pkey); }catch(e){} }
     collabSharedPwd=share; collabPrivPwd=share; // v38.35 单口令：私有保险箱取消，变量保留只为兼容旧代码路径
     if($("#collabRemember").checked){ localStorage.setItem("dp_collab_remember",JSON.stringify({share,priv:share})); }
     else { localStorage.removeItem("dp_collab_remember"); }
@@ -3799,7 +3815,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.47";
+  var APP_VERSION = "v38.46";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
