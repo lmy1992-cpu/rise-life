@@ -627,9 +627,9 @@ function setSyncBackend(b){ try{ localStorage.setItem("dp_sync_backend", b||DEFA
 function cbEnvId(){ try{ return (localStorage.getItem("dp_sync_cb_env")||"").trim(); }catch(e){ return ""; } }
 function cbRegion(){ try{ return (localStorage.getItem("dp_sync_cb_region")||"ap-shanghai").trim(); }catch(e){ return "ap-shanghai"; } }
 function cbPkey(){ try{ return (localStorage.getItem("dp_sync_cb_pkey")||"").trim(); }catch(e){ return ""; } }
-let __cbApp=null, __cbSigned=false;
+let __cbApp=null, __cbSigned=false, __cbPkeyNow="";
 async function ensureCB(){
-  if(__cbApp && __cbSigned) return;
+  if(__cbApp && __cbSigned && __cbPkeyNow===cbPkey()) return;
   const envId=cbEnvId(); if(!envId) throw new Error("未配置 CloudBase 环境 ID，请先在「协作设置」里填写");
   if(!window.cloudbase){
     await new Promise(function(res,rej){
@@ -642,7 +642,7 @@ async function ensureCB(){
   const pkey=cbPkey();
   const _opts={ env: envId, region: cbRegion() };
   if(pkey) _opts.accessKey=pkey;
-  if(!__cbApp) __cbApp = window.cloudbase.init(_opts);
+  if(!__cbApp || __cbPkeyNow!==pkey){ __cbApp = window.cloudbase.init(_opts); __cbPkeyNow=pkey; __cbSigned=false; }
   if(!pkey){ await __cbApp.auth().signInAnonymously(); }
   __cbSigned=true;
 }
@@ -3761,7 +3761,7 @@ async function saveSyncSettings(){
   try{ if(r) localStorage.setItem("dp_sync_cb_region", (r.value||"ap-shanghai").trim()); }catch(_){}
   try{ const pk=$("#inpCbPkey"); if(pk) localStorage.setItem("dp_sync_cb_pkey", (pk.value||"").trim()); }catch(_){}
   // 切到 CloudBase 时重置缓存的 app 实例，下次同步用新配置
-  __cbApp=null; __cbSigned=false;
+  __cbApp=null; __cbSigned=false; __cbPkeyNow="";
   closeSyncSettings();
   toast("已保存同步设置");
   // 立即尝试一次同步
@@ -3797,7 +3797,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.44";
+  var APP_VERSION = "v38.45";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
