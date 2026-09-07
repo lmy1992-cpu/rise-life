@@ -626,6 +626,7 @@ function syncBackend(){ try{ return localStorage.getItem("dp_sync_backend") || D
 function setSyncBackend(b){ try{ localStorage.setItem("dp_sync_backend", b||DEFAULT_SYNC_BACKEND); }catch(e){} }
 function cbEnvId(){ try{ return (localStorage.getItem("dp_sync_cb_env")||"").trim(); }catch(e){ return ""; } }
 function cbRegion(){ try{ return (localStorage.getItem("dp_sync_cb_region")||"ap-shanghai").trim(); }catch(e){ return "ap-shanghai"; } }
+function cbPkey(){ try{ return (localStorage.getItem("dp_sync_cb_pkey")||"").trim(); }catch(e){ return ""; } }
 let __cbApp=null, __cbSigned=false;
 async function ensureCB(){
   if(__cbApp && __cbSigned) return;
@@ -638,8 +639,11 @@ async function ensureCB(){
     });
   }
   if(!window.cloudbase) throw new Error("CloudBase SDK 不可用");
-  if(!__cbApp) __cbApp = window.cloudbase.init({ env: envId, region: cbRegion() });
-  await __cbApp.auth().signInAnonymously();
+  const pkey=cbPkey();
+  const _opts={ env: envId, region: cbRegion() };
+  if(pkey) _opts.accessKey=pkey;
+  if(!__cbApp) __cbApp = window.cloudbase.init(_opts);
+  if(!pkey){ await __cbApp.auth().signInAnonymously(); }
   __cbSigned=true;
 }
 async function cbUpsert(vid,payload,ts){
@@ -1284,7 +1288,7 @@ window.addEventListener("unhandledrejection",function(ev){ window._err("unhandle
 <div class="mask" id="maskSyncSet">
   <div class="modal" style="max-width:460px">
     <h3>☁️ 同步设置</h3>
-    <div class="sub">已默认使用腾讯云 CloudBase（国内直连）。建环境时「数据库类型」保持默认的【PostgreSQL 数据库】即可（也是当前新环境默认）。控制台四步：① 开通 CloudBase 环境（套餐可先选免费体验版）② 身份认证里开启「匿名登录」③ 环境配置→安全配置，把 <code>lmy1992-cpu.github.io</code> 加进 Web 安全域名 ④ 在 PostgreSQL 控制台执行下方 SQL 建表并开放匿名用户读写权限。填好环境 ID 即可同步。</div>
+    <div class="sub">已默认使用腾讯云 CloudBase（国内直连）。建环境时「数据库类型」保持默认的【PostgreSQL 数据库】即可（也是当前新环境默认）。控制台四步：① 开通 CloudBase 环境（套餐可先选免费体验版）② 在「身份源 / 密钥」生成 Publishable Key（或：身份认证里开启「匿名登录」）③ 环境配置→安全配置，把 <code>lmy1992-cpu.github.io</code> 加进 Web 安全域名 ④ 在 PostgreSQL 控制台执行下方 SQL 建表并开放匿名用户读写权限。填好环境 ID 即可同步。</div>
     <div class="field" style="margin-top:10px">
       <label>同步后端</label>
       <select id="selSyncBackend" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#fff">
@@ -1304,11 +1308,16 @@ window.addEventListener("unhandledrejection",function(ev){ window._err("unhandle
         <option value="ap-singapore">新加坡（ap-singapore）</option>
       </select>
     </div>
+    <div class="field" id="cbPkeyField" style="margin-top:10px;display:none">
+      <label>CloudBase 公钥（Publishable Key，可选）</label>
+      <input id="inpCbPkey" type="password" placeholder="在控制台「身份源 / 密钥」复制 Publishable Key" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px" />
+      <div class="sub" style="margin-top:6px">留空则用匿名登录；若匿名登录连不上，请到控制台生成 Publishable Key 填这里。</div>
+    </div>
     <div class="modal-actions" style="margin-top:14px">
       <button class="btn" id="btnSyncSetCancel">取消</button>
       <button class="btn primary" id="btnSyncSetSave">保存并尝试同步</button>
     </div>
-    <div class="navset-hint">控制台四步：① 开通 CloudBase 环境（数据库类型保持默认的【PostgreSQL 数据库】；套餐需升级「个人版」——免费体验版加不了 Web 安全域名）② 身份认证里开启「匿名登录」③ 环境配置→安全配置，把 <code>lmy1992-cpu.github.io</code> 加进 Web 安全域名（约 10 分钟生效）④ 在 PostgreSQL 控制台「SQL 编辑器」执行下面这段 SQL（复制粘贴即可）：<br><code style="display:block;white-space:pre-wrap;background:#f8f8f8;padding:6px;border-radius:6px;margin:4px 0">CREATE TABLE IF NOT EXISTS sync_vault (
+    <div class="navset-hint">控制台四步：① 开通 CloudBase 环境（数据库类型保持默认的【PostgreSQL 数据库】；套餐需升级「个人版」——免费体验版加不了 Web 安全域名）② 在「身份源 / 密钥」生成 Publishable Key（或：身份认证里开启「匿名登录」）③ 环境配置→安全配置，把 <code>lmy1992-cpu.github.io</code> 加进 Web 安全域名（约 10 分钟生效）④ 在 PostgreSQL 控制台「SQL 编辑器」执行下面这段 SQL（复制粘贴即可）：<br><code style="display:block;white-space:pre-wrap;background:#f8f8f8;padding:6px;border-radius:6px;margin:4px 0">CREATE TABLE IF NOT EXISTS sync_vault (
   vault_id TEXT PRIMARY KEY,
   payload TEXT,
   updated_at TIMESTAMPTZ DEFAULT now()
@@ -3709,15 +3718,17 @@ function openSyncSettings(){
   if(s) s.value=syncBackend();
   if(e) e.value=cbEnvId();
   if(r) r.value=cbRegion();
+  const pk=$("#inpCbPkey"); if(pk) pk.value=cbPkey();
   syncSettingsUi();
   m.classList.add("on");
 }
 function closeSyncSettings(){ const m=$("#maskSyncSet"); if(m) m.classList.remove("on"); }
 function syncSettingsUi(){
   const isCb=(syncBackend()==="cloudbase");
-  const ef=$("#cbEnvField"), rf=$("#cbRegionField");
+  const ef=$("#cbEnvField"), rf=$("#cbRegionField"), pkf=$("#cbPkeyField");
   if(ef) ef.style.display=isCb?"block":"none";
   if(rf) rf.style.display=isCb?"block":"none";
+  if(pkf) pkf.style.display=isCb?"block":"none";
 }
 async function saveSyncSettings(){
   const s=$("#selSyncBackend"), e=$("#inpCbEnvId"), r=$("#selCbRegion");
@@ -3726,6 +3737,7 @@ async function saveSyncSettings(){
   setSyncBackend(backend);
   try{ if(e) localStorage.setItem("dp_sync_cb_env", (e.value||"").trim()); }catch(_){}
   try{ if(r) localStorage.setItem("dp_sync_cb_region", (r.value||"ap-shanghai").trim()); }catch(_){}
+  try{ const pk=$("#inpCbPkey"); if(pk) localStorage.setItem("dp_sync_cb_pkey", (pk.value||"").trim()); }catch(_){}
   // 切到 CloudBase 时重置缓存的 app 实例，下次同步用新配置
   __cbApp=null; __cbSigned=false;
   closeSyncSettings();
@@ -3763,7 +3775,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.42";
+  var APP_VERSION="v38.43";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
