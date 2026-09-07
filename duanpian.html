@@ -826,6 +826,20 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 .tut-h5{font-size:1.06em;font-weight:700}
 .tut-h6{font-size:1em;font-weight:700}
 .tut-p{font-size:1em;line-height:1.95;margin:.35em 0;word-break:break-word}
+#tutContent h1,#tutContent h2,#tutContent h3,#tutContent h4,#tutContent h5,#tutContent h6{margin:.7em 0 .35em;line-height:1.35;color:var(--ink,#222);word-break:break-word;font-weight:700}
+#tutContent h1{font-size:1.9em}
+#tutContent h2{font-size:1.6em}
+#tutContent h3{font-size:1.35em}
+#tutContent h4{font-size:1.18em}
+#tutContent h5{font-size:1.06em}
+#tutContent h6{font-size:1em}
+#tutContent p{font-size:1em;line-height:1.95;margin:.35em 0;word-break:break-word}
+#tutContent ul,#tutContent ol{margin:.5em 0;padding-left:1.5em}
+#tutContent li{margin:.25em 0}
+#tutContent strong{font-weight:700}
+#tutContent em{font-style:italic}
+#tutContent table{border-collapse:collapse;margin:.5em 0}
+#tutContent td,#tutContent th{border:1px solid var(--line);padding:6px 8px}
 </style>
 <div class="mask" id="maskUploadPreview">
   <div class="modal">
@@ -2346,7 +2360,8 @@ async function parseFile(f){
   const isDocx=f.name.toLowerCase().endsWith(".docx");
   if(isDocx){
     if(typeof mammoth==="undefined"){ toast("Word 解析库未加载，请联网后重试"); return Promise.reject(); }
-    if(uploadTarget==="tutorials"){ text=await mammothToHeadingText(buf); } // 教程：Word 标题样式 → # 一级/二级标题
+    let tutHtml="";
+  if(uploadTarget==="tutorials"){ const conv=await mammothToHeadingText(buf); text=conv.text; tutHtml=conv.html; } // 教程：保留 Word 原格式 HTML
     else { const r=await mammoth.extractRawText({arrayBuffer:buf}); text=r.value; }
   } else if(f.name.toLowerCase().endsWith(".txt")){ text=decodeTxt(buf); }
   else { toast("仅支持 .docx / .txt"); return Promise.reject(); }
@@ -2354,9 +2369,10 @@ async function parseFile(f){
   parsed.fileData=bufToB64(buf);
   parsed.fileType=f.type||(isDocx?"application/vnd.openxmlformats-officedocument.wordprocessingml.document":"text/plain");
   parsed.title=((f.name||"").replace(/\.[^.]+$/,"").trim())||parsed.title||"未命名"; // 文章名取文件名（去扩展名），而非正文第一行
+  if(tutHtml) parsed.htmlContent=tutHtml;
   return parsed;
 }
-// 教程：把 Word 的标题样式转成 Markdown 的 # / ## / ###，使阅读视图能按层级显示大字号
+// 教程：Word → HTML（保留原格式），同时提取纯文本（用于摘要/编辑）
 async function mammothToHeadingText(buf){
   try{
     const r=await mammoth.convertToHtml({arrayBuffer:buf, styleMap:[
@@ -2367,21 +2383,14 @@ async function mammothToHeadingText(buf){
       "p[style-name='Heading 5'] => h5:fresh", "p[style-name='标题 5'] => h5:fresh",
       "p[style-name='Heading 6'] => h6:fresh", "p[style-name='标题 6'] => h6:fresh"
     ]});
-    return htmlToMarkdownHeadings(r.value);
+    return {html:r.value||"", text:htmlToPlainText(r.value)};
   }catch(e){
-    try{ const r2=await mammoth.extractRawText({arrayBuffer:buf}); return r2.value; }catch(_){ return ""; }
+    try{ const r2=await mammoth.extractRawText({arrayBuffer:buf}); return {html:"", text:r2.value||""}; }catch(_){ return {html:"", text:""}; }
   }
 }
-function htmlToMarkdownHeadings(html){
-  const d=document.createElement("div"); d.innerHTML=html||"";
-  const out=[];
-  d.childNodes.forEach(n=>{
-    if(n.nodeType===3){ const t=(n.textContent||"").trim(); if(t) out.push(t); return; }
-    const tag=(n.tagName||"").toLowerCase();
-    if(/^h[1-6]$/.test(tag)){ const lvl=+tag[1]; out.push("#".repeat(lvl)+" "+(n.textContent||"").trim()); }
-    else { const t=(n.textContent||"").trim(); if(t) out.push(t); }
-  });
-  return out.join("\n");
+function htmlToPlainText(html){
+  const d=document.createElement("div"); d.innerHTML=(html||"").replace(/<\/(p|h[1-6]|div)>/gi,"\n</$1>").replace(/<br\s*\/?>/gi,"\n");
+  return (d.textContent||"").replace(/\n{2,}/g,"\n").trim();
 }
 function openUploadModal(fileName, parsed, remaining, total){
   pendingUpload={fileName, ...parsed};
@@ -2511,7 +2520,8 @@ function renderTutorialReading(){
   const wc=(t.content||"").replace(/\s/g,"").length;
   $("#tutWc").textContent='字数 '+wc;
   const ce=$("#tutContent");
-  if((t.content||"").trim()){ ce.innerHTML=renderTutorialBody(t.content); ce.classList.remove("empty"); }
+  if((t.htmlContent||"").trim()){ ce.innerHTML=t.htmlContent; ce.classList.remove("empty"); }
+  else if((t.content||"").trim()){ ce.innerHTML=renderTutorialBody(t.content); ce.classList.remove("empty"); }
   else { ce.innerHTML="（无正文预览）"; ce.classList.add("empty"); }
 }
 function showTutorialReaderView(which){ $("#tutView").style.display = which==="read" ? "" : "none"; $("#tutEditContent").style.display = which==="content" ? "" : "none"; }
@@ -2542,6 +2552,7 @@ $("#btnTutContentSave").onclick=()=>{
   t.title=$("#tutEdTitle").value.trim()||"未命名";
   t.category=$("#tutEdCat").value||"其他";
   t.content=$("#tutEdContent").value;
+  t.htmlContent=renderTutorialBody(t.content);
   save(); renderTutorialReading(); showTutorialReaderView("read"); renderAll(); toast("已保存");
 };
 $("#btnTutDownload").onclick=tutorialDownload;
@@ -3325,7 +3336,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.49";
+  var APP_VERSION = "v38.50";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
