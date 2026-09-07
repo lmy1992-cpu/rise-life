@@ -987,7 +987,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
         <button class="btn ghost" id="btnTutClose">关闭</button>
       </div>
       <h2 id="tutTitle"></h2>
-      <div class="reader-meta" id="tutCat"></div>
+      <div class="reader-meta" id="tutReaderCat"></div>
       <div class="reader-wc" id="tutWc"></div>
     </div>
     <div class="reader-body">
@@ -2533,7 +2533,7 @@ async function renderTutorialReading(){
   const t=curTut(); if(!t) return;
   await ensureTutorialHtml(t);
   $("#tutTitle").textContent=t.title||"未命名";
-  $("#tutCat").innerHTML='<span class="tagmini">'+esc(t.category||"其他")+'</span>';
+  $("#tutReaderCat").innerHTML='<span class="tagmini">'+esc(t.category||"其他")+'</span>';
   const wc=(t.content||"").replace(/\s/g,"").length;
   $("#tutWc").textContent='字数 '+wc;
   const ce=$("#tutContent");
@@ -3353,7 +3353,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.51";
+  var APP_VERSION = "v38.52";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
