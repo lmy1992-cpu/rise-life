@@ -644,16 +644,17 @@ async function ensureCB(){
 }
 async function cbUpsert(vid,payload,ts){
   await ensureCB();
-  const db=__cbApp.database();
-  await db.collection("sync_vault").doc(vid).set({ payload:payload||"", updated_at:ts||new Date().toISOString() });
+  const db=__cbApp.rdb();
+  const r=await db.from("sync_vault").upsert({ vault_id:vid, payload:payload||"", updated_at:ts||new Date().toISOString() }, { onConflict:"vault_id" });
+  if(r && r.error) throw new Error("CloudBase 上传失败："+(r.error.message||JSON.stringify(r.error)));
 }
 async function cbGet(vid){
   await ensureCB();
-  const db=__cbApp.database();
-  const res=await db.collection("sync_vault").doc(vid).get();
-  const d=(res&&res.data)?res.data:null;
-  if(!d || (d.payload===undefined && d.updated_at===undefined && !d._id)) return null;
-  return { payload:d.payload, updated_at:d.updated_at };
+  const db=__cbApp.rdb();
+  const r=await db.from("sync_vault").select("payload,updated_at").eq("vault_id", vid).limit(1);
+  if(r && r.error) throw new Error("CloudBase 下载失败："+(r.error.message||JSON.stringify(r.error)));
+  if(r && r.data && r.data.length) return { payload:r.data[0].payload, updated_at:r.data[0].updated_at };
+  return null;
 }
 async function cbUpsertChunked(vid,payload,ts){
   if(!payload || payload.length<=SB_CHUNK_SIZE) return cbUpsert(vid,payload,ts);
@@ -1283,7 +1284,7 @@ window.addEventListener("unhandledrejection",function(ev){ window._err("unhandle
 <div class="mask" id="maskSyncSet">
   <div class="modal" style="max-width:460px">
     <h3>☁️ 同步设置</h3>
-    <div class="sub">已默认使用腾讯云 CloudBase（国内直连、个人版 ¥19.9/月）。建环境时「数据库类型」选默认的【云数据库/文档型】（别选 PostgreSQL）。控制台四步：① 开通 CloudBase 个人版环境 ② 身份认证里开启「匿名登录」③ 环境配置→安全配置，把 <code>lmy1992-cpu.github.io</code> 加进 Web 安全域名 ④ 数据库里新建集合 <code>sync_vault</code>，权限设为「所有用户可读写」（见下方提示）。填好环境 ID 即可同步。</div>
+    <div class="sub">已默认使用腾讯云 CloudBase（国内直连）。建环境时「数据库类型」保持默认的【PostgreSQL 数据库】即可（也是当前新环境默认）。控制台四步：① 开通 CloudBase 环境（套餐可先选免费体验版）② 身份认证里开启「匿名登录」③ 环境配置→安全配置，把 <code>lmy1992-cpu.github.io</code> 加进 Web 安全域名 ④ 在 PostgreSQL 控制台执行下方 SQL 建表并开放匿名用户读写权限。填好环境 ID 即可同步。</div>
     <div class="field" style="margin-top:10px">
       <label>同步后端</label>
       <select id="selSyncBackend" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#fff">
@@ -1300,15 +1301,14 @@ window.addEventListener("unhandledrejection",function(ev){ window._err("unhandle
       <label>CloudBase 地域（默认上海）</label>
       <select id="selCbRegion" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#fff">
         <option value="ap-shanghai" selected>上海（ap-shanghai）</option>
-        <option value="ap-guangzhou">广州（ap-guangzhou）</option>
-        <option value="ap-beijing">北京（ap-beijing）</option>
+        <option value="ap-singapore">新加坡（ap-singapore）</option>
       </select>
     </div>
     <div class="modal-actions" style="margin-top:14px">
       <button class="btn" id="btnSyncSetCancel">取消</button>
       <button class="btn primary" id="btnSyncSetSave">保存并尝试同步</button>
     </div>
-    <div class="navset-hint">控制台四步：① 开通 CloudBase 个人版环境（数据库类型选默认的【云数据库/文档型】）② 身份认证里开启「匿名登录」③ 环境配置→安全配置，把 <code>lmy1992-cpu.github.io</code> 加进 Web 安全域名（约 10 分钟生效）④ 数据库里新建集合 <code>sync_vault</code>，点该集合「权限设置」→ 安全规则，填入并保存：<br><code>{ "read": true, "write": true }</code><br>（或选「所有用户可读写」模板）。数据已在本地用协作口令加密，云端只存密文，匿名可读写是安全的。切换后端不会删除本地数据。</div>
+    <div class="navset-hint">控制台四步：① 开通 CloudBase 环境（数据库类型保持默认的【PostgreSQL 数据库】，套餐可先选免费体验版）② 身份认证里开启「匿名登录」③ 环境配置→安全配置，把 <code>lmy1992-cpu.github.io</code> 加进 Web 安全域名（约 10 分钟生效）④ 在 PostgreSQL 控制台「SQL 编辑器」执行下面这段 SQL（复制粘贴即可）：<br><code style="display:block;white-space:pre-wrap;background:#f8f8f8;padding:6px;border-radius:6px;margin:4px 0">CREATE TABLE IF NOT EXISTS sync_vault (vault_id TEXT PRIMARY KEY, payload TEXT, updated_at TIMESTAMPTZ DEFAULT now());\nALTER TABLE sync_vault ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS anon_rw ON sync_vault;\nCREATE POLICY anon_rw ON sync_vault FOR ALL TO authenticated USING (true) WITH CHECK (true);\nGRANT ALL ON sync_vault TO authenticated;</code><br>数据已在本地用协作口令加密，云端只存密文，开放匿名读写是安全的。切换后端不会删除本地数据。</div>
   </div>
 </div>
 
@@ -3756,7 +3756,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.39";
+  var APP_VERSION="v38.40";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
