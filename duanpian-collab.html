@@ -1308,7 +1308,14 @@ window.addEventListener("unhandledrejection",function(ev){ window._err("unhandle
       <button class="btn" id="btnSyncSetCancel">取消</button>
       <button class="btn primary" id="btnSyncSetSave">保存并尝试同步</button>
     </div>
-    <div class="navset-hint">控制台四步：① 开通 CloudBase 环境（数据库类型保持默认的【PostgreSQL 数据库】，套餐可先选免费体验版）② 身份认证里开启「匿名登录」③ 环境配置→安全配置，把 <code>lmy1992-cpu.github.io</code> 加进 Web 安全域名（约 10 分钟生效）④ 在 PostgreSQL 控制台「SQL 编辑器」执行下面这段 SQL（复制粘贴即可）：<br><code style="display:block;white-space:pre-wrap;background:#f8f8f8;padding:6px;border-radius:6px;margin:4px 0">CREATE TABLE IF NOT EXISTS sync_vault (vault_id TEXT PRIMARY KEY, payload TEXT, updated_at TIMESTAMPTZ DEFAULT now());\nALTER TABLE sync_vault ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS anon_rw ON sync_vault;\nCREATE POLICY anon_rw ON sync_vault FOR ALL TO authenticated USING (true) WITH CHECK (true);\nGRANT ALL ON sync_vault TO authenticated;</code><br>数据已在本地用协作口令加密，云端只存密文，开放匿名读写是安全的。切换后端不会删除本地数据。</div>
+    <div class="navset-hint">控制台四步：① 开通 CloudBase 环境（数据库类型保持默认的【PostgreSQL 数据库】；套餐需升级「个人版」——免费体验版加不了 Web 安全域名）② 身份认证里开启「匿名登录」③ 环境配置→安全配置，把 <code>lmy1992-cpu.github.io</code> 加进 Web 安全域名（约 10 分钟生效）④ 在 PostgreSQL 控制台「SQL 编辑器」执行下面这段 SQL（复制粘贴即可）：<br><code style="display:block;white-space:pre-wrap;background:#f8f8f8;padding:6px;border-radius:6px;margin:4px 0">CREATE TABLE IF NOT EXISTS sync_vault (
+  vault_id TEXT PRIMARY KEY,
+  payload TEXT,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE sync_vault ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS anon_rw ON sync_vault;
+CREATE POLICY anon_rw ON sync_vault FOR ALL USING (true) WITH CHECK (true);</code><br>数据已在本地用协作口令加密，云端只存密文，开放匿名读写是安全的。切换后端不会删除本地数据。</div>
   </div>
 </div>
 
@@ -3756,7 +3763,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.41";
+  var APP_VERSION="v38.42";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
