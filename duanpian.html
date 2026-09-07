@@ -625,6 +625,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   <nav class="side" id="side">
     <div id="sideNav"></div>
     <button class="nav-settings" id="btnNavSettings" title="设置模块">⚙</button>
+    <button class="nav-settings" id="btnPersonalSync" title="云端同步设置">☁️</button>
   </nav>
 
   <main>
@@ -1134,9 +1135,128 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   </div>
 </div>
 
+<!-- 云端同步设置（个人多端） -->
+<div class="mask" id="maskPersonalSync">
+  <div class="modal">
+    <h3>☁️ 云端同步（个人多端）</h3>
+    <div class="sub">用腾讯云 CloudBase 让你电脑 / 平板 / 手机三端的「短篇工作台」数据互通。数据在你浏览器里客户端加密后再上传，腾讯云只存密文。设置一次，三端填<strong>同一个</strong>「环境 ID」+「个人同步口令」即可。</div>
+    <div class="field"><label>CloudBase 环境 ID（envId）</label><input id="dpSyncCbEnv" placeholder="在腾讯云控制台复制" /></div>
+    <div class="field"><label>地域（默认 ap-shanghai）</label><input id="dpSyncCbRegion" placeholder="ap-shanghai" /></div>
+    <div class="field"><label>个人同步口令（三端相同，自己定）</label><input id="dpPersonalKey" type="password" placeholder="例如 myrise2026" /></div>
+    <label class="up-batch"><input type="checkbox" id="dpPersonalSyncOn" /> <span>开启个人云端同步</span></label>
+    <div id="personalSyncStatus" style="color:#1a8a3c;font-size:13px;min-height:18px;margin:6px 0"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btnPersonalSyncClose">关闭</button>
+      <button class="btn primary" id="btnPersonalSyncNow">立即同步</button>
+    </div>
+    <div class="navset-hint">控制台需做：① 建 CloudBase 环境（文档型）② 开启匿名登录 ③ 把 lmy1992-cpu.github.io 加进 Web 安全域名 ④ 建集合 sync_vault 并设权限 {read:true,write:true}。不开启同步则本工具完全本地使用，数据不离开此浏览器。</div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="crawl-data.js"></script>
+<script>
+/* ===== 主工作台：个人云端同步（腾讯云 CloudBase，国内直连）===== */
+const CB_CDN="https://static.cloudbase.net/cloudbase-js-sdk/2.27.1/cloudbase.full.js";
+const SYNC_SALT="rise-life-personal-v1";
+async function sha256Hex(s){ const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
+async function deriveKey(pass){ const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pass),"PBKDF2",false,["deriveKey"]); return crypto.subtle.deriveKey({name:"PBKDF2",salt:new TextEncoder().encode(SYNC_SALT),iterations:150000,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]); }
+function b64from(buf){ const bytes=new Uint8Array(buf); let bin=""; const c=0x8000; for(let i=0;i<bytes.length;i+=c) bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+c)); return btoa(bin); }
+function b64to(s){ const bin=atob(s); const bytes=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i); return bytes.buffer; }
+async function encBundle(key,obj){ const iv=crypto.getRandomValues(new Uint8Array(12)); const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,new TextEncoder().encode(JSON.stringify(obj))); return b64from(iv.buffer)+"."+b64from(ct); }
+async function decBundle(key,str){ const p=str.split("."); if(p.length!==2) throw new Error("密文格式错误"); const iv=new Uint8Array(b64to(p[0])); const ct=b64to(p[1]); const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv},key,ct); return JSON.parse(new TextDecoder().decode(pt)); }
+function cbEnvId(){ try{ return (localStorage.getItem("dp_sync_cb_env")||"").trim(); }catch(e){ return ""; } }
+function cbRegion(){ try{ return (localStorage.getItem("dp_sync_cb_region")||"ap-shanghai").trim(); }catch(e){ return "ap-shanghai"; } }
+let __cbApp=null, __cbSigned=false;
+async function ensureCB(){
+  if(__cbApp && __cbSigned) return;
+  const envId=cbEnvId(); if(!envId) throw new Error("未配置 CloudBase 环境 ID，请先点 ☁️ 填写");
+  if(!window.cloudbase){
+    await new Promise(function(res,rej){
+      const s=document.createElement("script"); s.src=CB_CDN; s.async=true;
+      s.onload=res; s.onerror=function(){ rej(new Error("CloudBase SDK 加载失败，请检查网络或 CDN 是否可达")); };
+      (document.head||document.documentElement).appendChild(s);
+    });
+  }
+  if(!window.cloudbase) throw new Error("CloudBase SDK 不可用");
+  if(!__cbApp) __cbApp = window.cloudbase.init({ env: envId, region: cbRegion() });
+  await __cbApp.auth().signInAnonymously();
+  __cbSigned=true;
+}
+async function cbUpsert(vid,payload,ts){
+  await ensureCB();
+  const db=__cbApp.database();
+  await db.collection("sync_vault").doc(vid).set({ payload:payload||"", updated_at:ts||new Date().toISOString() });
+}
+async function cbGet(vid){
+  await ensureCB();
+  const db=__cbApp.database();
+  const res=await db.collection("sync_vault").doc(vid).get();
+  const d=(res&&res.data)?res.data:null;
+  if(!d || (d.payload===undefined && d.updated_at===undefined && !d._id)) return null;
+  return { payload:d.payload, updated_at:d.updated_at };
+}
+const CB_CHUNK_SIZE=250000;
+async function cbUpsertChunked(vid,payload,ts){
+  if(!payload || payload.length<=CB_CHUNK_SIZE) return cbUpsert(vid,payload,ts);
+  const parts=[]; for(let i=0;i<payload.length;i+=CB_CHUNK_SIZE) parts.push(payload.slice(i,i+CB_CHUNK_SIZE));
+  const CONC=8;
+  for(let i=0;i<parts.length;i+=CONC){
+    const chunk=parts.slice(i,i+CONC);
+    await Promise.all(chunk.map(function(c,j){ return cbUpsert(vid+"#"+(i+j),c,ts); }));
+  }
+  return cbUpsert(vid, JSON.stringify({__chunked:true,n:parts.length}), ts);
+}
+async function cbGetChunked(vid){
+  const row=await cbGet(vid);
+  if(!row || typeof row.payload!=="string" || row.payload.indexOf('"__chunked"')<0) return row;
+  let meta=null; try{ const m=JSON.parse(row.payload); if(m&&m.__chunked&&typeof m.n==="number") meta=m; }catch(e){}
+  if(!meta) return row;
+  const n=meta.n, blocks=new Array(n), CONC=8;
+  for(let i=0;i<n;i+=CONC){
+    const idxs=[]; for(let k=i;k<Math.min(i+CONC,n);k++) idxs.push(k);
+    const arr=await Promise.all(idxs.map(function(k){ return cbGet(vid+"#"+(k)); }));
+    arr.forEach(function(b,k){ if(!b||typeof b.payload!=="string") throw new Error("云端分块不完整（缺第"+(idxs[k]+1)+"块），可能正在重新上传，稍后重试"); blocks[idxs[k]]=b.payload; });
+  }
+  row.payload=blocks.join(""); return row;
+}
+/* ---- 个人同步配置与存取（与协作版共享 envId，个人保险箱独立）---- */
+function personalKey(){ try{ return (localStorage.getItem("dp_personal_sync_key")||"").trim(); }catch(e){ return ""; } }
+function personalSyncEnabled(){ try{ return localStorage.getItem("dp_personal_sync_on")==="1"; }catch(e){ return false; } }
+function setPersonalStatus(t){ try{ var el=document.getElementById("personalSyncStatus"); if(el) el.textContent=t; }catch(e){} window.__personalStatus=t; }
+async function personalVaultId(){ const k=personalKey(); if(!k) throw new Error("未设置个人同步口令"); return "p_"+await sha256Hex("personal|"+k); }
+async function personalPush(){
+  if(!personalSyncEnabled() || !personalKey()) return;
+  const vid=await personalVaultId();
+  const key=await deriveKey(personalKey());
+  const bundle={v:1,ts:Date.now(),state:state};
+  const enc=await encBundle(key,bundle);
+  await cbUpsertChunked(vid, enc, new Date(bundle.ts).toISOString());
+  try{ localStorage.setItem("dp_last_sync_ts", String(bundle.ts)); }catch(e){}
+  setPersonalStatus("已同步 ✓");
+}
+async function personalPull(){
+  if(!personalSyncEnabled() || !personalKey()) return;
+  const vid=await personalVaultId();
+  const row=await cbGetChunked(vid);
+  if(!row || !row.payload){ setPersonalStatus("云端暂无数据 · 已上传本地"); await personalPush(); return; }
+  const key=await deriveKey(personalKey());
+  const bundle=await decBundle(key,row.payload);
+  if(!bundle || !bundle.state) return;
+  var localTs=Number(localStorage.getItem("dp_last_sync_ts")||0);
+  var cloudTs=bundle.ts||0;
+  var localEmpty=!state || (state.examples&&state.examples.length===0 && state.materials&&state.materials.length===0 && state.intros&&state.intros.length===0);
+  if(localEmpty || cloudTs>localTs){
+    state=bundle.state; migrate(); ensureAiCfg();
+    try{ localStorage.setItem("dp_last_sync_ts", String(cloudTs)); }catch(e){}
+    try{ save(); }catch(e){}
+    setPersonalStatus("已从云端恢复 ✓");
+  } else {
+    setPersonalStatus("本地已是最新 ✓");
+  }
+}
+</script>
 <script>
 "use strict";
 const KEY = "duanpian_workbench_v1";
@@ -1417,25 +1537,33 @@ function save(){
     try{ localStorage.setItem(KEY, JSON.stringify(full)); }catch(e){}
   });
   try{ persistLocalAiCfg(state.aiCfg); }catch(e){}
+  // 个人云端同步：本地存完即推云端；失败仅记状态，绝不阻断本地保存
+  if(personalSyncEnabled() && personalKey()){
+    personalPush().catch(function(e){ if(window._err) window._err("personalPush",e); setPersonalStatus("云端未连接 · 重试中"); });
+  }
 }
 function load(){
+  var localPromise;
   if(typeof indexedDB!=="undefined"){
-    return idbGet(IDB_KEY).then(full=>{
+    localPromise = idbGet(IDB_KEY).then(function(full){
       if(full && full.examples){ state=full; }
       else { const raw=localStorage.getItem(KEY); if(raw){ try{ state=JSON.parse(raw); }catch(e){ state=null; } } else { state=null; } }
-      if(!state){ seed(); return; }
+      if(!state){ seed(); }
       migrate();
-      ensureAiCfg(); // v38.33：state 里 key 若丢失，从 duanpian_aicfg 备份找回
-    }).catch(()=>{
+      ensureAiCfg();
+    }).catch(function(){
       const raw=localStorage.getItem(KEY);
       if(raw){ try{ state=JSON.parse(raw); }catch(e){ state=null; } }
-      if(!state){ seed(); return; }
+      if(!state){ seed(); }
       migrate();
-      ensureAiCfg(); // v38.33：同上
+      ensureAiCfg();
     });
+  } else {
+    try{ const raw=localStorage.getItem(KEY); if(raw){ state=JSON.parse(raw); migrate(); ensureAiCfg(); localPromise=Promise.resolve(); } }catch(e){ localPromise=null; }
+    if(!localPromise){ seed(); localPromise=Promise.resolve(); }
   }
-  try{ const raw=localStorage.getItem(KEY); if(raw){ state=JSON.parse(raw); migrate(); ensureAiCfg(); return Promise.resolve(); } }catch(e){}
-  seed(); return Promise.resolve();
+  // 本地就绪后拉取个人云端（失败仅记状态，不阻断渲染）
+  return localPromise.then(function(){ return personalPull().catch(function(e){ if(window._err) window._err("personalPull",e); setPersonalStatus("云端未连接 · 重试中"); }); });
 }
 function migrate(){
   if(!state || typeof state !== 'object') state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
@@ -1677,6 +1805,35 @@ function renderNavSettings(){
 }
 $("#btnNavSettings").onclick=()=>{ renderNavSettings(); $("#maskNavSet").classList.add("on"); };
 $("#btnNavSetClose").onclick=()=>$("#maskNavSet").classList.remove("on");
+/* ---- 个人云端同步设置 ---- */
+$("#btnPersonalSync").onclick=function(){
+  try{
+    document.getElementById("dpSyncCbEnv").value=localStorage.getItem("dp_sync_cb_env")||"";
+    document.getElementById("dpSyncCbRegion").value=localStorage.getItem("dp_sync_cb_region")||"ap-shanghai";
+    document.getElementById("dpPersonalKey").value=localStorage.getItem("dp_personal_sync_key")||"";
+    document.getElementById("dpPersonalSyncOn").checked=localStorage.getItem("dp_personal_sync_on")==="1";
+  }catch(e){}
+  $("#maskPersonalSync").classList.add("on");
+};
+$("#btnPersonalSyncClose").onclick=function(){ $("#maskPersonalSync").classList.remove("on"); };
+$("#btnPersonalSyncNow").onclick=function(){
+  try{
+    var env=document.getElementById("dpSyncCbEnv").value.trim();
+    var region=document.getElementById("dpSyncCbRegion").value.trim()||"ap-shanghai";
+    var key=document.getElementById("dpPersonalKey").value;
+    var on=document.getElementById("dpPersonalSyncOn").checked?"1":"0";
+    localStorage.setItem("dp_sync_cb_env",env);
+    localStorage.setItem("dp_sync_cb_region",region);
+    localStorage.setItem("dp_personal_sync_key",key);
+    localStorage.setItem("dp_personal_sync_on",on);
+  }catch(e){}
+  if(on==="0"){ setPersonalStatus("已关闭同步"); return; }
+  if(!env){ setPersonalStatus("请先填环境 ID"); return; }
+  if(!key){ setPersonalStatus("请先填个人同步口令"); return; }
+  setPersonalStatus("同步中…");
+  personalPush().then(function(){ return personalPull(); }).then(function(){ if(typeof renderAll==="function") renderAll(); setPersonalStatus("已同步 ✓"); })
+    .catch(function(e){ if(window._err) window._err("syncNow",e); setPersonalStatus("同步失败："+(e&&e.message?e.message:e)); });
+};
 $("#btnNavReset").onclick=()=>{
   const btn=$("#btnNavReset");
   if(btn.dataset.arm==="1"){ state.nav=DEFAULT_NAV.map(x=>({...x})); save(); renderNav(); renderNavSettings(); btn.dataset.arm=""; btn.textContent="恢复默认"; toast("已恢复默认"); }
@@ -3129,7 +3286,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION="v38.38";
+  var APP_VERSION="v38.39";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
