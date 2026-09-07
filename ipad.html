@@ -2192,6 +2192,7 @@ function renderSettings(){
   // 预填同步配置
   if($("cbEnv")) $("cbEnv").value=syncCfg.cbEnv||"";
   if($("cbRegion")) $("cbRegion").value=syncCfg.cbRegion||"ap-shanghai";
+  if($("cbPkey")) $("cbPkey").value=syncCfg.cbPkey||"";
   if($("rememberPass")) $("rememberPass").checked=!!syncCfg.rememberPass;
   if($("autoSync")) $("autoSync").checked=!!syncCfg.auto;
   if($("syncPass") && syncCfg.rememberPass && syncCfg.pass) $("syncPass").value=syncCfg.pass;
