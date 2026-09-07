@@ -767,7 +767,7 @@ navCfg = navCfg.filter(function(x){ return x.key!=="duanpian"; });
 // 迁移：v36 起把 灵感收件箱/时间轴/心情日记/回收站 收进「每日待办」与「人生概览」，移除独立侧栏大模块
 navCfg = navCfg.filter(function(x){ return ["inbox","timeline","mood","recycle"].indexOf(x.key)<0; });
 
-const APP_VERSION="v38.40";
+const APP_VERSION="v38.41";
 // ===== 健壮存储层：localStorage 不可用时自动回退 IndexedDB（防止刷新丢数据）=====
 // 内部状态挂在 window 上，避免跨 <script> 块时 let 的暂时性死区（TDZ）报错
 // —— 存储层 v2：每条记录带写入时间戳，读取/合并时"取最新"，杜绝旧空值覆盖新数据 ——
@@ -2126,9 +2126,9 @@ function renderSettings(){
       '</div>'+
     '<div class="panel"><h3>🔁 逐模块迁移（手帐类）</h3><p class="hint" style="color:var(--sub);font-size:12px;margin:0 0 10px">把某个手帐的数据导出为单独 JSON，或导入到该模块（用于换机/清缓存后恢复）。</p><div id="migList"></div></div>'+
     '<div class="panel"><h3>☁️ 云端同步（端到端加密 · 零知识）</h3>'+
-    '<p class="hint" style="color:var(--sub);font-size:12px;margin:0 0 10px">数据先在浏览器用「同步密码」加密成密文再上传，云端只存密文、包括服务商在内谁都解不开。电脑/手机/iPad 三端输入<b>同一个密码</b>即共享同一份数据。需先建 <a href="https://supabase.com" target="_blank">Supabase</a> 项目并执行建表 SQL（聊天里有说明）。</p>'+
-    '<div class="field"><label>Supabase 项目 URL</label><input id="sbUrl" placeholder="https://xxxx.supabase.co"></div>'+
-    '<div class="field"><label>anon 公钥（公开的，可放前端）</label><input id="sbAnon" placeholder="eyJ..."></div>'+
+    '<p class="hint" style="color:var(--sub);font-size:12px;margin:0 0 10px">数据先在浏览器用「同步密码」加密成密文再上传，云端只存密文、包括服务商在内谁都解不开。电脑/手机/iPad 三端填<b>同一个环境 ID + 同一个密码</b>即共享同一份数据（腾讯云 CloudBase，国内直连）。</p>'+
+    '<div class="field"><label>CloudBase 环境 ID（envId）</label><input id="cbEnv" placeholder="env-xxxxxxxx" onchange="saveSyncCfgUI()"></div>'+
+    '<div class="field"><label>地域（默认 ap-shanghai，按你建环境时选的填）</label><input id="cbRegion" placeholder="ap-shanghai" onchange="saveSyncCfgUI()"></div>'+
     '<div class="field"><label>同步密码（三端一致；遗忘=永久无法解密）</label><div class="pw-wrap"><input id="syncPass" type="password" placeholder="设一个强密码" onchange="saveSyncCfgUI()"><button type="button" class="pw-eye" title="显示 / 隐藏密码" onclick="togglePassVis(\'syncPass\',this)">👁</button></div><div class="hint" style="font-size:12px;color:var(--sub);margin-top:5px">点右边的眼睛可以看清自己输的密码，方便核对三端是否一致。</div></div>'+
     '<div style="display:flex;gap:16px;flex-wrap:wrap;margin:4px 0 12px;font-size:13px;color:var(--sub)">'+
     '<label><input type="checkbox" id="rememberPass" onchange="saveSyncCfgUI()"> 本机记住密码（方便自动同步，但本机留密码副本）</label>'+
@@ -2189,8 +2189,8 @@ function renderSettings(){
     mig.appendChild(d);
   })();
   // 预填同步配置
-  if($("sbUrl")) $("sbUrl").value=syncCfg.supabaseUrl||"";
-  if($("sbAnon")) $("sbAnon").value=syncCfg.anonKey||"";
+  if($("cbEnv")) $("cbEnv").value=syncCfg.cbEnv||"";
+  if($("cbRegion")) $("cbRegion").value=syncCfg.cbRegion||"ap-shanghai";
   if($("rememberPass")) $("rememberPass").checked=!!syncCfg.rememberPass;
   if($("autoSync")) $("autoSync").checked=!!syncCfg.auto;
   if($("syncPass") && syncCfg.rememberPass && syncCfg.pass) $("syncPass").value=syncCfg.pass;
@@ -2388,9 +2388,9 @@ window.addEventListener("load", function(){
 });
 
 /* ============ 云端同步（端到端加密，零知识） ============ */
-const SYNC_KEY="workbench_sync_cfg_v1"; // 仅存 supabase 同步配置（本机）
+const SYNC_KEY="workbench_sync_cfg_v1"; // 仅存 CloudBase 同步配置（本机）
 const SYNC_SALT="life-workbench-sync-v1";
-let syncCfg = load(SYNC_KEY, {supabaseUrl:"https://ailxzvbbjybezfoaqsit.supabase.co", anonKey:"sb_publishable_AQbq_KfBipQcYrlX5UL3Qg_ZIB1P_nx", auto:false, rememberPass:false, pass:"", lastSyncText:""});
+let syncCfg = load(SYNC_KEY, {cbEnv:"", cbRegion:"ap-shanghai", auto:false, rememberPass:false, pass:"", lastSyncText:""});
 function saveSyncCfg(){ persist(SYNC_KEY, syncCfg); }
 // 滴答清单配置独立缓存键，与同步配置解耦（避免同步逻辑改动波及）
 const DIDA_KEY="workbench_dida_cfg_v1";
@@ -2442,19 +2442,65 @@ async function decBundle(key, str){
   return JSON.parse(new TextDecoder().decode(pt));
 }
 
-/* Supabase REST 传输（无需 SDK） */
-function sbHeaders(){ return { "apikey": syncCfg.anonKey, "Authorization":"Bearer "+syncCfg.anonKey, "Content-Type":"application/json" }; }
-async function sbUpsert(vaultId, payload){
-  const url=syncCfg.supabaseUrl.replace(/\/$/,"")+"/rest/v1/sync_vault";
-  const res=await fetch(url, {method:"POST", headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates"}),
-    body:JSON.stringify({vault_id:vaultId, payload:payload, updated_at:new Date().toISOString()})});
-  if(!res.ok) throw new Error("上传失败 HTTP "+res.status);
+/* ===== 腾讯云 CloudBase 传输（国内直连 · PostgreSQL）=====
+   说明：原 Supabase（海外，国内常被墙）已整体替换为腾讯云 CloudBase。
+   数据依旧先在本地用「同步密码」加密成密文再上传，云端只存密文。*/
+const CB_CDN="https://static.cloudbase.net/cloudbase-js-sdk/2.27.1/cloudbase.full.js";
+function cbEnvId(){ return String((syncCfg && syncCfg.cbEnv) || "").trim(); }
+function cbRegion(){ return String((syncCfg && syncCfg.cbRegion) || "ap-shanghai").trim(); }
+let __cbApp=null, __cbSigned=false, __cbEnvNow="";
+async function ensureCB(){
+  const envId=cbEnvId();
+  if(!envId) throw new Error("未配置 CloudBase 环境 ID：请到「设置 → ☁️ 云端同步」填写环境 ID（腾讯云控制台里那串 env-xxxx）");
+  if(__cbApp && __cbSigned && __cbEnvNow===envId) return;
+  if(!window.cloudbase){
+    await new Promise(function(res,rej){
+      const sc=document.createElement("script"); sc.src=CB_CDN; sc.async=true;
+      sc.onload=res; sc.onerror=function(){ rej(new Error("CloudBase SDK 加载失败：请检查网络，或确认 static.cloudbase.net 未被拦截")); };
+      (document.head||document.documentElement).appendChild(sc);
+    });
+  }
+  if(!window.cloudbase) throw new Error("CloudBase SDK 不可用");
+  if(!__cbApp || __cbEnvNow!==envId){ __cbApp=window.cloudbase.init({env:envId, region:cbRegion()}); __cbEnvNow=envId; __cbSigned=false; }
+  await __cbApp.auth().signInAnonymously();
+  __cbSigned=true;
 }
-async function sbGet(vaultId){
-  const url=syncCfg.supabaseUrl.replace(/\/$/,"")+"/rest/v1/sync_vault?vault_id=eq."+encodeURIComponent(vaultId);
-  const res=await fetch(url, {headers:sbHeaders()});
-  if(!res.ok) throw new Error("下载失败 HTTP "+res.status);
-  const arr=await res.json(); return (arr && arr.length)? arr[0] : null;
+async function cbUpsert(vid,payload,ts){
+  await ensureCB();
+  const r=await __cbApp.rdb().from("sync_vault").upsert({ vault_id:vid, payload:payload||"", updated_at:ts||new Date().toISOString() }, { onConflict:"vault_id" });
+  if(r && r.error) throw new Error("CloudBase 上传失败："+(r.error.message||JSON.stringify(r.error)));
+}
+async function cbGet(vid){
+  await ensureCB();
+  const r=await __cbApp.rdb().from("sync_vault").select("payload,updated_at").eq("vault_id", vid).limit(1);
+  if(r && r.error) throw new Error("CloudBase 下载失败："+(r.error.message||JSON.stringify(r.error)));
+  if(r && r.data && r.data.length) return { payload:r.data[0].payload, updated_at:r.data[0].updated_at };
+  return null;
+}
+/* 大包分块：单块 250KB，避免一次写入过大导致超时/失败 */
+const CB_CHUNK_SIZE=250000;
+async function cbUpsertChunked(vid,payload,ts){
+  if(!payload || payload.length<=CB_CHUNK_SIZE) return cbUpsert(vid,payload,ts);
+  const parts=[]; for(let i=0;i<payload.length;i+=CB_CHUNK_SIZE) parts.push(payload.slice(i,i+CB_CHUNK_SIZE));
+  const CONC=8;
+  for(let i=0;i<parts.length;i+=CONC){
+    const chunk=parts.slice(i,i+CONC);
+    await Promise.all(chunk.map(function(c,j){ return cbUpsert(vid+"#"+(i+j),c,ts); }));
+  }
+  return cbUpsert(vid, JSON.stringify({__chunked:true,n:parts.length}), ts);
+}
+async function cbGetChunked(vid){
+  const row=await cbGet(vid);
+  if(!row || typeof row.payload!=="string" || row.payload.indexOf('"__chunked"')<0) return row;
+  let meta=null; try{ const m=JSON.parse(row.payload); if(m&&m.__chunked&&typeof m.n==="number") meta=m; }catch(e){}
+  if(!meta) return row;
+  const n=meta.n, blocks=new Array(n), CONC=8;
+  for(let i=0;i<n;i+=CONC){
+    const idxs=[]; for(let k=i;k<Math.min(i+CONC,n);k++) idxs.push(k);
+    const arr=await Promise.all(idxs.map(function(k){ return cbGet(vid+"#"+k); }));
+    arr.forEach(function(b,k){ if(!b||typeof b.payload!=="string") throw new Error("云端分块不完整（缺第"+(idxs[k]+1)+"块），可能是上次上传未传完，稍后重试即可"); blocks[idxs[k]]=b.payload; });
+  }
+  row.payload=blocks.join(""); return row;
 }
 
 /* 聚合所有模块数据：v37.6 先从 localStorage 兜底读出各模块数据，
@@ -2711,23 +2757,23 @@ function setSyncStatus(t){ const el=$("syncStatus"); if(el) el.textContent=t; sy
 function refreshSyncDiag(){ try{ const d=$("syncDiag"); if(d) d.innerHTML=syncDiagHtml(); }catch(e){} }
 
 async function doUpload(pass){
-  if(!syncCfg.supabaseUrl||!syncCfg.anonKey){ alert("请先在设置里填写 Supabase 地址与 anon 密钥"); return; }
+  if(!syncCfg.cbEnv){ alert("请先在设置里填写 CloudBase 环境 ID（env-xxxx）"); return; }
   collectAll(async function(bundle){
     try{
-      const key=await deriveKey(pass); const vaultId=await sha256Hex(pass);
-      const row=await sbGet(vaultId);
+      const key=await deriveKey(pass); const vaultId="shell_"+await sha256Hex(pass);
+      const row=await cbGetChunked(vaultId);
       let toSave=bundle;
       if(row && row.payload){ try{ const cb=await decBundle(key,row.payload); if(cb && typeof cb==="object") toSave=mergeBundles(bundle, cb); }catch(_){} }
-      await sbUpsert(vaultId, await encBundle(key, toSave));
+      await cbUpsertChunked(vaultId, await encBundle(key, toSave));
       lastSyncTs=toSave.ts; setSyncStatus("已上传 ✓ "+new Date().toLocaleString());
     }catch(e){ setSyncStatus("上传失败："+e.message); alert("上传失败："+e.message); }
   });
 }
 async function doDownload(pass, opts){
-  if(!syncCfg.supabaseUrl||!syncCfg.anonKey){ alert("请先在设置里填写 Supabase 地址与 anon 密钥"); return; }
+  if(!syncCfg.cbEnv){ alert("请先在设置里填写 CloudBase 环境 ID（env-xxxx）"); return; }
   try{
-    const key=await deriveKey(pass); const vaultId=await sha256Hex(pass);
-    const row=await sbGet(vaultId);
+    const key=await deriveKey(pass); const vaultId="shell_"+await sha256Hex(pass);
+    const row=await cbGetChunked(vaultId);
     if(!row){ setSyncStatus("云端暂无数据（首次请先上传）"); return; }
     const bundle=await decBundle(key, row.payload);
     const kept=applyBundle(bundle, opts)||[];
@@ -2755,8 +2801,8 @@ function togglePassVis(id, btn){
   if(btn){ btn.textContent = show ? "🙈" : "👁"; btn.classList.toggle("on", show); btn.title = show ? "点一下隐藏密码" : "点一下显示密码"; }
 }
 function saveSyncCfgUI(){
-  syncCfg.supabaseUrl=$("sbUrl").value.trim();
-  syncCfg.anonKey=$("sbAnon").value.trim();
+  syncCfg.cbEnv=$("cbEnv").value.trim();
+  syncCfg.cbRegion=($("cbRegion").value.trim()||"ap-shanghai");
   syncCfg.rememberPass=$("rememberPass").checked;
   syncCfg.auto=$("autoSync").checked;
   const p=$("syncPass").value; if(syncCfg.rememberPass) syncCfg.pass=p; else syncCfg.pass="";
@@ -2766,17 +2812,17 @@ function saveSyncCfgUI(){
   refreshSyncDiag();
 }
 function resetSyncCfgUI(){
-  if(!confirm("确认重置 Supabase 同步配置？仅重置本机的 URL/密钥/密码，不影响滴答清单配置，也不会动云端数据。"+String.fromCharCode(10)+"清完后输入框会回到默认值。")) return;
-  syncCfg.supabaseUrl="https://ailxzvbbjybezfoaqsit.supabase.co";
-  syncCfg.anonKey="sb_publishable_AQbq_KfBipQcYrlX5UL3Qg_ZIB1P_nx";
+  if(!confirm("确认重置 CloudBase 同步配置？仅重置本机的环境 ID/地域/密码，不影响滴答清单配置，也不会动云端数据。"+String.fromCharCode(10)+"清完后输入框会回到默认值。")) return;
+  syncCfg.cbEnv="";
+  syncCfg.cbRegion="ap-shanghai";
   syncCfg.pass=""; syncCfg.rememberPass=false; syncCfg.auto=false;
   saveSyncCfg();
   location.reload();
 }
-// 导出同步连接配置（仅 Supabase URL/anonKey/开关，**不含同步密码明文**，避免加密密钥落盘）
+// 导出同步连接配置（仅 CloudBase 环境 ID/地域/开关，**不含同步密码明文**，避免加密密钥落盘）
 function exportSyncCfg(){
   const data={ _type:"rise-life-sync-cfg", v:1,
-    supabaseUrl:syncCfg.supabaseUrl||"", anonKey:syncCfg.anonKey||"",
+    cbEnv:syncCfg.cbEnv||"", cbRegion:syncCfg.cbRegion||"ap-shanghai",
     rememberPass:!!syncCfg.rememberPass, auto:!!syncCfg.auto,
     exportedAt:new Date().toISOString() };
   const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
@@ -2787,7 +2833,7 @@ function exportSyncCfg(){
   URL.revokeObjectURL(a.href);
   setSyncStatus("已导出连接配置（不含同步密码） ✓");
 }
-// 导入同步连接配置：填回 URL/anonKey/开关，刷新输入框；密码不导入，需手动输
+// 导入同步连接配置：填回 环境 ID/地域/开关，刷新输入框；密码不导入，需手动输
 function importSyncCfg(input){
   const f=input.files&&input.files[0]; if(!f) return;
   const r=new FileReader();
@@ -2795,13 +2841,13 @@ function importSyncCfg(input){
     try{
       const d=JSON.parse(r.result);
       if(d._type!=="rise-life-sync-cfg"){ alert("这不是工作台同步配置文件"); input.value=""; return; }
-      syncCfg.supabaseUrl=(d.supabaseUrl||"").trim();
-      syncCfg.anonKey=(d.anonKey||"").trim();
+      syncCfg.cbEnv=(d.cbEnv||"").trim();
+      syncCfg.cbRegion=((d.cbRegion||"").trim()||"ap-shanghai");
       syncCfg.rememberPass=!!d.rememberPass;
       syncCfg.auto=!!d.auto;
       saveSyncCfg();
-      if($("sbUrl")) $("sbUrl").value=syncCfg.supabaseUrl;
-      if($("sbAnon")) $("sbAnon").value=syncCfg.anonKey;
+      if($("cbEnv")) $("cbEnv").value=syncCfg.cbEnv;
+      if($("cbRegion")) $("cbRegion").value=syncCfg.cbRegion;
       if($("rememberPass")) $("rememberPass").checked=syncCfg.rememberPass;
       if($("autoSync")) $("autoSync").checked=syncCfg.auto;
       setSyncStatus("已导入连接配置 ✓ 同步密码仍需手动输入");
@@ -2822,12 +2868,12 @@ function rehydrateGlobals(){
   try{ TASK_BIG_BONUS      = load(TASK_BONUS_KEY,   TASK_BIG_BONUS); }catch(e){}
   try{ TASK_ALLDONE_BONUS  = load(TASK_ALLDONE_KEY, TASK_ALLDONE_BONUS); }catch(e){}
   try{
-    var scDef = {supabaseUrl:"https://ailxzvbbjybezfoaqsit.supabase.co", anonKey:"sb_publishable_AQbq_KfBipQcYrlX5UL3Qg_ZIB1P_nx", auto:false, rememberPass:false, pass:"", lastSyncText:""};
+    var scDef = {cbEnv:"", cbRegion:"ap-shanghai", auto:false, rememberPass:false, pass:"", lastSyncText:""};
     var sc = load(SYNC_KEY, null);
     if(sc && typeof sc === "object"){
       syncCfg = Object.assign({}, scDef, sc);
-      if(!syncCfg.supabaseUrl) syncCfg.supabaseUrl = scDef.supabaseUrl;
-      if(!syncCfg.anonKey)     syncCfg.anonKey     = scDef.anonKey;
+      if(!syncCfg.cbEnv) syncCfg.cbEnv = scDef.cbEnv;
+      if(!syncCfg.cbRegion)  syncCfg.cbRegion = scDef.cbRegion;
     }
   }catch(e){}
   try{
@@ -2897,8 +2943,8 @@ function scheduleCloudPush(){
       try{
         collectAll(async function(bundle){
           try{
-            const key=await deriveKey(syncCfg.pass); const vaultId=await sha256Hex(syncCfg.pass);
-            await sbUpsert(vaultId, await encBundle(key, bundle));
+            const key=await deriveKey(syncCfg.pass); const vaultId="shell_"+await sha256Hex(syncCfg.pass);
+            await cbUpsertChunked(vaultId, await encBundle(key, bundle));
             lastSyncTs=bundle.ts;
             setSyncStatus("本机改动已自动上传 ✓ "+new Date().toLocaleString());
           }catch(e){ /* 静默，下一轮 3 分钟例行同步会重试 */ }
@@ -2909,8 +2955,8 @@ function scheduleCloudPush(){
 }
 async function autoRound(pass){
   try{
-    const key=await deriveKey(pass); const vaultId=await sha256Hex(pass);
-    const row=await sbGet(vaultId);
+    const key=await deriveKey(pass); const vaultId="shell_"+await sha256Hex(pass);
+    const row=await cbGetChunked(vaultId);
     if(row && row.updated_at && new Date(row.updated_at).getTime()>lastSyncTs){
       const bundle=await decBundle(key, row.payload);
       const kept=applyBundle(bundle)||[];      /* v33：带时间戳保护，本机更新的部分不会被覆盖 */
@@ -2920,7 +2966,7 @@ async function autoRound(pass){
       /* 本机有更新的部分 → 继续往下推送，让云端跟上，不要 return */
     }
     collectAll(async function(bundle){
-      await sbUpsert(vaultId, await encBundle(key, bundle));
+      await cbUpsertChunked(vaultId, await encBundle(key, bundle));
       lastSyncTs=bundle.ts; setSyncStatus("自动同步(推送) ✓ "+new Date().toLocaleString());
     });
   }catch(e){ /* 静默，下一轮重试 */ }
