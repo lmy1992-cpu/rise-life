@@ -767,7 +767,7 @@ navCfg = navCfg.filter(function(x){ return x.key!=="duanpian"; });
 // 迁移：v36 起把 灵感收件箱/时间轴/心情日记/回收站 收进「每日待办」与「人生概览」，移除独立侧栏大模块
 navCfg = navCfg.filter(function(x){ return ["inbox","timeline","mood","recycle"].indexOf(x.key)<0; });
 
-const APP_VERSION = "v38.44";
+const APP_VERSION = "v38.45";
 // ===== 健壮存储层：localStorage 不可用时自动回退 IndexedDB（防止刷新丢数据）=====
 // 内部状态挂在 window 上，避免跨 <script> 块时 let 的暂时性死区（TDZ）报错
 // —— 存储层 v2：每条记录带写入时间戳，读取/合并时"取最新"，杜绝旧空值覆盖新数据 ——
@@ -2450,11 +2450,11 @@ const CB_CDN="https://static.cloudbase.net/cloudbase-js-sdk/2.27.1/cloudbase.ful
 function cbEnvId(){ return String((syncCfg && syncCfg.cbEnv) || "").trim(); }
 function cbRegion(){ return String((syncCfg && syncCfg.cbRegion) || "ap-shanghai").trim(); }
 function cbPkey(){ return String((syncCfg && syncCfg.cbPkey) || "").trim(); }
-let __cbApp=null, __cbSigned=false, __cbEnvNow="";
+let __cbApp=null, __cbSigned=false, __cbEnvNow="", __cbPkeyNow="";
 async function ensureCB(){
   const envId=cbEnvId();
   if(!envId) throw new Error("未配置 CloudBase 环境 ID：请到「设置 → ☁️ 云端同步」填写环境 ID（腾讯云控制台里那串 env-xxxx）");
-  if(__cbApp && __cbSigned && __cbEnvNow===envId) return;
+  if(__cbApp && __cbSigned && __cbEnvNow===envId && __cbPkeyNow===cbPkey()) return;
   if(!window.cloudbase){
     await new Promise(function(res,rej){
       const sc=document.createElement("script"); sc.src=CB_CDN; sc.async=true;
@@ -2466,7 +2466,7 @@ async function ensureCB(){
   const pkey=cbPkey();
   const _opts={ env: envId, region: cbRegion() };
   if(pkey) _opts.accessKey=pkey;
-  if(!__cbApp || __cbEnvNow!==envId){ __cbApp=window.cloudbase.init(_opts); __cbEnvNow=envId; __cbSigned=false; }
+  if(!__cbApp || __cbEnvNow!==envId || __cbPkeyNow!==pkey){ __cbApp=window.cloudbase.init(_opts); __cbEnvNow=envId; __cbPkeyNow=pkey; __cbSigned=false; }
   if(!pkey){ await __cbApp.auth().signInAnonymously(); }
   __cbSigned=true;
 }
