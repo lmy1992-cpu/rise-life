@@ -647,6 +647,8 @@ async function ensureCB(){
   __cbSigned=true;
 }
 async function cbToken(){
+  const pkey=cbPkey();
+  if(pkey) return pkey;
   await ensureCB();
   return await __cbApp.auth().getAccessToken();
 }
@@ -3797,7 +3799,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.45";
+  var APP_VERSION = "v38.46";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
