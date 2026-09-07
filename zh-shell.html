@@ -896,7 +896,7 @@ navCfg = navCfg.filter(function(x){ return ["inbox","timeline","mood","recycle"]
   }
 })();
 
-const APP_VERSION="v38.43";
+const APP_VERSION = "v38.44";
 // ===== 健壮存储层：localStorage 不可用时自动回退 IndexedDB（防止刷新丢数据）=====
 // 内部状态挂在 window 上，避免跨 <script> 块时 let 的暂时性死区（TDZ）报错
 // —— 存储层 v2：每条记录带写入时间戳，读取/合并时"取最新"，杜绝旧空值覆盖新数据 ——
@@ -3160,16 +3160,40 @@ async function ensureCB(){
   if(!pkey){ await __cbApp.auth().signInAnonymously(); }
   __cbSigned=true;
 }
-async function cbUpsert(vid,payload,ts){
+async function cbToken(){
   await ensureCB();
-  const r=await __cbApp.rdb().from("sync_vault").upsert({ vault_id:vid, payload:payload||"", updated_at:ts||new Date().toISOString() }, { onConflict:"vault_id" });
-  if(r && r.error) throw new Error("CloudBase 上传失败："+(r.error.message||JSON.stringify(r.error)));
+  return await __cbApp.auth().getAccessToken();
+}
+function cbBaseUrl(){
+  return "https://"+cbEnvId()+".api.tcloudbasegateway.com/v1/rdb/rest";
+}
+async function cbUpsert(vid,payload,ts){
+  const token=await cbToken();
+  const url=cbBaseUrl()+"/sync_vault?on_conflict=vault_id";
+  const body=JSON.stringify([{vault_id:vid, payload:payload||"", updated_at:ts||new Date().toISOString()}]);
+  const r=await fetch(url,{
+    method:"POST",
+    headers:{"Authorization":"Bearer "+token, "Content-Type":"application/json", "Accept":"application/json", "Prefer":"resolution=merge-duplicates"},
+    body:body
+  });
+  if(!r.ok){
+    const txt=await r.text();
+    throw new Error("CloudBase 上传失败："+r.status+" "+txt);
+  }
 }
 async function cbGet(vid){
-  await ensureCB();
-  const r=await __cbApp.rdb().from("sync_vault").select("payload,updated_at").eq("vault_id", vid).limit(1);
-  if(r && r.error) throw new Error("CloudBase 下载失败："+(r.error.message||JSON.stringify(r.error)));
-  if(r && r.data && r.data.length) return { payload:r.data[0].payload, updated_at:r.data[0].updated_at };
+  const token=await cbToken();
+  const url=cbBaseUrl()+"/sync_vault?select=payload,updated_at&vault_id=eq."+encodeURIComponent(vid)+"&limit=1";
+  const r=await fetch(url,{
+    method:"GET",
+    headers:{"Authorization":"Bearer "+token, "Accept":"application/json"}
+  });
+  if(!r.ok){
+    const txt=await r.text();
+    throw new Error("CloudBase 下载失败："+r.status+" "+txt);
+  }
+  const data=await r.json();
+  if(data && data.length) return { payload:data[0].payload, updated_at:data[0].updated_at };
   return null;
 }
 /* 大包分块：单块 250KB，避免一次写入过大导致超时/失败 */
