@@ -121,7 +121,7 @@
   }
   .card:hover{transform:translateY(-2px); border-color:var(--brand2)}
 .card{position:relative}
-  .pin-btn{position:absolute; top:8px; right:8px; z-index:3; border:none; cursor:pointer; background:var(--soft); color:var(--sub); border-radius:20px; padding:3px 10px; font-size:12px; line-height:1.4}
+  .pin-btn{border:none; cursor:pointer; background:var(--soft); color:var(--sub); border-radius:20px; padding:2px 9px; font-size:12px; line-height:1.4}
   .pin-btn.on{background:var(--brand); color:#fff}
   .reader-related{margin:6px 0 2px; font-size:13px}
   .rel-row{display:flex; align-items:center; flex-wrap:wrap; gap:6px}
@@ -1932,7 +1932,7 @@ function renderExamples(){
       '<div class="meta">'+tags+(aiHasContent(e.ai)?'<span class="ai-badge">🤖 已分析</span>':"")+'<span>'+esc(e.fileName||"")+'</span><span class="ctime">添加 '+fmtDate(e.createdAt)+'</span></div>';
     card.onclick=()=>openEditor(e.id);
     const pinBtn=document.createElement("button"); pinBtn.className="pin-btn"+(e.pinned?" on":""); pinBtn.textContent=e.pinned?"📌 取消置顶":"📌 置顶"; pinBtn.title="置顶到例文列表最前"; pinBtn.onclick=(ev)=>{ ev.stopPropagation(); e.pinned=!e.pinned; save(); renderExamples(); };
-    card.appendChild(pinBtn);
+    const _metaEl=card.querySelector(".meta"); if(_metaEl){ const _ct=card.querySelector(".ctime"); if(_ct) _metaEl.insertBefore(pinBtn,_ct); else _metaEl.appendChild(pinBtn); } else { card.appendChild(pinBtn); }
     g.appendChild(card);
   });
   if(list.length>shown.length){
@@ -1999,8 +1999,10 @@ $("#btnRdClose").onclick=()=>$("#maskEdit").classList.remove("on");
     if(!ex){ box.innerHTML=""; return; }
     if(!Array.isArray(ex.related)) ex.related=[];
     let html='<div class="rel-row"><span class="rel-label">🔗 关联文档</span>';
-    if(ex.related.length){
-      html+=ex.related.map(function(rid){
+    let relIds=(ex.related||[]).slice();
+    state.examples.forEach(function(x){ if(x.id!==ex.id && Array.isArray(x.related) && x.related.indexOf(ex.id)>=0 && relIds.indexOf(x.id)<0) relIds.push(x.id); });
+    if(relIds.length){
+      html+=relIds.map(function(rid){
         const r=state.examples.find(function(x){return x.id===rid;});
         if(!r) return "";
         return '<span class="rel-chip" data-id="'+rid+'">'+esc(r.title||"未命名")+'<button class="rel-x" data-id="'+rid+'" title="取消关联">×</button></span>';
@@ -2019,7 +2021,9 @@ $("#btnRdClose").onclick=()=>$("#maskEdit").classList.remove("on");
       if(!title){ toast("请输入要关联的例文标题"); return; }
       const target=state.examples.find(function(x){return x.id!==ex.id && (x.title||"").trim()===title;});
       if(!target){ toast("没找到标题为「"+title+"」的其他例文"); return; }
+      const _rev=(Array.isArray(target.related) && target.related.indexOf(ex.id)>=0);
       if(ex.related.indexOf(target.id)>=0){ toast("已关联该篇"); }
+      else if(_rev){ toast("已关联该篇（对方已关联你）"); }
       else { ex.related.push(target.id); save(); }
       document.getElementById("rdRelPick").style.display="none"; inp.value="";
       renderRelated(); renderReadingView(); renderExamples();
@@ -2029,7 +2033,7 @@ $("#btnRdClose").onclick=()=>$("#maskEdit").classList.remove("on");
       ch.onclick=function(ev){ if(ev.target.classList.contains("rel-x")) return; openEditor(id); };
     });
     Array.prototype.forEach.call(box.querySelectorAll(".rel-x"), function(x){
-      x.onclick=function(ev){ ev.stopPropagation(); const id=x.getAttribute("data-id"); ex.related=ex.related.filter(function(r){return r!==id;}); save(); renderRelated(); renderReadingView(); renderExamples(); };
+      x.onclick=function(ev){ ev.stopPropagation(); const id=x.getAttribute("data-id"); ex.related=(ex.related||[]).filter(function(r){return r!==id;}); const _oth=state.examples.find(function(y){return y.id===id;}); if(_oth && Array.isArray(_oth.related)) _oth.related=_oth.related.filter(function(r){return r!==ex.id;}); save(); renderRelated(); renderReadingView(); renderExamples(); };
     });
   }
   function fillRelOptions(){
@@ -3377,7 +3381,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.55";
+  var APP_VERSION = "v38.56";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
