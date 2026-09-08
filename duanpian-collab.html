@@ -1945,6 +1945,7 @@ async function load(){
     }catch(e){
       // 网络/云端失败：读本地兜底（IndexedDB 全量优先，localStorage 瘦身兜底），但不谎报成功——
       // 返回 false 表示「当前显示的是本地内容」，调用方据此诚实提示并安排自动重试
+      try{ _lastSyncError=(e&&e.message)?String(e.message).slice(0,120):String(e); }catch(_){}
       let cached=null;
       try{ cached=await idbGet(IDB_KEY); }catch(e){}
       if(cached && typeof cached==='object'){
@@ -3706,7 +3707,11 @@ function startLoadRetry(){
     try{
       const ok=await load();
       if(ok!==false){ stopLoadRetry(); enterCollabUI(); toast("云端已连接，已更新到最新内容"); }
-    }catch(e){ /* 仍失败：继续等下一轮自动重试 */ }
+      else { setSyncStatus("本地内容 · 云端未连接，自动重试中…", false, _lastSyncError||"网络不可达，正在每 10 秒自动重试"); }
+    }catch(e){
+      try{ _lastSyncError=(e&&e.message)?String(e.message).slice(0,120):String(e); }catch(_){}
+      setSyncStatus("本地内容 · 云端未连接，自动重试中…", false, _lastSyncError||"正在每 10 秒自动重试");
+    }
   },10000);
 }
 function collabStartPoll(){ if(_collabTimer) clearInterval(_collabTimer); _collabTimer=setInterval(collabPoll,20000); }
@@ -3934,7 +3939,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.56";
+  var APP_VERSION = "v38.57";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
