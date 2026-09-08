@@ -1975,8 +1975,8 @@ function renderReadingView(){
   const ce=$("#rdContent");
   if(body){ ce.textContent=body; ce.classList.remove("empty"); }
   else { ce.textContent="（无正文预览）"; ce.classList.add("empty"); }
-}
   renderRelated();
+}
 function showReaderView(which){
   $("#rdView").style.display = which==="read" ? "" : "none";
   $("#rdEditContent").style.display = which==="content" ? "" : "none";
@@ -1996,8 +1996,8 @@ $("#btnRdClose").onclick=()=>$("#maskEdit").classList.remove("on");
     const badge=document.getElementById("rdSelCount"); if(!badge) return;
     const sel=window.getSelection();
     if(!sel || sel.isCollapsed){ badge.style.display="none"; return; }
-    let node=sel.anchorNode; if(!node || node.nodeType!==3){ badge.style.display="none"; return; }
-    const rc=document.getElementById("rdContent"); if(!rc || !rc.contains(node)){ badge.style.display="none"; return; }
+    let rng=null; try{ rng=sel.getRangeAt(0); }catch(e){}
+    const rc=document.getElementById("rdContent"); if(!rng || !rc || !rc.contains(rng.commonAncestorContainer)){ badge.style.display="none"; return; }
     const txt=sel.toString(); const n=txt.replace(/\s/g,"").length;
     if(!n){ badge.style.display="none"; return; }
     badge.textContent="已选 "+n+" 字"; badge.style.display="block";
@@ -3439,7 +3439,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.54";
+  var APP_VERSION = "v38.55";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
