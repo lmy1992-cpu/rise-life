@@ -1264,22 +1264,23 @@ const CB_CHUNK_SIZE=250000;
 async function cbUpsertChunked(vid,payload,ts){
   if(!payload || payload.length<=CB_CHUNK_SIZE) return cbUpsert(vid,payload,ts);
   const parts=[]; for(let i=0;i<payload.length;i+=CB_CHUNK_SIZE) parts.push(payload.slice(i,i+CB_CHUNK_SIZE));
+  const epoch=String(Date.now()); // v38.59：块键带 epoch，杜绝旧块混入
   const CONC=8;
   for(let i=0;i<parts.length;i+=CONC){
     const chunk=parts.slice(i,i+CONC);
-    await Promise.all(chunk.map(function(c,j){ return cbUpsert(vid+"#"+(i+j),c,ts); }));
+    await Promise.all(chunk.map(function(c,j){ return cbUpsert(vid+"#"+epoch+"#"+(i+j),c,ts); }));
   }
-  return cbUpsert(vid, JSON.stringify({__chunked:true,n:parts.length}), ts);
+  return cbUpsert(vid, JSON.stringify({__chunked:true,n:parts.length,epoch:epoch}), ts);
 }
 async function cbGetChunked(vid){
   const row=await cbGet(vid);
   if(!row || typeof row.payload!=="string" || row.payload.indexOf('"__chunked"')<0) return row;
   let meta=null; try{ const m=JSON.parse(row.payload); if(m&&m.__chunked&&typeof m.n==="number") meta=m; }catch(e){}
   if(!meta) return row;
-  const n=meta.n, blocks=new Array(n), CONC=8;
+  const n=meta.n, epoch=(meta.epoch!=null)?String(meta.epoch):null, blocks=new Array(n), CONC=8;
   for(let i=0;i<n;i+=CONC){
     const idxs=[]; for(let k=i;k<Math.min(i+CONC,n);k++) idxs.push(k);
-    const arr=await Promise.all(idxs.map(function(k){ return cbGet(vid+"#"+(k)); }));
+    const arr=await Promise.all(idxs.map(function(k){ return cbGet(vid+(epoch!=null?("#"+epoch+"#"+k):("#"+k))); }));
     arr.forEach(function(b,k){ if(!b||typeof b.payload!=="string") throw new Error("云端分块不完整（缺第"+(idxs[k]+1)+"块），可能正在重新上传，稍后重试"); blocks[idxs[k]]=b.payload; });
   }
   row.payload=blocks.join(""); return row;
@@ -3381,7 +3382,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.58";
+  var APP_VERSION = "v38.59";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
