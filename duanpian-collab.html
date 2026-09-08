@@ -622,6 +622,7 @@ async function sbFetch(url,opts){
 }
 async function sbUpsert(vid,payload,ts){ const url=SB_URL.replace(/\/$/,"")+"/rest/v1/sync_vault"; const r=await sbFetch(url,{method:"POST",headers:Object.assign(sbHeaders(),{"Prefer":"resolution=merge-duplicates"}),body:JSON.stringify({vault_id:vid,payload,updated_at:ts||new Date().toISOString()})}); if(!r.ok){ let b=""; try{b=await r.text();}catch(e){} throw new Error("上传失败 HTTP "+r.status+(b?("｜"+b.slice(0,160)):"")); } }
 async function sbGet(vid){ const url=SB_URL.replace(/\/$/,"")+"/rest/v1/sync_vault?vault_id=eq."+encodeURIComponent(vid); const r=await sbFetch(url,{headers:sbHeaders()}); if(!r.ok){ let b=""; try{b=await r.text();}catch(e){} throw new Error("下载失败 HTTP "+r.status+(b?("｜"+b.slice(0,160)):"")); } const a=await r.json(); return (a&&a.length)?a[0]:null; }
+async function sbDelete(vid){ const url=SB_URL.replace(/\/$/,"")+"/rest/v1/sync_vault?vault_id=eq."+encodeURIComponent(vid); const r=await sbFetch(url,{method:"DELETE",headers:sbHeaders()}); if(!r.ok){ let b=""; try{b=await r.text();}catch(e){} throw new Error("Supabase 删除失败 HTTP "+r.status+(b?("｜"+b.slice(0,160)):"")); } }
 // ---- 分块上传/下载：整包超大的数据拆成小块逐条写，绕开 Supabase 数据库 statement timeout ----
 // 上传：<=250KB 的包仍用原单行格式（旧设备可读）；超过则切成多块，先传块、最后写主行元数据，中途失败云端保持完整旧数据
 const SB_CHUNK_SIZE=250000;
@@ -629,12 +630,22 @@ async function sbUpsertChunked(vid,payload,ts){
   if(!payload || payload.length<=SB_CHUNK_SIZE) return sbUpsert(vid,payload,ts);
   const parts=[]; for(let i=0;i<payload.length;i+=SB_CHUNK_SIZE) parts.push(payload.slice(i,i+SB_CHUNK_SIZE));
   const epoch=String(Date.now()); // v38.59：块键带 epoch，杜绝旧块混入
+  // v38.60：读旧主行拿 prevEpoch，上传后清理旧块，防止无限膨胀
+  let prevEpoch=null, prevN=0;
+  try{ const old=await sbGet(vid); if(old&&old.payload){ const m=JSON.parse(old.payload); if(m&&m.epoch){ prevEpoch=String(m.epoch); prevN=(typeof m.n==="number")?m.n:parts.length; } } }catch(e){}
   const CONC=8;
   for(let i=0;i<parts.length;i+=CONC){
     const chunk=parts.slice(i,i+CONC);
     await Promise.all(chunk.map(function(c,j){ return sbUpsert(vid+"#"+epoch+"#"+(i+j),c,ts); }));
   }
-  return sbUpsert(vid, JSON.stringify({__chunked:true,n:parts.length,epoch:epoch}), ts);
+  await sbUpsert(vid, JSON.stringify({__chunked:true,n:parts.length,epoch:epoch}), ts);
+  if(prevEpoch && prevEpoch!==epoch){
+    const cnt=Math.max(prevN, parts.length);
+    for(let i=0;i<cnt;i+=CONC){
+      const idxs=[]; for(let k=i;k<Math.min(i+CONC,cnt);k++) idxs.push(k);
+      await Promise.all(idxs.map(function(k){ return sbDelete(vid+"#"+prevEpoch+"#"+k).catch(function(){}); }));
+    }
+  }
 }
 // 下载：主行是分块元数据则收集所有块拼接还原；否则按旧格式原样返回
 async function sbGetChunked(vid){
@@ -714,16 +725,32 @@ async function cbGet(vid){
   if(data && data.length) return { payload:data[0].payload, updated_at:data[0].updated_at };
   return null;
 }
+async function cbDelete(vid){
+  const token=await cbToken();
+  const url=cbBaseUrl()+"/sync_vault?vault_id=eq."+encodeURIComponent(vid);
+  const r=await fetch(url,{method:"DELETE",headers:{"Authorization":"Bearer "+token,"Accept":"application/json"}});
+  if(!r.ok){ const txt=await r.text(); throw new Error("CloudBase 删除失败："+r.status+" "+txt); }
+}
 async function cbUpsertChunked(vid,payload,ts){
   if(!payload || payload.length<=SB_CHUNK_SIZE) return cbUpsert(vid,payload,ts);
   const parts=[]; for(let i=0;i<payload.length;i+=SB_CHUNK_SIZE) parts.push(payload.slice(i,i+SB_CHUNK_SIZE));
   const epoch=String(Date.now()); // v38.59：每次上传唯一版本号，块键带 epoch，旧块永远不会被误读为当前块
+  // v38.60：先读旧主行拿上一个 epoch/块数，上传后清理旧块，防止 sync_vault 无限膨胀
+  let prevEpoch=null, prevN=0;
+  try{ const old=await cbGet(vid); if(old&&old.payload){ const m=JSON.parse(old.payload); if(m&&m.epoch){ prevEpoch=String(m.epoch); prevN=(typeof m.n==="number")?m.n:parts.length; } } }catch(e){}
   const CONC=8;
   for(let i=0;i<parts.length;i+=CONC){
     const chunk=parts.slice(i,i+CONC);
     await Promise.all(chunk.map(function(c,j){ return cbUpsert(vid+"#"+epoch+"#"+(i+j),c,ts); }));
   }
-  return cbUpsert(vid, JSON.stringify({__chunked:true,n:parts.length,epoch:epoch}), ts);
+  await cbUpsert(vid, JSON.stringify({__chunked:true,n:parts.length,epoch:epoch}), ts);
+  if(prevEpoch && prevEpoch!==epoch){ // 尽力删除上一版块；失败仅留孤儿块，不影响正确性
+    const cnt=Math.max(prevN, parts.length);
+    for(let i=0;i<cnt;i+=CONC){
+      const idxs=[]; for(let k=i;k<Math.min(i+CONC,cnt);k++) idxs.push(k);
+      await Promise.all(idxs.map(function(k){ return cbDelete(vid+"#"+prevEpoch+"#"+k).catch(function(){}); }));
+    }
+  }
 }
 async function cbGetChunked(vid){
   const row=await cbGet(vid);
@@ -3953,7 +3980,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.59";
+  var APP_VERSION = "v38.60";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
