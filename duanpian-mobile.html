@@ -1260,17 +1260,33 @@ async function cbGet(vid){
   if(data && data.length) return { payload:data[0].payload, updated_at:data[0].updated_at };
   return null;
 }
+async function cbDelete(vid){
+  const token=await cbToken();
+  const url=cbBaseUrl()+"/sync_vault?vault_id=eq."+encodeURIComponent(vid);
+  const r=await fetch(url,{method:"DELETE",headers:{"Authorization":"Bearer "+token,"Accept":"application/json"}});
+  if(!r.ok){ const txt=await r.text(); throw new Error("CloudBase 删除失败："+r.status+" "+txt); }
+}
 const CB_CHUNK_SIZE=250000;
 async function cbUpsertChunked(vid,payload,ts){
   if(!payload || payload.length<=CB_CHUNK_SIZE) return cbUpsert(vid,payload,ts);
   const parts=[]; for(let i=0;i<payload.length;i+=CB_CHUNK_SIZE) parts.push(payload.slice(i,i+CB_CHUNK_SIZE));
   const epoch=String(Date.now()); // v38.59：块键带 epoch，杜绝旧块混入
+  // v38.60：读旧主行拿 prevEpoch，上传后清理旧块，防止无限膨胀
+  let prevEpoch=null, prevN=0;
+  try{ const old=await cbGet(vid); if(old&&old.payload){ const m=JSON.parse(old.payload); if(m&&m.epoch){ prevEpoch=String(m.epoch); prevN=(typeof m.n==="number")?m.n:parts.length; } } }catch(e){}
   const CONC=8;
   for(let i=0;i<parts.length;i+=CONC){
     const chunk=parts.slice(i,i+CONC);
     await Promise.all(chunk.map(function(c,j){ return cbUpsert(vid+"#"+epoch+"#"+(i+j),c,ts); }));
   }
-  return cbUpsert(vid, JSON.stringify({__chunked:true,n:parts.length,epoch:epoch}), ts);
+  await cbUpsert(vid, JSON.stringify({__chunked:true,n:parts.length,epoch:epoch}), ts);
+  if(prevEpoch && prevEpoch!==epoch){
+    const cnt=Math.max(prevN, parts.length);
+    for(let i=0;i<cnt;i+=CONC){
+      const idxs=[]; for(let k=i;k<Math.min(i+CONC,cnt);k++) idxs.push(k);
+      await Promise.all(idxs.map(function(k){ return cbDelete(vid+"#"+prevEpoch+"#"+k).catch(function(){}); }));
+    }
+  }
 }
 async function cbGetChunked(vid){
   const row=await cbGet(vid);
@@ -3382,7 +3398,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.59";
+  var APP_VERSION = "v38.60";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
