@@ -628,12 +628,13 @@ const SB_CHUNK_SIZE=250000;
 async function sbUpsertChunked(vid,payload,ts){
   if(!payload || payload.length<=SB_CHUNK_SIZE) return sbUpsert(vid,payload,ts);
   const parts=[]; for(let i=0;i<payload.length;i+=SB_CHUNK_SIZE) parts.push(payload.slice(i,i+SB_CHUNK_SIZE));
+  const epoch=String(Date.now()); // v38.59：块键带 epoch，杜绝旧块混入
   const CONC=8;
   for(let i=0;i<parts.length;i+=CONC){
     const chunk=parts.slice(i,i+CONC);
-    await Promise.all(chunk.map(function(c,j){ return sbUpsert(vid+"#"+(i+j),c,ts); }));
+    await Promise.all(chunk.map(function(c,j){ return sbUpsert(vid+"#"+epoch+"#"+(i+j),c,ts); }));
   }
-  return sbUpsert(vid, JSON.stringify({__chunked:true,n:parts.length}), ts);
+  return sbUpsert(vid, JSON.stringify({__chunked:true,n:parts.length,epoch:epoch}), ts);
 }
 // 下载：主行是分块元数据则收集所有块拼接还原；否则按旧格式原样返回
 async function sbGetChunked(vid){
@@ -641,10 +642,10 @@ async function sbGetChunked(vid){
   if(!row || typeof row.payload!=="string" || row.payload.indexOf('"__chunked"')<0) return row;
   let meta=null; try{ const m=JSON.parse(row.payload); if(m&&m.__chunked&&typeof m.n==="number") meta=m; }catch(e){}
   if(!meta) return row;
-  const n=meta.n, blocks=new Array(n), CONC=8;
+  const n=meta.n, epoch=(meta.epoch!=null)?String(meta.epoch):null, blocks=new Array(n), CONC=8;
   for(let i=0;i<n;i+=CONC){
     const idxs=[]; for(let k=i;k<Math.min(i+CONC,n);k++) idxs.push(k);
-    const arr=await Promise.all(idxs.map(function(k){ return sbGet(vid+"#"+(k)); }));
+    const arr=await Promise.all(idxs.map(function(k){ return sbGet(vid+(epoch!=null?("#"+epoch+"#"+k):("#"+k))); }));
     arr.forEach(function(b,k){ if(!b||typeof b.payload!=="string") throw new Error("云端分块不完整（缺第"+(idxs[k]+1)+"块），可能正在重新上传，稍后重试"); blocks[idxs[k]]=b.payload; });
   }
   row.payload=blocks.join("");
@@ -716,22 +717,23 @@ async function cbGet(vid){
 async function cbUpsertChunked(vid,payload,ts){
   if(!payload || payload.length<=SB_CHUNK_SIZE) return cbUpsert(vid,payload,ts);
   const parts=[]; for(let i=0;i<payload.length;i+=SB_CHUNK_SIZE) parts.push(payload.slice(i,i+SB_CHUNK_SIZE));
+  const epoch=String(Date.now()); // v38.59：每次上传唯一版本号，块键带 epoch，旧块永远不会被误读为当前块
   const CONC=8;
   for(let i=0;i<parts.length;i+=CONC){
     const chunk=parts.slice(i,i+CONC);
-    await Promise.all(chunk.map(function(c,j){ return cbUpsert(vid+"#"+(i+j),c,ts); }));
+    await Promise.all(chunk.map(function(c,j){ return cbUpsert(vid+"#"+epoch+"#"+(i+j),c,ts); }));
   }
-  return cbUpsert(vid, JSON.stringify({__chunked:true,n:parts.length}), ts);
+  return cbUpsert(vid, JSON.stringify({__chunked:true,n:parts.length,epoch:epoch}), ts);
 }
 async function cbGetChunked(vid){
   const row=await cbGet(vid);
   if(!row || typeof row.payload!=="string" || row.payload.indexOf('"__chunked"')<0) return row;
   let meta=null; try{ const m=JSON.parse(row.payload); if(m&&m.__chunked&&typeof m.n==="number") meta=m; }catch(e){}
   if(!meta) return row;
-  const n=meta.n, blocks=new Array(n), CONC=8;
+  const n=meta.n, epoch=(meta.epoch!=null)?String(meta.epoch):null, blocks=new Array(n), CONC=8;
   for(let i=0;i<n;i+=CONC){
     const idxs=[]; for(let k=i;k<Math.min(i+CONC,n);k++) idxs.push(k);
-    const arr=await Promise.all(idxs.map(function(k){ return cbGet(vid+"#"+(k)); }));
+    const arr=await Promise.all(idxs.map(function(k){ return cbGet(vid+(epoch!=null?("#"+epoch+"#"+k):("#"+k))); }));
     arr.forEach(function(b,k){ if(!b||typeof b.payload!=="string") throw new Error("云端分块不完整（缺第"+(idxs[k]+1)+"块），可能正在重新上传，稍后重试"); blocks[idxs[k]]=b.payload; });
   }
   row.payload=blocks.join(""); return row;
@@ -1748,6 +1750,7 @@ function _countShared(s){ // 只统计共享侧字段（poll 只拉共享行，�
 let _saveUploading=false; // 云端上传进行中标志：防止重试定时器与手动保存叠出并发请求互相踩
 let _savePending=false;   // 上传期间又有新改动：结束后自动补传，绝不漏
 let _lastSyncError="";    // 最后一次上传失败的简要原因（悬停状态条可见）
+let _cloudCorrupt=false;  // v38.59：云端分块解密失败（残留旧块混入）标志，触发本机干净重传自愈
 async function save(force=false){
   if(!state || typeof state !== 'object'){ state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; }
   // 手动强制同步：清掉可能卡死的标志、停止旧重试，立即再试一次
@@ -1870,6 +1873,7 @@ async function load(){
   if(_loadPromise) return _loadPromise;
   _loadPromise=(async function(){
     try{
+      _cloudCorrupt=false; // v38.59：每轮拉取先清标志
       const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
       const sRow=await syncGetChunked(sId);
       collabSharedUpdatedAt = (sRow && sRow.updated_at) ? sRow.updated_at : null;
@@ -1877,6 +1881,7 @@ async function load(){
       if(sRow){
         try{ shared=await decBundle(await deriveKey(collabSharedPwd), sRow.payload); }
         catch(e){
+          _cloudCorrupt=true; // v38.59：分块损坏（残留旧块混入）标记，外层 catch 触发本机干净重传自愈
           throw new Error("云端数据解密失败——当前协作口令和云端这包数据对不上（口令不一致或数据损坏）。请点状态条「退出」后重新输入口令登录；不行就找对方核对约定口令");
         }
       }
@@ -1955,7 +1960,10 @@ async function load(){
       let cached=null;
       try{ cached=await idbGet(IDB_KEY); }catch(e){}
       if(cached && typeof cached==='object'){
-        try{ state=cached; migrate(); return false; }catch(_){}
+        try{ state=cached; migrate();
+          // v38.59：云端分块损坏（残留旧块混入）导致解密失败 → 用本机真实内容做一次干净带版本号的上传，下一轮自动重试即恢复
+          if(_cloudCorrupt){ try{ save(); }catch(_){} }
+          return false; }catch(_){}
       }
       try{ cached=localStorage.getItem("dp_collab_cache"); }catch(e){}
       if(cached){
@@ -3945,7 +3953,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.58";
+  var APP_VERSION = "v38.59";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
