@@ -1873,7 +1873,13 @@ async function load(){
       const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
       const sRow=await syncGetChunked(sId);
       collabSharedUpdatedAt = (sRow && sRow.updated_at) ? sRow.updated_at : null;
-      const shared = sRow ? await decBundle(await deriveKey(collabSharedPwd), sRow.payload) : null;
+      let shared=null;
+      if(sRow){
+        try{ shared=await decBundle(await deriveKey(collabSharedPwd), sRow.payload); }
+        catch(e){
+          throw new Error("云端数据解密失败——当前协作口令和云端这包数据对不上（口令不一致或数据损坏）。请点状态条「退出」后重新输入口令登录；不行就找对方核对约定口令");
+        }
+      }
       // v38.35：一次性迁移旧「私有保险箱」内容——本机若还记得旧私有口令，读出来并入共享包，之后只走单一共享包
       let priv=null;
       try{
@@ -3939,7 +3945,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.57";
+  var APP_VERSION = "v38.58";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
