@@ -2451,7 +2451,7 @@ function processUploadQueue(){
   if(!uploadQueue.length){ const t=uploadTotal; uploadTotal=0; closeUpload(); if(t) toast("已收录 "+t+" 篇"+(uploadTarget==="tutorials"?"教程":"例文")); return; }
   const f=uploadQueue[0]; const remaining=uploadQueue.length;
   parseFile(f).then(parsed=>{ openUploadModal(f.name, parsed, remaining, uploadTotal); })
-    .catch(()=>{ uploadQueue.shift(); processUploadQueue(); });
+    .catch(err=>{ toast("⚠️ 已跳过「"+f.name+"」："+(err||"解析失败")); uploadQueue.shift(); processUploadQueue(); });
 }
 function decodeTxt(buf){
   const bytes=new Uint8Array(buf);
@@ -2463,20 +2463,28 @@ function decodeTxt(buf){
 }
 async function parseFile(f){
   const buf=await f.arrayBuffer();
-  let text="";
   const isDocx=f.name.toLowerCase().endsWith(".docx");
+  const isTxt=f.name.toLowerCase().endsWith(".txt");
+  const fileNameNoExt=(f.name||"").replace(/\.[^.]+$/,"").trim();
+  let text="", tutHtml="", warn="";
   if(isDocx){
-    if(typeof mammoth==="undefined"){ toast("Word 解析库未加载，请联网后重试"); return Promise.reject(); }
-    let tutHtml="";
-  if(uploadTarget==="tutorials"){ const conv=await mammothToHeadingText(buf); text=conv.text; tutHtml=conv.html; } // 教程：保留 Word 原格式 HTML
-    else { const r=await mammoth.extractRawText({arrayBuffer:buf}); text=r.value; }
-  } else if(f.name.toLowerCase().endsWith(".txt")){ text=decodeTxt(buf); }
-  else { toast("仅支持 .docx / .txt"); return Promise.reject(); }
+    if(typeof mammoth==="undefined"){
+      // v38.62：解析库偶发未加载（网络波动）不再静默丢弃——降级打开编辑框让用户手动粘贴
+      warn="⚠️ Word 解析库未加载（可能网络波动），已为你打开编辑框——请在下方手动粘贴正文后点确认收录；或刷新页面重试。";
+    } else {
+      try{
+        if(uploadTarget==="tutorials"){ const conv=await mammothToHeadingText(buf); text=conv.text; tutHtml=conv.html; } // 教程：保留 Word 原格式 HTML
+        else { const r=await mammoth.extractRawText({arrayBuffer:buf}); text=r.value; }
+      }catch(e){ warn="⚠️ Word 解析失败："+(e&&e.message?String(e.message):e)+"，已打开编辑框，请手动粘贴正文。"; }
+    }
+  } else if(isTxt){ text=decodeTxt(buf); }
+  else { return Promise.reject("仅支持 .docx / .txt 格式"); }
   const parsed=parseText(text);
   parsed.fileData=bufToB64(buf);
   parsed.fileType=f.type||(isDocx?"application/vnd.openxmlformats-officedocument.wordprocessingml.document":"text/plain");
-  parsed.title=((f.name||"").replace(/\.[^.]+$/,"").trim())||parsed.title||"未命名"; // 文章名取文件名（去扩展名），而非正文第一行
+  parsed.title=fileNameNoExt||parsed.title||"未命名"; // 文章名取文件名（去扩展名），而非正文第一行
   if(tutHtml) parsed.htmlContent=tutHtml;
+  if(warn) parsed._warn=warn;
   return parsed;
 }
 // 教程：Word → HTML（保留原格式），同时提取纯文本（用于摘要/编辑）
@@ -2510,7 +2518,8 @@ function openUploadModal(fileName, parsed, remaining, total){
   $("#upTagField").style.display = isTut ? "none" : "";
   $("#upTutCatWrap").style.display = isTut ? "" : "none";
   const dup=state[uploadTarget].find(e=>e.fileName===fileName);
-  let warnHtml = parsed.markerFound ? "" : '<div class="warn">未检测到「1. / 1、 / 1）」等编号，已把整篇作为正文。如只需部分，可在确认后点「编辑原文」裁剪。</div>';
+  let warnHtml = parsed._warn ? '<div class="warn">'+esc(parsed._warn)+'</div>' : "";
+  if(!parsed.markerFound) warnHtml += '<div class="warn">未检测到「1. / 1、 / 1）」等编号，已把整篇作为正文。如只需部分，可在确认后点「编辑原文」裁剪。</div>';
   if(dup){ warnHtml = '<div class="warn">⚠️ 已存在同名'+(isTut?"教程":"例文")+'「'+esc(dup.title)+'」（'+fmtDate(dup.createdAt)+'）。确认收录将保留两篇，不会覆盖旧文。</div>' + warnHtml; }
   $("#upWarn").innerHTML = warnHtml;
   if(isTut){ $("#upTutCat").value=pendingUpload.category||"短篇教程"; }
@@ -3460,7 +3469,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.61";
+  var APP_VERSION = "v38.62";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
