@@ -1785,17 +1785,19 @@ async function save(force=false){
     _saveUploading=false;
     if(_syncRetryTimer){ clearInterval(_syncRetryTimer); _syncRetryTimer=null; }
   }
+  // 标记本机有改动待上传：移到落盘前，防止并发拉取（collabPoll/load retry）在 persistLocal 期间把本机新内容覆盖掉
+  setPendingLocal(true);
+  if(_saveUploading){ _savePending=true; await persistLocal(); return; } // 上一轮上传还在跑，先落盘，结束后自动补传
+  _saveUploading=true;
   // 本地落盘不依赖登录：先保证本地有最新副本（IndexedDB 全量 + localStorage 瘦身），刷新绝不回退
   try{ await persistLocal(); }catch(e){}
-  if(!collabSharedPwd) return; // v38.35 单口令：未登录不推云端
+  if(!collabSharedPwd){ _saveUploading=false; setPendingLocal(false); return; } // v38.35 单口令：未登录不推云端
   // 安全护栏：还没成功读过云端，且当前数据为空，禁止上传覆盖云端（防止首次联网失败时把空数据冲掉）
   if(!_collabLoadedFromCloud && isStateEmpty()){
+    _saveUploading=false; setPendingLocal(false);
     setSyncStatus("本地为空，未上传（等待云端数据）", false);
     return;
   }
-  setPendingLocal(true); // 标记本机有改动待上传：本窗口 poll/load 见此会保护本地内容，不被云端旧包覆盖
-  if(_saveUploading){ _savePending=true; return; } // 上一轮上传还在跑（Supabase 慢），这轮先落盘，上传结束后自动补传最新版
-  _saveUploading=true;
   const ts=new Date().toISOString();
   // AI 密钥独立存 localStorage（体积小）；全量数据已由 persistLocal 落 IndexedDB，这里不再写 localStorage
   try{ await persistLocalAiCfg(state.aiCfg); }catch(e){}
@@ -2845,7 +2847,7 @@ function openUploadModal(fileName, parsed, remaining, total){
   $("#maskUpload").classList.add("on");
 }
 function closeUpload(){ $("#maskUpload").classList.remove("on"); pendingUpload=null; }
-function saveOneUpload(){
+async function saveOneUpload(){
   if(uploadTarget==="tutorials"){ tutPage=1; } else { exPage=1; }
   const id=uid();
   const title=$("#upTitle").value.trim()||"未命名";
@@ -2853,40 +2855,40 @@ function saveOneUpload(){
   const item={id,title,fileName:pendingUpload.fileName,fileData:pendingUpload.fileData,fileType:pendingUpload.fileType,createdAt:Date.now(),content:bodyText};
   if(uploadTarget==="tutorials") item.category=($("#upTutCat").value)||"其他"; else item.tags=[...pendingUpload.tags];
   state[uploadTarget].push(item);
-  save();
+  await save();
   if(uploadTarget==="tutorials"){ renderTutorials(); } else { renderExamples(); updateFilterBtns(); }
   pendingUpload=null;
 }
-function saveUploadRaw(fileName, parsed, tags, category){
+async function saveUploadRaw(fileName, parsed, tags, category){
   const id=uid();
   const title=parsed.title||"未命名";
   const item={id,title,fileName,tags:[...(tags||[])],createdAt:Date.now(),content:parsed.body,fileData:parsed.fileData,fileType:parsed.fileType};
   if(category) item.category=category;
   state[uploadTarget].push(item);
-  save();
+  await save();
 }
 $("#btnUploadCancel").onclick=()=>{ uploadQueue=[]; uploadTotal=0; closeUpload(); };
 $("#btnUploadSkip").onclick=()=>{ uploadQueue.shift(); processUploadQueue(); };
-$("#btnUploadConfirm").onclick=()=>{
+$("#btnUploadConfirm").onclick=async ()=>{
   if(!pendingUpload) return;
   const reuse = ($("#upBatchWrap").style.display!=="none") && $("#upBatchSame").checked;
   if(reuse){
     const tags=[...pendingUpload.tags];
     const cat=(uploadTarget==="tutorials")?($("#upTutCat").value||"其他"):undefined;
-    saveOneUpload();
+    await saveOneUpload();
     const rest=uploadQueue.slice(1);
     uploadQueue=[]; closeUpload();
     let done=0;
     (async()=>{
       for(const f of rest){
-        try{ const parsed=await parseFile(f); saveUploadRaw(f.name, parsed, tags, cat); done++; }catch(e){}
+        try{ const parsed=await parseFile(f); await saveUploadRaw(f.name, parsed, tags, cat); done++; }catch(e){}
       }
       toast("已收录 "+(done+1)+" 篇（含本篇）");
       if(uploadTarget==="tutorials"){ renderTutorials(); } else { renderExamples(); updateFilterBtns(); }
     })();
     return;
   }
-  saveOneUpload();
+  await saveOneUpload();
   uploadQueue.shift(); processUploadQueue();
 };
 
@@ -3745,6 +3747,7 @@ function startLoadRetry(){
   if(_loadRetryTimer) return;
   _loadRetryTimer=setInterval(async function(){
     if(!collabSharedPwd){ stopLoadRetry(); return; }
+    if(_saveUploading || _savePending) return; // 正在保存，不拉取，避免覆盖本机新内容
     try{
       const ok=await load();
       if(ok!==false){ stopLoadRetry(); enterCollabUI(); toast("云端已连接，已更新到最新内容"); }
@@ -3768,7 +3771,14 @@ async function collabPoll(){
       // v38.32：不再用「条数比本地少就反推」——那会把正常删除误判成回退攻击、回滚其它设备的删除。
       // 云端 updated_at 前进 = 其它设备有新写入（增/删/改），直接应用；本地未上传改动已由 _pendingLocal 在上方挡掉。
       if(shared){
-        Object.assign(state, shared);
+        // v38.61：不再 Object.assign 整体替换数组，改用按 id 合并：保留本机新增，吸收云端新增，防止并发拉取覆盖未上传内容
+        _DATA_KEYS.forEach(function(k){
+          if(Array.isArray(shared[k]) && shared[k].length){
+            state[k]=_unionById(state[k]||[], shared[k]);
+          }
+        });
+        if(shared.aiFields && shared.aiFields.length) state.aiFields=shared.aiFields;
+        if(shared.nav && shared.nav.length) state.nav=shared.nav;
         // v38.33：云端共享包不含 AI key，直接 assign 会把本机 key 抹空 → 补空找回（不覆盖云端非空字段）
         try{ await ensureAiCfg(); }catch(e){}
       }
@@ -3980,7 +3990,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.60";
+  var APP_VERSION = "v38.61";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
