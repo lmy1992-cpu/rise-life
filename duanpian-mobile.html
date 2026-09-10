@@ -2508,7 +2508,7 @@ function openUploadModal(fileName, parsed, remaining, total){
   $("#maskUpload").classList.add("on");
 }
 function closeUpload(){ $("#maskUpload").classList.remove("on"); pendingUpload=null; }
-function saveOneUpload(){
+async function saveOneUpload(){
   if(uploadTarget==="tutorials"){ tutPage=1; } else { exPage=1; }
   const id=uid();
   const title=$("#upTitle").value.trim()||"未命名";
@@ -2516,40 +2516,40 @@ function saveOneUpload(){
   const item={id,title,fileName:pendingUpload.fileName,fileData:pendingUpload.fileData,fileType:pendingUpload.fileType,createdAt:Date.now(),content:bodyText};
   if(uploadTarget==="tutorials") item.category=($("#upTutCat").value)||"其他"; else item.tags=[...pendingUpload.tags];
   state[uploadTarget].push(item);
-  save();
+  await save();
   if(uploadTarget==="tutorials"){ renderTutorials(); } else { renderExamples(); updateFilterBtns(); }
   pendingUpload=null;
 }
-function saveUploadRaw(fileName, parsed, tags, category){
+async function saveUploadRaw(fileName, parsed, tags, category){
   const id=uid();
   const title=parsed.title||"未命名";
   const item={id,title,fileName,tags:[...(tags||[])],createdAt:Date.now(),content:parsed.body,fileData:parsed.fileData,fileType:parsed.fileType};
   if(category) item.category=category;
   state[uploadTarget].push(item);
-  save();
+  await save();
 }
 $("#btnUploadCancel").onclick=()=>{ uploadQueue=[]; uploadTotal=0; closeUpload(); };
 $("#btnUploadSkip").onclick=()=>{ uploadQueue.shift(); processUploadQueue(); };
-$("#btnUploadConfirm").onclick=()=>{
+$("#btnUploadConfirm").onclick=async ()=>{
   if(!pendingUpload) return;
   const reuse = ($("#upBatchWrap").style.display!=="none") && $("#upBatchSame").checked;
   if(reuse){
     const tags=[...pendingUpload.tags];
     const cat=(uploadTarget==="tutorials")?($("#upTutCat").value||"其他"):undefined;
-    saveOneUpload();
+    await saveOneUpload();
     const rest=uploadQueue.slice(1);
     uploadQueue=[]; closeUpload();
     let done=0;
     (async()=>{
       for(const f of rest){
-        try{ const parsed=await parseFile(f); saveUploadRaw(f.name, parsed, tags, cat); done++; }catch(e){}
+        try{ const parsed=await parseFile(f); await saveUploadRaw(f.name, parsed, tags, cat); done++; }catch(e){}
       }
       toast("已收录 "+(done+1)+" 篇（含本篇）");
       if(uploadTarget==="tutorials"){ renderTutorials(); } else { renderExamples(); updateFilterBtns(); }
     })();
     return;
   }
-  saveOneUpload();
+  await saveOneUpload();
   uploadQueue.shift(); processUploadQueue();
 };
 
@@ -3398,7 +3398,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.60";
+  var APP_VERSION = "v38.61";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
