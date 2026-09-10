@@ -2517,17 +2517,47 @@ function openUploadModal(fileName, parsed, remaining, total){
   $("#maskUpload").classList.add("on");
 }
 function closeUpload(){ $("#maskUpload").classList.remove("on"); pendingUpload=null; }
+function _dedupItems(arr){ // v38.63：同一上传源(fileName 相同)且正文完全相同的多条只保留最新一条，根治「确认收录」连点/重传产生两份、以及删除后从云端复活
+  if(!Array.isArray(arr)) return arr;
+  const best={}, done={}, out=[];
+  for(const x of arr){
+    if(!x || x.id==null){ continue; }
+    const fn=(x.fileName!=null)?String(x.fileName):null;
+    const ct=(typeof x.content==="string")?x.content:null;
+    if(fn==null || ct==null) continue; // 非上传类条目(无 fileName/正文)不参与去重
+    const key=fn+"\u0000"+ct;
+    const prev=best[key];
+    if(!prev || (x.createdAt||0) > (prev.createdAt||0)) best[key]=x;
+  }
+  for(const x of arr){
+    if(!x || x.id==null){ out.push(x); continue; }
+    const fn=(x.fileName!=null)?String(x.fileName):null;
+    const ct=(typeof x.content==="string")?x.content:null;
+    if(fn==null || ct==null){ out.push(x); continue; }
+    const key=fn+"\u0000"+ct;
+    const winner=best[key];
+    if(winner && winner.id===x.id && !done[key]){ done[key]=true; out.push(x); } // 否则为被淘汰的重复项，跳过
+  }
+  arr.length=0; for(const x of out) arr.push(x);
+  return arr;
+}
+let _savingUpload=false; // v38.63：防止「确认收录」连点产生两份
 async function saveOneUpload(){
-  if(uploadTarget==="tutorials"){ tutPage=1; } else { exPage=1; }
-  const id=uid();
-  const title=$("#upTitle").value.trim()||"未命名";
-  const bodyText=($("#upContent")&&$("#upContent").value!=null)?$("#upContent").value:pendingUpload.body;
-  const item={id,title,fileName:pendingUpload.fileName,fileData:pendingUpload.fileData,fileType:pendingUpload.fileType,createdAt:Date.now(),content:bodyText};
-  if(uploadTarget==="tutorials") item.category=($("#upTutCat").value)||"其他"; else item.tags=[...pendingUpload.tags];
-  state[uploadTarget].push(item);
-  await save();
-  if(uploadTarget==="tutorials"){ renderTutorials(); } else { renderExamples(); updateFilterBtns(); }
-  pendingUpload=null;
+  if(_savingUpload) return; // 上一次还没保存完，直接忽略本次点击
+  _savingUpload=true;
+  try{
+    if(uploadTarget==="tutorials"){ tutPage=1; } else { exPage=1; }
+    const id=uid();
+    const title=$("#upTitle").value.trim()||"未命名";
+    const bodyText=($("#upContent")&&$("#upContent").value!=null)?$("#upContent").value:pendingUpload.body;
+    const item={id,title,fileName:pendingUpload.fileName,fileData:pendingUpload.fileData,fileType:pendingUpload.fileType,createdAt:Date.now(),content:bodyText};
+    if(uploadTarget==="tutorials") item.category=($("#upTutCat").value)||"其他"; else item.tags=[...pendingUpload.tags];
+    state[uploadTarget].push(item);
+    _dedupItems(state[uploadTarget]); // v38.63：同文件+同正文重复收录只留一篇
+    await save();
+    if(uploadTarget==="tutorials"){ renderTutorials(); } else { renderExamples(); updateFilterBtns(); }
+    pendingUpload=null;
+  } finally { _savingUpload=false; }
 }
 async function saveUploadRaw(fileName, parsed, tags, category){
   const id=uid();
@@ -2541,25 +2571,28 @@ $("#btnUploadCancel").onclick=()=>{ uploadQueue=[]; uploadTotal=0; closeUpload()
 $("#btnUploadSkip").onclick=()=>{ uploadQueue.shift(); processUploadQueue(); };
 $("#btnUploadConfirm").onclick=async ()=>{
   if(!pendingUpload) return;
-  const reuse = ($("#upBatchWrap").style.display!=="none") && $("#upBatchSame").checked;
-  if(reuse){
-    const tags=[...pendingUpload.tags];
-    const cat=(uploadTarget==="tutorials")?($("#upTutCat").value||"其他"):undefined;
+  const _cf=$("#btnUploadConfirm"); if(_cf){ _cf.disabled=true; _cf.textContent="收录中…"; }
+  try{
+    const reuse = ($("#upBatchWrap").style.display!=="none") && $("#upBatchSame").checked;
+    if(reuse){
+      const tags=[...pendingUpload.tags];
+      const cat=(uploadTarget==="tutorials")?($("#upTutCat").value||"其他"):undefined;
+      await saveOneUpload();
+      const rest=uploadQueue.slice(1);
+      uploadQueue=[]; closeUpload();
+      let done=0;
+      (async()=>{
+        for(const f of rest){
+          try{ const parsed=await parseFile(f); await saveUploadRaw(f.name, parsed, tags, cat); done++; }catch(e){}
+        }
+        toast("已收录 "+(done+1)+" 篇（含本篇）");
+        if(uploadTarget==="tutorials"){ renderTutorials(); } else { renderExamples(); updateFilterBtns(); }
+      })();
+      return;
+    }
     await saveOneUpload();
-    const rest=uploadQueue.slice(1);
-    uploadQueue=[]; closeUpload();
-    let done=0;
-    (async()=>{
-      for(const f of rest){
-        try{ const parsed=await parseFile(f); await saveUploadRaw(f.name, parsed, tags, cat); done++; }catch(e){}
-      }
-      toast("已收录 "+(done+1)+" 篇（含本篇）");
-      if(uploadTarget==="tutorials"){ renderTutorials(); } else { renderExamples(); updateFilterBtns(); }
-    })();
-    return;
-  }
-  await saveOneUpload();
-  uploadQueue.shift(); processUploadQueue();
+    uploadQueue.shift(); processUploadQueue();
+  } finally { if(_cf){ _cf.disabled=false; _cf.textContent="确认收录"; } }
 };
 
 /* ---------- 教程（与例文同模式；区别：分类 + 标题层级渲染） ---------- */
@@ -3407,7 +3440,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.62";
+  var APP_VERSION = "v38.63";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
