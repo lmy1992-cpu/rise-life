@@ -8,9 +8,14 @@
 <script src="mammoth.browser.min.js"></script>
 <style>
   :root{
-    --bg:#FBF6EC; --panel:#ffffff; --ink:#4A3528; --sub:#8a7a6c;
-    --line:#F0E6D8; --brand:#FF8E72; --brand2:#FFB394; --chip:#FFE9DC;
-    --chipOn:#FF8E72; --soft:#FFF1E8; --danger:#E85F4A; --ok:#5e8c6a;
+    --bg:#FBF6EC; --bg-soft:#FFFCF7; --panel:#FFFFFF;
+    --ink:#4A3528; --ink2:#7A604C; --sub:#A89880;
+    --line:#EFE3D0;
+    --brand:#FF9E7A; --brand2:#FFC9A8; --brand-deep:#F07C56; --brand-soft:#FFF1E9;
+    --c-mint:#9BD3B5; --c-lavender:#C5B0E8; --c-peach:#FFC089; --c-pink:#F5A5AE; --c-sky:#A8C9E5; --c-sun:#F2C84B;
+    --chip:#FFE9DC; --chipOn:#FF9E7A;
+    --soft:#FFF1E9;
+    --warn:#E89E5A; --danger:#E07A6F; --pink:#F5A5AE; --gold:#F0C24E; --ok:#5e8c6a;
     --shadow:0 1px 3px rgba(60,45,30,.08),0 6px 18px rgba(60,45,30,.06);
   }
   *{box-sizing:border-box}
@@ -4034,7 +4039,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.63";
+  var APP_VERSION = "v38.64";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
