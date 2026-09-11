@@ -863,6 +863,99 @@ window.addEventListener("unhandledrejection",function(ev){ window._err("unhandle
   });
 })();
 </script>
+<script>
+/* ===== 协作版主题换肤（移植自总工作台 11 套色系；偏好存独立 localStorage 键，不进同步 state，不影响上传/同步） ===== */
+var COLLAB_THEME_DEFS = {
+  garden:{name:'花园晨光系', bg:'#FBF7EF', bgSoft:'#FFFDF8', ink:'#4A4036', ink2:'#7C6E5E', sub:'#A89B86', line:'#EFE6D6', brand:'#FF9E7A', brand2:'#FFC9A8', brandDeep:'#F07C56', brandSoft:'#FFF1E9', soft:'#FFF1E9', warn:'#E89E5A', danger:'#E07A6F', gold:'#EFC24E'},
+  apricot:{name:'奶油杏桃系', bg:'#FBF3EA', bgSoft:'#FFFCF7', ink:'#4A372B', ink2:'#7A604C', sub:'#A8917A', line:'#F0E0CE', brand:'#F2A06A', brand2:'#F8C6A0', brandDeep:'#E07A48', brandSoft:'#FDEEE2', soft:'#FDEEE2', warn:'#E0915A', danger:'#D97A6F', gold:'#E6B24E'},
+  cloud:{name:'云朵晚安系', bg:'#F7F5FB', bgSoft:'#FDFCFF', ink:'#423B4E', ink2:'#6E6580', sub:'#9B93AB', line:'#E7E1F0', brand:'#9B8FD0', brand2:'#C0B5E2', brandDeep:'#7C6FB8', brandSoft:'#EFECF8', soft:'#EFECF8', warn:'#B58FCE', danger:'#B07AB0', gold:'#D9C46E'},
+  stationery:{name:'文具学习系', bg:'#FAF7F0', bgSoft:'#FFFEFB', ink:'#443B2E', ink2:'#756550', sub:'#A3947E', line:'#ECE3D2', brand:'#C79A5B', brand2:'#E0C193', brandDeep:'#A97E3F', brandSoft:'#F6EEDD', soft:'#F6EEDD', warn:'#C99A5A', danger:'#C97A6E', gold:'#D9B04A'},
+  forest:{name:'森林治愈系', bg:'#F6F4EC', bgSoft:'#FDFCF7', ink:'#3E4636', ink2:'#657055', sub:'#948B77', line:'#E3E6D6', brand:'#8FB37A', brand2:'#B6D2A2', brandDeep:'#6E9659', brandSoft:'#EEF4E6', soft:'#EEF4E6', warn:'#A9B36A', danger:'#9E8A6E', gold:'#C9B85A'},
+  candy:{name:'软糖清甜系', bg:'#FBF6F8', bgSoft:'#FFFDFE', ink:'#4A3A42', ink2:'#7C6670', sub:'#A8909A', line:'#F0E2E8', brand:'#F59AB6', brand2:'#FBC0D2', brandDeep:'#E5729A', brandSoft:'#FDEAF1', soft:'#FDEAF1', warn:'#E89A86', danger:'#E07A92', gold:'#E6B85E'},
+  editorial:{name:'编辑部生活系', bg:'#FAF6EF', bgSoft:'#FFFCF8', ink:'#443B36', ink2:'#746259', sub:'#A09187', line:'#ECE2D8', brand:'#D69A9A', brand2:'#E9C2C2', brandDeep:'#B57474', brandSoft:'#F6E9E9', soft:'#F6E9E9', warn:'#C99A7A', danger:'#C97A7A', gold:'#D6AE5A'},
+  spring:{name:'春季·花园粉绿', bg:'#FBF7F4', bgSoft:'#FFFDFB', ink:'#4A3E3E', ink2:'#7A6666', sub:'#A89090', line:'#F0E4E0', brand:'#F2A6B8', brand2:'#F8C6D2', brandDeep:'#D97A96', brandSoft:'#FCEAF0', soft:'#FCEAF0', warn:'#E8A07A', danger:'#E07A8F', gold:'#E9C24E'},
+  summer:{name:'夏季·薄荷奶黄', bg:'#F6FBF7', bgSoft:'#FDFFFE', ink:'#3E4640', ink2:'#657066', sub:'#8E9A8E', line:'#E1EAE2', brand:'#7FC0A8', brand2:'#A8D8C6', brandDeep:'#5A9E84', brandSoft:'#EAF5EF', soft:'#EAF5EF', warn:'#E0B06A', danger:'#D98A7A', gold:'#E9C24E'},
+  autumn:{name:'秋季·杏橙奶咖', bg:'#FBF4EA', bgSoft:'#FFFCF6', ink:'#4A3B2E', ink2:'#7A6048', sub:'#A8907A', line:'#F0E2CE', brand:'#E89A5C', brand2:'#F2BC8A', brandDeep:'#C8763C', brandSoft:'#FBEEE0', soft:'#FBEEE0', warn:'#D98A4A', danger:'#C97A6E', gold:'#D9A24E'},
+  winter:{name:'冬季·暖白淡紫', bg:'#F8F7FC', bgSoft:'#FEFEFF', ink:'#3E3C4A', ink2:'#66627A', sub:'#9690A8', line:'#E9E5F0', brand:'#A99BD6', brand2:'#C6BCE6', brandDeep:'#877AB8', brandSoft:'#F1EEF9', soft:'#F1EEF9', warn:'#B59A6E', danger:'#A98A9E', gold:'#D9C46E'}
+};
+function collabHexA(hex,a){
+  try{ var h=hex.replace('#',''); if(h.length===3)h=h.split('').map(function(c){return c+c;}).join('');
+    var r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);
+    return 'rgba('+r+','+g+','+b+','+a+')'; }catch(_){ return hex; }
+}
+function applyCollabTheme(key){
+  var t = COLLAB_THEME_DEFS[key] || COLLAB_THEME_DEFS.garden;
+  var r = document.documentElement;
+  r.style.setProperty('--bg', t.bg);
+  r.style.setProperty('--bg-soft', t.bgSoft);
+  r.style.setProperty('--panel', '#FFFFFF');
+  r.style.setProperty('--ink', t.ink);
+  r.style.setProperty('--ink2', t.ink2);
+  r.style.setProperty('--sub', t.sub);
+  r.style.setProperty('--line', t.line);
+  r.style.setProperty('--brand', t.brand);
+  r.style.setProperty('--brand2', t.brand2);
+  r.style.setProperty('--brand-deep', t.brandDeep);
+  r.style.setProperty('--brand-soft', t.brandSoft);
+  r.style.setProperty('--soft', t.soft);
+  r.style.setProperty('--warn', t.warn);
+  r.style.setProperty('--danger', t.danger);
+  r.style.setProperty('--gold', t.gold);
+  r.style.setProperty('--c-mint', '#9BD3B5');
+  r.style.setProperty('--c-lavender', '#C5B0E8');
+  r.style.setProperty('--c-peach', '#FFC089');
+  r.style.setProperty('--c-pink', '#F5A5AE');
+  r.style.setProperty('--c-sky', '#A8C9E5');
+  r.style.setProperty('--c-sun', '#F2C84B');
+  r.style.setProperty('--chip', 'var(--brand-soft)');
+  r.style.setProperty('--chipOn', 'var(--brand)');
+  try{
+    document.body.style.background =
+      'radial-gradient(circle at 18% 8%, '+collabHexA(t.brandSoft,1)+' 0%, transparent 55%),'+
+      'radial-gradient(circle at 82% 92%, '+collabHexA(t.brand2,.42)+' 0%, transparent 55%),'+
+      'var(--bg)';
+  }catch(_){}
+  window.__collabTheme = key;
+}
+function collabThemeGet(){ try{ return localStorage.getItem('rl_collab_theme') || 'garden'; }catch(_){ return 'garden'; } }
+function collabThemeSet(k){ try{ localStorage.setItem('rl_collab_theme', k); }catch(_){} }
+function showCollabTheme(){
+  var cur = collabThemeGet();
+  var ov=document.getElementById('collabThemePanel');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='collabThemePanel';
+    ov.style.cssText='position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(40,30,25,.42);backdrop-filter:blur(2px)';
+    document.body.appendChild(ov);
+    ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  }
+  var FONT='-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif';
+  ov.innerHTML='<div style="width:min(460px,92vw);max-height:86vh;overflow:auto;background:var(--panel);border-radius:18px;padding:18px 18px 14px;box-shadow:0 18px 60px rgba(0,0,0,.25);font-family:'+FONT+'">'+
+    '<div style="display:flex;align-items:center;gap:8px"><div style="font-size:20px">🎨</div><b style="font-size:17px;color:var(--ink)">主题配色</b><span style="margin-left:auto;color:var(--sub);font-size:12px" id="collabThemeCur"></span></div>'+
+    '<div style="font-size:12.5px;color:var(--sub);margin:6px 0 12px">花园晨光系为默认；可随时切换其它配色方向或四季。点选后立即生效，仅本机保存、不同步给伙伴。</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px" id="collabThemeGrid"></div>'+
+    '<div style="margin-top:12px;text-align:right"><button id="collabThemeClose" style="border:none;background:var(--brand-soft);color:var(--brand);padding:8px 16px;border-radius:10px;font-size:13px;cursor:pointer">关闭</button></div>'+
+    '</div>';
+  var grid=ov.querySelector('#collabThemeGrid');
+  var keys=Object.keys(COLLAB_THEME_DEFS);
+  keys.forEach(function(k){
+    var t=COLLAB_THEME_DEFS[k];
+    var cell=document.createElement('div');
+    cell.style.cssText='display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;cursor:pointer;border:2px solid '+(k===cur?'var(--brand)':'transparent')+';background:'+(k===cur?'var(--brand-soft)':'#fafafa');
+    cell.innerHTML='<span style="width:30px;height:30px;border-radius:50%;flex:none;background:linear-gradient(135deg,'+t.brand+','+t.brand2+');box-shadow:0 2px 6px '+collabHexA(t.brand,.4)+'"></span>'+
+      '<span style="font-size:13.5px;color:var(--ink)">'+t.name+(k===cur?' ✓':'')+'</span>';
+    cell.onclick=function(){
+      collabThemeSet(k); applyCollabTheme(k);
+      Array.prototype.forEach.call(grid.children, function(c){ c.style.borderColor='transparent'; c.style.background='#fafafa'; });
+      cell.style.borderColor='var(--brand)'; cell.style.background='var(--brand-soft)';
+      var cc=ov.querySelector('#collabThemeCur'); if(cc) cc.textContent='当前：'+t.name;
+    };
+    grid.appendChild(cell);
+  });
+  var cc=ov.querySelector('#collabThemeCur'); if(cc) cc.textContent='当前：'+(COLLAB_THEME_DEFS[cur]?COLLAB_THEME_DEFS[cur].name:'');
+  ov.querySelector('#collabThemeClose').onclick=function(){ ov.remove(); };
+}
+try{ applyCollabTheme(collabThemeGet()); }catch(_){}
+</script>
 <header class="top">
   <div class="top-row">
     <div class="logo">短篇<small>写作素材模块</small></div>
@@ -871,6 +964,7 @@ window.addEventListener("unhandledrejection",function(ev){ window._err("unhandle
     <button class="btn sm" id="btnBackup">备份 / 恢复</button>
     <button class="btn sm" id="btnSyncNow" onclick="forceSyncNow()" title="立即尝试云端同步">☁️ 同步</button>
     <button class="btn sm" id="refreshBtn" onclick="hardRefresh()">🔄 刷新</button>
+    <button class="btn sm" id="btnCollabTheme" onclick="showCollabTheme()">🎨 换肤</button>
   </div>
 </header>
 
@@ -4039,7 +4133,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.64";
+  var APP_VERSION = "v38.65";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
