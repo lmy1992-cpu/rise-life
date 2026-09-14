@@ -960,11 +960,11 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
   <div class="top-row">
     <div class="logo">短篇<small>写作素材模块</small></div>
     <div class="spacer"></div>
+    <button class="btn sm" id="btnCollabTheme" onclick="showCollabTheme()">🎨 换肤</button>
     <button class="btn sm" id="btnTagEdit">编辑元素标签</button>
     <button class="btn sm" id="btnBackup">备份 / 恢复</button>
     <button class="btn sm" id="btnSyncNow" onclick="forceSyncNow()" title="立即尝试云端同步">☁️ 同步</button>
     <button class="btn sm" id="refreshBtn" onclick="hardRefresh()">🔄 刷新</button>
-    <button class="btn sm" id="btnCollabTheme" onclick="showCollabTheme()">🎨 换肤</button>
   </div>
 </header>
 
@@ -4156,7 +4156,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.66";
+  var APP_VERSION = "v38.67";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
