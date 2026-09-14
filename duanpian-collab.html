@@ -1166,7 +1166,7 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
 <div class="mask" id="maskUploadPreview">
   <div class="modal">
     <h3>上传预审清单</h3>
-    <div class="sub">勾选要收录的例文；「已收录」默认不勾选，只收未收录的即可</div>
+    <div class="sub">勾选要收录的例文；「已收录」默认不勾选。或点「全部收录」一键收录所有未收录项（忽略元素标签，不弹编辑框）</div>
     <div class="up-prev-tools">
       <button class="btn soft" id="upPrevSelectNew" type="button">全选未收录</button>
       <button class="btn soft" id="upPrevInvert" type="button">反选</button>
@@ -1175,6 +1175,7 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
     <div class="up-prev-list" id="upPrevList"></div>
     <div class="modal-actions">
       <button class="btn ghost" id="upPrevCancel" type="button">取消</button>
+      <button class="btn primary" id="upPrevCollectAll" type="button">全部收录（忽略元素）</button>
       <button class="btn primary" id="upPrevStart" type="button">开始收录选中项</button>
     </div>
   </div>
@@ -2873,6 +2874,28 @@ $("#upPrevStart").onclick=()=>{
   uploadQueue=sel.slice(); uploadTotal=sel.length;
   processUploadQueue();
 };
+// v38.66：全部收录——一键收录所有未收录项，跳过每篇编辑框、忽略元素标签；复用 saveUploadRaw（正规 save() 同步，不动上传逻辑）
+$("#upPrevCollectAll").onclick=async ()=>{
+  const existing=new Set(state[uploadTarget].map(e=>e.fileName));
+  const sel=previewFiles.filter(f=>!existing.has(f.name)); // 全部未收录项，忽略勾选/元素
+  $("#maskUploadPreview").classList.remove("on");
+  if(!sel.length){ previewFiles=[]; toast("没有需要收录的新"+(uploadTarget==="tutorials"?"教程":"例文")+"（已全部收录）"); return; }
+  const _btn=$("#upPrevCollectAll"); if(_btn){ _btn.disabled=true; _btn.textContent="收录中…"; }
+  if(uploadTarget==="tutorials"){ tutPage=1; } else { exPage=1; }
+  let done=0; const skipped=[];
+  try{
+    for(const f of sel){
+      try{ const parsed=await parseFile(f); await saveUploadRaw(f.name, parsed, [], undefined); done++; }
+      catch(e){ skipped.push(f.name); }
+    }
+    _dedupItems(state[uploadTarget]); // 同文件+同正文只留一篇，防重复
+    if(uploadTarget==="tutorials"){ renderTutorials(); } else { renderExamples(); updateFilterBtns(); }
+    toast("已收录 "+done+" 篇"+(uploadTarget==="tutorials"?"教程":"例文")+(skipped.length?"；跳过 "+skipped.length+" 篇解析失败":""));
+  } finally {
+    previewFiles=[];
+    if(_btn){ _btn.disabled=false; _btn.textContent="全部收录（忽略元素）"; }
+  }
+};
 function processUploadQueue(){
   if(!uploadQueue.length){ const t=uploadTotal; uploadTotal=0; closeUpload(); if(t) toast("已收录 "+t+" 篇"+(uploadTarget==="tutorials"?"教程":"例文")); return; }
   const f=uploadQueue[0]; const remaining=uploadQueue.length;
@@ -4133,7 +4156,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.65";
+  var APP_VERSION = "v38.66";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
