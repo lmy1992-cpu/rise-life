@@ -736,39 +736,97 @@ async function cbDelete(vid){
   const r=await fetch(url,{method:"DELETE",headers:{"Authorization":"Bearer "+token,"Accept":"application/json"}});
   if(!r.ok){ const txt=await r.text(); throw new Error("CloudBase 删除失败："+r.status+" "+txt); }
 }
+// v38.69：单块读取带重试——平板/弱网下一次抖动不再让整包下载失败（返回 null=确实没这行，不重试）
+async function cbGetRetry(vid, tries){
+  let lastErr=null;
+  for(let t=0;t<(tries||4);t++){
+    try{ return await cbGet(vid); }
+    catch(e){ lastErr=e; await new Promise(function(r){ setTimeout(r, 250*(t+1)+Math.random()*350); }); }
+  }
+  throw lastErr||new Error("读取云端失败");
+}
 async function cbUpsertChunked(vid,payload,ts){
   if(!payload || payload.length<=SB_CHUNK_SIZE) return cbUpsert(vid,payload,ts);
   const parts=[]; for(let i=0;i<payload.length;i+=SB_CHUNK_SIZE) parts.push(payload.slice(i,i+SB_CHUNK_SIZE));
   const epoch=String(Date.now()); // v38.59：每次上传唯一版本号，块键带 epoch，旧块永远不会被误读为当前块
-  // v38.60：先读旧主行拿上一个 epoch/块数，上传后清理旧块，防止 sync_vault 无限膨胀
-  let prevEpoch=null, prevN=0;
-  try{ const old=await cbGet(vid); if(old&&old.payload){ const m=JSON.parse(old.payload); if(m&&m.epoch){ prevEpoch=String(m.epoch); prevN=(typeof m.n==="number")?m.n:parts.length; } } }catch(e){}
-  const CONC=8;
+  // v38.69：读旧主行拿「上一版」与「上上版」，云端始终保留两版块，任一版被误删都能回退
+  let prevEpoch=null, prevN=0, prevPrev=null, prevPrevN=0;
+  try{ const old=await cbGet(vid); if(old&&old.payload){ const m=JSON.parse(old.payload); if(m&&m.epoch){ prevEpoch=String(m.epoch); prevN=(typeof m.n==="number")?m.n:parts.length; if(m.prev!=null){ prevPrev=String(m.prev); prevPrevN=(typeof m.pn==="number")?m.pn:0; } } } }catch(e){}
+  const CONC=4; // v38.69：8 并发在平板上容易触发单请求超时，降到 4
   for(let i=0;i<parts.length;i+=CONC){
     const chunk=parts.slice(i,i+CONC);
     await Promise.all(chunk.map(function(c,j){ return cbUpsert(vid+"#"+epoch+"#"+(i+j),c,ts); }));
   }
-  await cbUpsert(vid, JSON.stringify({__chunked:true,n:parts.length,epoch:epoch}), ts);
-  if(prevEpoch && prevEpoch!==epoch){ // 尽力删除上一版块；失败仅留孤儿块，不影响正确性
-    const cnt=Math.max(prevN, parts.length);
-    for(let i=0;i<cnt;i+=CONC){
-      const idxs=[]; for(let k=i;k<Math.min(i+CONC,cnt);k++) idxs.push(k);
-      await Promise.all(idxs.map(function(k){ return cbDelete(vid+"#"+prevEpoch+"#"+k).catch(function(){}); }));
-    }
+  await cbUpsert(vid, JSON.stringify({__chunked:true,n:parts.length,epoch:epoch,prev:prevEpoch,pn:prevN}), ts);
+  // v38.69 关键修复：只清理「上上版」，绝不删「上一版」。
+  // 旧逻辑删上一版，在协作场景会出致命竞态：A 上传完并清理了 B 的旧块，而主行时间戳恰好仍指向 B 那版
+  // → 主行指向一个已被删光的版本 → 所有设备都缺块 → 没有本地缓存的平板永久进不去。
+  // 现在任何时刻云端都有两版可用；且清理前重新确认主行仍是我刚写的 epoch，否则放弃清理（宁留孤儿块，不可删错）。
+  if(prevPrev && prevPrev!==epoch && prevPrev!==prevEpoch){
+    try{
+      const nowRow=await cbGet(vid);
+      let nowEpoch=null; try{ const m=JSON.parse(nowRow&&nowRow.payload); if(m&&m.epoch) nowEpoch=String(m.epoch); }catch(e){}
+      if(nowEpoch===epoch){
+        const cnt=Math.max(prevPrevN, parts.length);
+        for(let i=0;i<cnt;i+=CONC){
+          const idxs=[]; for(let k=i;k<Math.min(i+CONC,cnt);k++) idxs.push(k);
+          await Promise.all(idxs.map(function(k){ return cbDelete(vid+"#"+prevPrev+"#"+k).catch(function(){}); }));
+        }
+      }
+    }catch(e){}
   }
 }
+// v38.69：一次请求批量拉取全部块（从 N 次请求降到 1 次，平板/弱网的决定性优化）。
+// 网关不支持 like 或结果不全时返回 null，调用方自动回退逐块重试，绝不因此失败。
+async function cbGetMany(vid, epoch, n){
+  try{
+    const token=await cbToken();
+    const prefix=vid+(epoch!=null?("#"+epoch+"#"):"#");
+    const url=cbBaseUrl()+"/sync_vault?select=vault_id,payload&vault_id=like."+encodeURIComponent(prefix)+"*&limit=2000";
+    const r=await fetch(url,{method:"GET",headers:{"Authorization":"Bearer "+token,"Accept":"application/json"}});
+    if(!r.ok) return null;
+    const data=await r.json();
+    if(!Array.isArray(data)||!data.length) return null;
+    const map={};
+    data.forEach(function(x){ if(x&&typeof x.vault_id==="string"&&typeof x.payload==="string") map[x.vault_id]=x.payload; });
+    const blocks=new Array(n);
+    for(let i=0;i<n;i++){
+      const v=map[prefix+i];
+      if(typeof v!=="string") return null;
+      blocks[i]=v;
+    }
+    return blocks.join("");
+  }catch(e){ return null; }
+}
+// 按指定版本拉取全部分块；任一版取全即成功（深拷贝出新对象，不污染入参）
+async function cbGetChunkedVer(row, vid, n, epoch){
+  const bulk=(n>3)?await cbGetMany(vid, epoch, n):null;
+  if(typeof bulk==="string") return { payload:bulk, updated_at:row.updated_at };
+  const blocks=new Array(n), CONC=4;
+  for(let i=0;i<n;i+=CONC){
+    const idxs=[]; for(let k=i;k<Math.min(i+CONC,n);k++) idxs.push(k);
+    try{ if(typeof setSyncStatus==="function" && n>12) setSyncStatus("正在下载云端数据… "+Math.min(i+CONC,n)+"/"+n, null, "首次进入需完整下载，请保持网络"); }catch(e){}
+    const arr=await Promise.all(idxs.map(function(k){ return cbGetRetry(vid+(epoch!=null?("#"+epoch+"#"+k):("#"+k)), 4); }));
+    arr.forEach(function(b,k){ if(!b||typeof b.payload!=="string") throw new Error("云端分块不完整（缺第"+(idxs[k]+1)+"块）"); blocks[idxs[k]]=b.payload; });
+  }
+  return { payload:blocks.join(""), updated_at:row.updated_at };
+}
 async function cbGetChunked(vid){
-  const row=await cbGet(vid);
+  const row=await cbGetRetry(vid,4);
   if(!row || typeof row.payload!=="string" || row.payload.indexOf('"__chunked"')<0) return row;
   let meta=null; try{ const m=JSON.parse(row.payload); if(m&&m.__chunked&&typeof m.n==="number") meta=m; }catch(e){}
   if(!meta) return row;
-  const n=meta.n, epoch=(meta.epoch!=null)?String(meta.epoch):null, blocks=new Array(n), CONC=8;
-  for(let i=0;i<n;i+=CONC){
-    const idxs=[]; for(let k=i;k<Math.min(i+CONC,n);k++) idxs.push(k);
-    const arr=await Promise.all(idxs.map(function(k){ return cbGet(vid+(epoch!=null?("#"+epoch+"#"+k):("#"+k))); }));
-    arr.forEach(function(b,k){ if(!b||typeof b.payload!=="string") throw new Error("云端分块不完整（缺第"+(idxs[k]+1)+"块），可能正在重新上传，稍后重试"); blocks[idxs[k]]=b.payload; });
+  // v38.69：按「当前版 → 上一版 → 无 epoch 旧格式」依次尝试，任一版取全即成功
+  const vers=[];
+  if(meta.epoch!=null) vers.push(String(meta.epoch));
+  if(meta.prev!=null && String(meta.prev)!==String(meta.epoch)) vers.push(String(meta.prev));
+  vers.push(null);
+  let lastErr=null;
+  for(let v=0;v<vers.length;v++){
+    try{ return await cbGetChunkedVer(row, vid, meta.n, vers[v]); }
+    catch(e){ lastErr=e; }
   }
-  row.payload=blocks.join(""); return row;
+  throw lastErr||new Error("云端分块不完整，正在等待其它设备重新上传完整数据");
 }
 async function syncUpsert(vid,payload,ts){ const b=syncBackend(); if(b==="cloudbase") return cbUpsert(vid,payload,ts); return sbUpsert(vid,payload,ts); }
 async function syncGet(vid){ const b=syncBackend(); if(b==="cloudbase") return cbGet(vid); return sbGet(vid); }
@@ -2089,15 +2147,18 @@ async function load(){
       try{ _lastSyncError=(e&&e.message)?String(e.message).slice(0,120):String(e); }catch(_){}
       let cached=null;
       try{ cached=await idbGet(IDB_KEY); }catch(e){}
+      // v38.69：结构性损坏（解密失败 / 云端分块缺块）才自愈重传；单纯网络不通绝不覆盖云端
+      const _em=(e&&e.message)?String(e.message):"";
+      const _structural = _cloudCorrupt || _em.indexOf("分块")>=0 || _em.indexOf("不完整")>=0;
       if(cached && typeof cached==='object'){
         try{ state=cached; migrate();
-          // v38.59：云端分块损坏（残留旧块混入）导致解密失败 → 用本机真实内容做一次干净带版本号的上传，下一轮自动重试即恢复
-          if(_cloudCorrupt){ try{ save(); }catch(_){} }
+          // 云端数据本身坏了（解密失败或分块缺失）→ 用本机真实内容做一次干净带版本号的重传，其它设备下一轮就能读到
+          if(_structural){ try{ save(); }catch(_){} }
           return false; }catch(_){}
       }
       try{ cached=localStorage.getItem("dp_collab_cache"); }catch(e){}
       if(cached){
-        try{ state=JSON.parse(cached); migrate(); return false; }catch(_){}
+        try{ state=JSON.parse(cached); migrate(); if(_structural){ try{ save(); }catch(_){} } return false; }catch(_){}
       }
       throw e; // 本地也无缓存（首次且无网络）：交调用方提示
     }
@@ -4053,8 +4114,14 @@ async function doCollabLogin(silent){
     }).catch(function(e){
       if(!cachedState){
         // 首次使用且无法联网：不能进入空界面，也不能保存空缓存，避免后续误上传空数据
-        if(msg) msg.textContent="无法读取协作空间，请检查网络后重试（"+(e.message||e)+"）";
-        toast("首次进入需要联网读取协作空间，请检查网络后重试");
+        const _em=(e&&e.message)?String(e.message):String(e);
+        const _isChunk=(_em.indexOf("分块")>=0 || _em.indexOf("不完整")>=0);
+        if(msg) msg.textContent = _isChunk
+          ? "云端这包数据暂时不完整。请先在你能正常打开的电脑端打开一次协作版（它会自动修复），等电脑显示「已同步 ✓」后，本机点「进入协作空间」即可"
+          : "无法读取协作空间，请检查网络后重试（"+_em+"）";
+        toast(_isChunk ? "云端数据正在修复中，请先在电脑端打开一次协作版" : "首次进入需要联网读取协作空间，请检查网络后重试");
+        setSyncStatus("云端数据不完整，等待其它设备修复…", false, _em);
+        startLoadRetry(); // 电脑端修好后本机自动进入，不用反复手动试
       } else {
         if(!silent) toast("后台同步失败，仍显示本地内容："+(e.message||e));
       }
@@ -4175,7 +4242,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.68";
+  var APP_VERSION = "v38.69";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
