@@ -859,6 +859,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     </details>
     <div id="collabMsg" style="color:#c0392b;font-size:13px;min-height:18px;margin:6px 0"></div>
     <div class="modal-actions"><button class="btn primary" id="btnCollabLogin">进入协作空间</button></div>
+    <div style="text-align:center;margin-top:10px"><a href="javascript:void(0)" id="btnDiagLogin" style="color:#888;font-size:12px;text-decoration:underline">🩺 进不去？点这里自检（自动检查配置和云端数据）</a></div>
   </div>
 </div>
 <div id="collabBar" style="display:none;position:fixed;right:12px;bottom:12px;z-index:60;background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.12)">🔗 协作中 · <span id="syncStatus" style="color:#1a8a3c">已同步 ✓</span> · <a href="javascript:void(0)" id="btnSyncSettings" title="同步设置" style="color:#666;margin:0 6px">⚙️</a> · <a href="javascript:void(0)" id="btnCollabLogout" style="color:var(--brand);font-weight:600">退出</a></div>
@@ -4076,7 +4077,11 @@ async function doCollabLogin(silent){
     const msg=$("#collabMsg");
     if(!share){ if(msg) msg.textContent="请填写协作口令"; return; }
     // v38.48：朋友端首次可在入口弹窗直接填写 CloudBase 配置，不必先找设置页
-    if(envId){ try{ localStorage.setItem("dp_sync_cb_env", envId); }catch(e){} }
+    // v38.70：填了 CloudBase 环境 ID 就强制把后端切到 CloudBase。
+    // 否则会出现「环境 ID、公钥都对，但后端还锁在已停用的 Supabase 上」的死局——看着全对却永远连不上。
+    if(envId){ try{ localStorage.setItem("dp_sync_cb_env", envId); localStorage.setItem("dp_sync_backend","cloudbase"); }catch(e){} }
+    // 之前存过 CloudBase 配置、但后端被设成了 supabase → 自动纠正（同样的死局）
+    try{ if((localStorage.getItem("dp_sync_cb_env")||"").trim() && syncBackend()!=="cloudbase") localStorage.setItem("dp_sync_backend","cloudbase"); }catch(e){}
     if(pkey){ try{ localStorage.setItem("dp_sync_cb_pkey", pkey); }catch(e){} }
     collabSharedPwd=share; collabPrivPwd=share; // v38.35 单口令：私有保险箱取消，变量保留只为兼容旧代码路径
     if(($("#collabRemember")||{}).checked){ localStorage.setItem("dp_collab_remember",JSON.stringify({share,priv:share})); }
@@ -4116,9 +4121,12 @@ async function doCollabLogin(silent){
         // 首次使用且无法联网：不能进入空界面，也不能保存空缓存，避免后续误上传空数据
         const _em=(e&&e.message)?String(e.message):String(e);
         const _isChunk=(_em.indexOf("分块")>=0 || _em.indexOf("不完整")>=0);
-        if(msg) msg.textContent = _isChunk
-          ? "云端这包数据暂时不完整。请先在你能正常打开的电脑端打开一次协作版（它会自动修复），等电脑显示「已同步 ✓」后，本机点「进入协作空间」即可"
-          : "无法读取协作空间，请检查网络后重试（"+_em+"）";
+        // v38.70：不再只给一句笼统提示——把真实原因写出来，并给出自检入口（原来只能靠猜）
+        const _safe=_em.replace(/[<>]/g,"").slice(0,160);
+        if(msg) msg.innerHTML = (_isChunk
+          ? "云端这包数据暂时不完整（缺块）。原因："+_safe
+          : "无法读取协作空间："+_safe) +
+          "<br><a href=\"javascript:void(0)\" onclick=\"showDiag()\" style=\"color:#1a6fd4;text-decoration:underline\">🩺 点这里自检，看具体卡在哪一步</a>";
         toast(_isChunk ? "云端数据正在修复中，请先在电脑端打开一次协作版" : "首次进入需要联网读取协作空间，请检查网络后重试");
         setSyncStatus("云端数据不完整，等待其它设备修复…", false, _em);
         startLoadRetry(); // 电脑端修好后本机自动进入，不用反复手动试
@@ -4140,7 +4148,7 @@ function showDiag(){
       m.innerHTML='<div class="modal" style="max-width:600px"><h3>🩺 连接诊断</h3>'+
         '<div class="sub">把这个内容复制发给对方，就能定位问题。点空白处关闭。</div>'+
         '<pre id="diagBody" style="white-space:pre-wrap;word-break:break-all;font-size:12px;line-height:1.6;max-height:52vh;overflow:auto;background:#f7f7f7;padding:12px;border-radius:8px;margin:10px 0"></pre>'+
-        '<div class="modal-actions"><button class="btn" id="diagCopy">📋 复制诊断信息</button><button class="btn primary" id="diagClose">关闭</button></div></div>';
+        '<div class="modal-actions"><button class="btn" id="diagCopy">📋 复制诊断信息</button><button class="btn" id="diagRebuild" title="本机内容完整时，用本机数据重传一版到云端，其它设备就能读到了">☁️ 用本机数据重建云端</button><button class="btn primary" id="diagClose">关闭</button></div></div>';
       document.body.appendChild(m);
       m.addEventListener("click",function(e){ if(e.target===m) m.classList.remove("on"); });
       document.getElementById("diagClose").onclick=function(){ m.classList.remove("on"); };
@@ -4157,7 +4165,7 @@ function showDiag(){
     var ver="";
     try{ var mv=document.body.innerHTML.match(/APP_VERSION\s*=\s*["']([^"']+)["']/); ver=mv?mv[1]:""; }catch(e){}
     if(!ver){ try{ ver=(typeof APP_VERSION!=='undefined')?APP_VERSION:""; }catch(e){} }
-    document.getElementById("diagBody").textContent=
+    const base=
       "版本："+(ver||"未知")+"\n"+
       "地址："+location.href+"\n"+
       "时间："+(new Date()).toLocaleString()+"\n"+
@@ -4167,8 +4175,144 @@ function showDiag(){
       "数据条数：例文 "+((st.examples||[]).length)+" ｜ 脑洞 "+((st.brainstorms||[]).length)+" ｜ 想法 "+((st.ideas||[]).length)+" ｜ 素材 "+((st.materials||[]).length)+" ｜ 标签 "+((st.tags||[]).length)+"\n"+
       "AI 密钥："+(st.aiCfg&&st.aiCfg.key?("已填（"+String(st.aiCfg.key).slice(0,6)+"…）"):"未填")+"\n"+
       "\n--- 最近错误（最多 15 条）---\n"+(errs.length?errs.join("\n"):"无");
+    const body=document.getElementById("diagBody");
+    if(body) body.textContent=base+"\n\n⏳ 正在检测云端…（约 5–30 秒，请别关这个窗口）";
+    const rb=document.getElementById("diagRebuild");
+    if(rb) rb.onclick=function(){ forceRebuildCloud(); };
     m.classList.add("on");
+    // v38.70：异步跑真实云端自检，把「到底卡在哪一步」直接摆在用户面前
+    runCloudSelfCheck().then(function(txt){
+      if(body) body.textContent=base+"\n\n"+txt;
+    }).catch(function(e){
+      if(body) body.textContent=base+"\n\n⚠️ 自检中止："+((e&&e.message)||e);
+    });
   }catch(e){ try{ toast("诊断面板出错："+(e&&e.message||e)); }catch(_){} }
+}
+// v38.70：块完整性扫描——一次批量请求拿到全部块编号，网关不支持时回退逐块检查
+async function diagScanBlocks(vid, epoch, n){
+  const prefix=vid+(epoch!=null?("#"+epoch+"#"):"#");
+  const miss=[]; let ok=0;
+  try{
+    const token=await cbToken();
+    const url=cbBaseUrl()+"/sync_vault?select=vault_id&vault_id=like."+encodeURIComponent(prefix)+"*&limit=2000";
+    const r=await fetch(url,{method:"GET",headers:{"Authorization":"Bearer "+token,"Accept":"application/json"}});
+    if(r.ok){
+      const data=await r.json();
+      const set={}; (data||[]).forEach(function(x){ if(x&&typeof x.vault_id==="string") set[x.vault_id]=1; });
+      for(let i=0;i<n;i++){ if(set[prefix+i]) ok++; else miss.push(i+1); }
+      return {ok:ok,miss:miss,mode:"一次批量"};
+    }
+  }catch(e){}
+  const lim=Math.min(n,40);
+  for(let i=0;i<lim;i++){
+    try{ const b=await cbGet(prefix+i); if(b&&typeof b.payload==="string") ok++; else miss.push(i+1); }
+    catch(e){ miss.push(i+1); }
+  }
+  return {ok:ok,miss:miss,mode:"逐块检查（前 "+lim+" 块）"};
+}
+// v38.70：云端自检——未登录也能跑，把「配置缺失 / 后端选错 / 接口不通 / 没数据 / 分块缺块 / 口令不一致」直接定位出来
+async function runCloudSelfCheck(){
+  const L=[]; const P=function(s){ L.push(s); };
+  try{
+    const backend=syncBackend();
+    const envId=cbEnvId(), pkey=cbPkey(), region=cbRegion();
+    P("========== 云端自检 ==========");
+    P("【1】本机配置");
+    P("  同步后端："+backend+(backend==="cloudbase"?"  ✅ 腾讯云 CloudBase（正确）":"  ❌ 不是 CloudBase！请进「⚙️ 同步设置」改成『腾讯云 CloudBase（国内直连）』并保存"));
+    P("  环境 ID："+(envId?(envId.slice(0,6)+"…"+envId.slice(-4)+"（共 "+envId.length+" 位）"):"❌ 未填写"));
+    P("  公钥："+(pkey?("已填写（"+pkey.length+" 位）"):"未填（将改用匿名登录）"));
+    P("  地域："+region);
+    if(backend!=="cloudbase"){ P(""); P("  👉 结论：后端选错了，所以连不上。改成 CloudBase 保存后再进。"); return L.join("\n"); }
+    if(!envId){ P(""); P("  👉 结论：环境 ID 是空的，必然连不上。请在本页『⚙️ 高级：CloudBase 环境配置』里填写（或进「⚙️ 同步设置」）。"); return L.join("\n"); }
+
+    P(""); P("【2】云端能不能连上");
+    let token="";
+    try{ token=await cbToken(); }
+    catch(e){ P("  ❌ 取不到凭证："+((e&&e.message)||e)); P(""); P("  👉 结论：公钥无效，或 CloudBase SDK 加载失败。请重填公钥；仍不行就在控制台开启『匿名登录』、把公钥清空。"); return L.join("\n"); }
+    try{
+      const url=cbBaseUrl()+"/sync_vault?select=vault_id&limit=1";
+      const r=await fetch(url,{method:"GET",headers:{"Authorization":"Bearer "+token,"Accept":"application/json"}});
+      P("  接口地址："+cbBaseUrl());
+      P("  HTTP 状态："+r.status+(r.ok?"  ✅ 通":"  ❌ 不通"));
+      if(!r.ok){
+        let t=""; try{ t=await r.text(); }catch(e){}
+        P("  返回内容："+String(t).slice(0,300));
+        P("");
+        P("  👉 结论：云端接口不通。请依次核对：① 环境 ID 一字不差 ② 地域是不是上海 ③ 控制台『安全配置』里有没有把 lmy1992-cpu.github.io 加进 Web 安全域名（加完约 10 分钟生效）④ sync_vault 表是否已建。");
+        return L.join("\n");
+      }
+    }catch(e){
+      P("  ❌ 请求异常："+((e&&e.message)||e));
+      P(""); P("  👉 结论：网络不通或跨域被拦。请确认这台设备能正常上网。");
+      return L.join("\n");
+    }
+
+    const shareEl=document.getElementById("collabShare");
+    const pwd=(typeof collabSharedPwd!=='undefined'&&collabSharedPwd)?collabSharedPwd:((shareEl&&shareEl.value)||"").trim();
+    if(!pwd){ P(""); P("【3】还没填协作口令，跳过数据检查——填好口令再点一次自检"); return L.join("\n"); }
+    const vid="collab_share:"+await sha256Hex("collab:"+pwd);
+    P(""); P("【3】协作空间数据（编号尾号 …"+String(vid).slice(-8)+"）");
+    let row=null;
+    try{ row=await cbGetRetry(vid,2); }
+    catch(e){ P("  ❌ 读取失败："+((e&&e.message)||e)); P(""); P("  👉 结论：接口能通但读不到数据，多半是 sync_vault 表权限没开（要允许匿名读写）。"); return L.join("\n"); }
+    if(!row || typeof row.payload!=="string" || !row.payload){
+      P("  ❌ 云端这个协作空间里是空的（没数据）");
+      P("");
+      P("  👉 结论：你填的口令和伙伴用的不是同一个（会各看各的、互不同步），或云端数据被清过。请和伙伴核对口令完全一致——区分大小写、前后别多空格。");
+      return L.join("\n");
+    }
+    let meta=null; try{ const m=JSON.parse(row.payload); if(m&&m.__chunked) meta=m; }catch(e){}
+    if(!meta){
+      P("  ✅ 数据完整（单个整包，"+row.payload.length+" 字符）");
+      P("  更新时间："+(row.updated_at||"未知"));
+      P("");
+      P("  👉 数据是好的。若这一步还进不去，问题在口令解密——请确认口令与伙伴完全一致。");
+      return L.join("\n");
+    }
+    const n=meta.n;
+    P("  分块数据：共 "+n+" 块 ｜ 当前版本 "+(meta.epoch!=null?meta.epoch:"(无)")+" ｜ 上一版 "+(meta.prev!=null?meta.prev:"(无)"));
+    const cur=await diagScanBlocks(vid, (meta.epoch!=null?String(meta.epoch):null), n);
+    P("  当前版本（"+cur.mode+"）：到位 "+cur.ok+"/"+n+(cur.miss.length?("  ❌ 缺第 "+cur.miss.join("、")+" 块"):"  ✅ 完整"));
+    let prevOk=false;
+    if(meta.prev!=null && String(meta.prev)!==String(meta.epoch)){
+      const pv=await diagScanBlocks(vid, String(meta.prev), n);
+      prevOk=(pv.miss.length===0);
+      P("  上一版本（"+pv.mode+"）：到位 "+pv.ok+"/"+n+(pv.miss.length?("  ❌ 缺第 "+pv.miss.join("、")+" 块"):"  ✅ 完整"));
+    }
+    P("");
+    if(cur.miss.length===0){ P("  👉 云端数据是完整的。这一步还进不去，多半是口令和伙伴不一致，或浏览器缓存（请硬刷新一次）。"); }
+    else if(prevOk){ P("  👉 当前版本缺块，但上一版完整，按说能进。若仍进不去：请在你能正常打开的电脑端打开本页 → 打开这个自检面板 → 点『☁️ 用本机数据重建云端』，重建完再回本机点「进入协作空间」。"); }
+    else { P("  👉 云端这包数据坏了（两个版本都缺块）。修复办法：在你能正常打开的电脑端打开协作版 → 打开这个自检面板 → 点『☁️ 用本机数据重建云端』，等提示成功后再回本机点「进入协作空间」。（本机没有内容，只能靠电脑端修）"); }
+    return L.join("\n");
+  }catch(e){
+    P(""); P("⚠️ 自检异常："+((e&&e.message)||e));
+    return L.join("\n");
+  }
+}
+// v38.70：用本机数据强制重传一版到云端，修复「云端分块缺块 → 其它设备进不去」
+async function forceRebuildCloud(){
+  try{
+    if(!(typeof collabSharedPwd!=='undefined'&&collabSharedPwd)){ toast("请先进入协作空间，再重建云端"); return; }
+    const st=(typeof state!=='undefined'&&state)?state:null;
+    const cnt=st?((st.examples||[]).length+(st.materials||[]).length+(st.brainstorms||[]).length+(st.ideas||[]).length+(st.tutorials||[]).length):0;
+    if(!cnt){ toast("本机没有内容，不能用它重建云端（请在内容完整的那台设备上操作）"); return; }
+    if(!confirm("将用本机的 "+cnt+" 条内容重新上传一版到云端，覆盖云端损坏的数据。\n\n其它设备之后就能正常进入了。确定吗？")) return;
+    const btn=document.getElementById("diagRebuild");
+    if(btn){ btn.disabled=true; btn.textContent="重建中…"; }
+    try{
+      try{ _collabLoadedFromCloud=true; }catch(e){} // 本机非空，允许上传（不会误传空包覆盖云端）
+      try{ setSyncStatus("正在重建云端…", null, "用本机数据重新上传，请保持网络"); }catch(e){}
+      await save(true);
+      const err=(typeof _lastSyncError!=='undefined')?_lastSyncError:"";
+      if(err) toast("重建失败："+err);
+      else{
+        toast("云端已重建 ✓ 现在去其它设备点「进入协作空间」即可");
+        try{ const b=document.getElementById("diagBody"); if(b) b.textContent+="\n\n✅ 已用本机 "+cnt+" 条内容重建云端（"+new Date().toLocaleString()+"）"; }catch(e){}
+      }
+    }finally{
+      if(btn){ btn.disabled=false; btn.textContent="☁️ 用本机数据重建云端"; }
+    }
+  }catch(e){ try{ toast("重建出错："+((e&&e.message)||e)); }catch(_){} }
 }
 function collabLogout(){
   collabSharedPwd=""; collabPrivPwd="";
@@ -4200,7 +4344,8 @@ function syncSettingsUi(){
 async function saveSyncSettings(){
   const s=$("#selSyncBackend"), e=$("#inpCbEnvId"), r=$("#selCbRegion");
   if(!s) return;
-  const backend=s.value || "supabase";
+  // v38.70：原来写死回退 "supabase"（已停用的后端），下拉框一旦取不到值就会把设备设成连不上的后端 → 改为回退默认后端 CloudBase
+  const backend=s.value || DEFAULT_SYNC_BACKEND || "cloudbase";
   setSyncBackend(backend);
   try{ if(e) localStorage.setItem("dp_sync_cb_env", (e.value||"").trim()); }catch(_){}
   try{ if(r) localStorage.setItem("dp_sync_cb_region", (r.value||"ap-shanghai").trim()); }catch(_){}
@@ -4221,6 +4366,7 @@ try{ $("#btnSyncSetCancel").onclick=closeSyncSettings; }catch(e){}
 try{ $("#btnSyncSetSave").onclick=saveSyncSettings; }catch(e){}
 try{ const _ssb=$("#selSyncBackend"); if(_ssb) _ssb.onchange=syncSettingsUi; }catch(e){}
 try{ var _ss=document.getElementById("syncStatus"); if(_ss){ _ss.style.cursor="pointer"; _ss.title="点一下看连接诊断（可复制发给对方）"; _ss.onclick=showDiag; } }catch(e){}
+try{ var _bdl=document.getElementById("btnDiagLogin"); if(_bdl) _bdl.onclick=function(){ showDiag(); }; }catch(e){}
 collabBoot();
 
 function hardRefresh(){
@@ -4242,7 +4388,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.69";
+  var APP_VERSION = "v38.70";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
