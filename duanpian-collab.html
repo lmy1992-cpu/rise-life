@@ -3181,32 +3181,46 @@ function renderTutorials(){
 function renderTutorialBody(text){
   const lines=(text||"").split("\n");
   const out=[]; let para=[];
-  const flush=()=>{ if(para.length){ out.push('<p class="tut-p">'+para.map(l=>esc(l)).join("<br>")+'</p>'); para=[]; } };
+  const flush=()=>{ if(para.length){ out.push('<p class="tut-p">'+para.map(l=>tutInline(esc(l))).join("<br>")+'</p>'); para=[]; } };
   for(const raw of lines){
     const line=raw.replace(/\r/g,"");
     const h=line.match(/^ {0,3}(#{1,6})\s+(.*)$/);
-    if(h){ flush(); const lvl=h[1].length; out.push('<h'+lvl+' class="tut-h tut-h'+lvl+'">'+esc(h[2].trim())+'</h'+lvl+'>'); continue; }
+    if(h){ flush(); const lvl=h[1].length; out.push('<h'+lvl+' class="tut-h tut-h'+lvl+'">'+tutInline(esc(h[2].trim()))+'</h'+lvl+'>'); continue; }
     if(line.trim()===""){ flush(); continue; }
     para.push(line);
   }
   flush();
   return out.length ? out.join("") : '<div class="empty">（无正文预览）</div>';
 }
+// 文本排版里的行内加粗：**文字** → <strong>（编辑纯文本后想保留加粗就这么写）
+function tutInline(s){ return String(s||"").replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>"); }
+// Word → 带标题层级的 HTML（教程专用）
+async function mammothTutHtml(buf){
+  const r=await mammoth.convertToHtml({arrayBuffer:buf, styleMap:[
+    "p[style-name='Heading 1'] => h1:fresh", "p[style-name='标题 1'] => h1:fresh",
+    "p[style-name='Heading 2'] => h2:fresh", "p[style-name='标题 2'] => h2:fresh",
+    "p[style-name='Heading 3'] => h3:fresh", "p[style-name='标题 3'] => h3:fresh",
+    "p[style-name='Heading 4'] => h4:fresh", "p[style-name='标题 4'] => h4:fresh",
+    "p[style-name='Heading 5'] => h5:fresh", "p[style-name='标题 5'] => h5:fresh",
+    "p[style-name='Heading 6'] => h6:fresh", "p[style-name='标题 6'] => h6:fresh"
+  ]});
+  return r.value||"";
+}
 // 已有 Word 教程（v38.50 前只有纯文本）首次打开时，自动从 fileData 还原 HTML 格式
 async function ensureTutorialHtml(t){
-  if(!t || (t.htmlContent||"").trim() || !(t.fileData||"").trim()) return;
-  if(typeof mammoth==="undefined") return;
-  try{
-    const r=await mammoth.convertToHtml({arrayBuffer:b64ToBytes(t.fileData), styleMap:[
-      "p[style-name='Heading 1'] => h1:fresh", "p[style-name='标题 1'] => h1:fresh",
-      "p[style-name='Heading 2'] => h2:fresh", "p[style-name='标题 2'] => h2:fresh",
-      "p[style-name='Heading 3'] => h3:fresh", "p[style-name='标题 3'] => h3:fresh",
-      "p[style-name='Heading 4'] => h4:fresh", "p[style-name='标题 4'] => h4:fresh",
-      "p[style-name='Heading 5'] => h5:fresh", "p[style-name='标题 5'] => h5:fresh",
-      "p[style-name='Heading 6'] => h6:fresh", "p[style-name='标题 6'] => h6:fresh"
-    ]});
-    if(r.value){ t.htmlContent=r.value; save(); }
-  }catch(e){}
+  if(!t || !(t.fileData||"").trim() || typeof mammoth==="undefined") return;
+  const cur=(t.htmlContent||"").trim();
+  if(!cur){
+    try{ const h=await mammothTutHtml(b64ToBytes(t.fileData)); if(h){ t.htmlContent=h; save(); } }catch(e){}
+    return;
+  }
+  // v38.71：旧 bug 曾在编辑时把 Word 格式打回纯文本排版——若当前是纯文本排版且与 Word 原文一字不差，自动恢复原格式
+  if(cur.indexOf('class="tut-p"')>=0 && cur.indexOf("<strong>")<0 && cur.indexOf("<em>")<0){
+    try{
+      const h=await mammothTutHtml(b64ToBytes(t.fileData));
+      if(h && htmlToPlainText(h)===htmlToPlainText(cur)){ t.htmlContent=h; save(); }
+    }catch(e){}
+  }
 }
 async function renderTutorialReading(){
   const t=curTut(); if(!t) return;
@@ -3241,15 +3255,20 @@ function tutorialDownload(){
   triggerDownload(blob, name); toast("已开始下载："+name);
 }
 $("#btnTutClose").onclick=()=>$("#maskEditTut").classList.remove("on");
-$("#btnTutEditContent").onclick=()=>{ const t=curTut(); if(!t) return; $("#tutEdTitle").value=t.title||""; $("#tutEdCat").value=t.category||"其他"; $("#tutEdContent").value=t.content||""; showTutorialReaderView("content"); };
-$("#btnTutContentCancel").onclick=()=>showTutorialReaderView("read");
+let _tutEditOrigBody=null; // v38.71：记录打开编辑框时的正文原文，判断用户是否真的改了正文
+$("#btnTutEditContent").onclick=()=>{ const t=curTut(); if(!t) return; $("#tutEdTitle").value=t.title||""; $("#tutEdCat").value=t.category||"其他"; $("#tutEdContent").value=t.content||""; _tutEditOrigBody=t.content||""; showTutorialReaderView("content"); };
+$("#btnTutContentCancel").onclick=()=>{ _tutEditOrigBody=null; showTutorialReaderView("read"); };
 $("#btnTutContentSave").onclick=async()=>{
   const t=curTut(); if(!t) return;
   t.title=$("#tutEdTitle").value.trim()||"未命名";
   t.category=$("#tutEdCat").value||"其他";
   t.content=$("#tutEdContent").value;
-  t.htmlContent=renderTutorialBody(t.content);
-  save(); await renderTutorialReading(); showTutorialReaderView("read"); renderAll(); toast("已保存");
+  // v38.71：正文没改动就保留 Word 原格式 HTML——只改标题/分类不再把加粗标题打回纯文本；
+  // 只有正文真的改了（Word 的 HTML 已经过时）才按文本重新排版，此时可用 **文字** 写加粗
+  const bodyChanged=(t.content!==(_tutEditOrigBody!=null?_tutEditOrigBody:(t.content||"")));
+  if(bodyChanged || !(t.htmlContent||"").trim()) t.htmlContent=renderTutorialBody(t.content);
+  _tutEditOrigBody=null;
+  save(); await renderTutorialReading(); showTutorialReaderView("read"); renderAll(); toast(bodyChanged?"已保存（正文有改动，已按文本排版）":"已保存");
 };
 $("#btnTutDownload").onclick=tutorialDownload;
 $("#btnTutDelete").onclick=()=>{
@@ -4388,7 +4407,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.70";
+  var APP_VERSION = "v38.71";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
