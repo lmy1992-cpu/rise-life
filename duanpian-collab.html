@@ -6,6 +6,8 @@
 <title>短篇协作版 · 共享工作台</title>
 <!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
 <script src="mammoth.browser.min.js"></script>
+<!-- v38.72：JSZip 本地部署（国内镜像下载），用于自研 Word 转换器读取字体颜色/高亮底色（mammoth 不支持） -->
+<script src="jszip.min.js"></script>
 <style>
   :root{
     --bg:#FBF6EC; --bg-soft:#FFFCF7; --panel:#FFFFFF;
@@ -3005,6 +3007,8 @@ async function parseFile(f){
 }
 // 教程：Word → HTML（保留原格式），同时提取纯文本（用于摘要/编辑）
 async function mammothToHeadingText(buf){
+  // v38.72：优先自研转换器（保留字体颜色/高亮底色，mammoth 做不到）；失败自动退回 mammoth 老路
+  try{ const html=await wordDocxToHtml(buf); if(html){ return {html:html, text:htmlToPlainText(html)}; } }catch(e){}
   try{
     const r=await mammoth.convertToHtml({arrayBuffer:buf, styleMap:[
       "p[style-name='Heading 1'] => h1:fresh", "p[style-name='标题 1'] => h1:fresh",
@@ -3023,6 +3027,142 @@ function htmlToPlainText(html){
   const d=document.createElement("div"); d.innerHTML=(html||"").replace(/<\/(p|h[1-6]|div)>/gi,"\n</$1>").replace(/<br\s*\/?>/gi,"\n");
   return (d.textContent||"").replace(/\n{2,}/g,"\n").trim();
 }
+/* ================= v38.72：自研 Word(docx) 保真转换器 =================
+   mammoth 按设计不读 w:color / w:highlight / w:shd（字体颜色、高亮底色），改参数救不了。
+   这里自己解包 docx（JSZip 本地）+ DOMParser 解析 document.xml，保留：
+   字体颜色、高亮底色、底纹、加粗、斜体、标题层级、图片、超链接、表格、居中、列表符号。
+   任何一步出错返回 null，由调用方退回 mammoth（老路保底，绝不让上传失败）。 */
+const _HL_COLORS={yellow:"#FFFF00",green:"#00FF00",cyan:"#00FFFF",magenta:"#FF00FF",blue:"#0000FF",red:"#FF0000",darkBlue:"#00008B",darkCyan:"#008B8B",darkGreen:"#006400",darkMagenta:"#8B008B",darkRed:"#8B0000",darkYellow:"#808000",darkGray:"#A9A9A9",lightGray:"#D3D3D3",black:"#000000",white:"#FFFFFF"};
+const _IMG_MIME={png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",gif:"image/gif",bmp:"image/bmp",webp:"image/webp",svg:"image/svg+xml",tif:"image/tiff",tiff:"image/tiff"};
+function _wKids(el,name){ const out=[]; if(!el) return out; for(let i=0;i<el.childNodes.length;i++){ const c=el.childNodes[i]; if(c.nodeType===1&&c.localName===name) out.push(c); } return out; }
+function _wDesc(el,name){ const out=[]; (function walk(n){ for(let i=0;i<n.childNodes.length;i++){ const c=n.childNodes[i]; if(c.nodeType===1){ if(c.localName===name) out.push(c); walk(c); } } })(el); return out; }
+function _wAttr(el,name){ if(!el) return null; for(let i=0;i<el.attributes.length;i++){ const a=el.attributes[i]; if(a.localName===name) return a.value; } return null; }
+function _wTagOn(el, name){ // el 下直接子级里找 name 标签，返回其 val 属性（无则 null）
+  const k=_wKids(el,name); return k.length?(_wAttr(k[0],"val")):null;
+}
+function _wImgHtml(node, ctx){
+  const blips=_wDesc(node,"blip"); if(!blips.length) return "";
+  const rid=_wAttr(blips[0],"embed")||_wAttr(blips[0],"link");
+  const uri=(rid&&ctx.images[rid])||"";
+  return uri?'<img src="'+uri+'" style="max-width:100%;height:auto">':"";
+}
+function _wRunHtml(r, ctx){
+  let inner="";
+  for(let i=0;i<r.childNodes.length;i++){
+    const c=r.childNodes[i];
+    if(c.nodeType!==1) continue;
+    if(c.localName==="t"){ inner+=esc(c.textContent||""); }
+    else if(c.localName==="br"){ inner+="<br>"; }
+    else if(c.localName==="tab"){ inner+="　"; }
+    else if(c.localName==="drawing"||c.localName==="pict"){ inner+=_wImgHtml(c,ctx); }
+  }
+  if(!inner) return "";
+  const rPr=_wKids(r,"rPr")[0];
+  let style="", bold=false, italic=false;
+  if(rPr){
+    const cv=_wTagOn(rPr,"color")||"";
+    if(/^[0-9A-Fa-f]{6}$/.test(cv)) style+="color:#"+cv+";";
+    const hv=_wTagOn(rPr,"highlight")||"";
+    if(hv&&hv!=="none"&&_HL_COLORS[hv]) style+="background:"+_HL_COLORS[hv]+";";
+    const shd=_wKids(rPr,"shd")[0]; const fv=shd?(_wAttr(shd,"fill")||""):"";
+    if(/^[0-9A-Fa-f]{6}$/.test(fv)&&fv.toLowerCase()!=="ffffff"&&fv.toLowerCase()!=="auto") style+="background:#"+fv+";";
+    const bv=_wTagOn(rPr,"b"), iv=_wTagOn(rPr,"i");
+    if(_wKids(rPr,"b").length&&bv!=="0"&&bv!=="false") bold=true;
+    if(_wKids(rPr,"i").length&&iv!=="0"&&iv!=="false") italic=true;
+  }
+  let out=inner;
+  if(italic) out="<em>"+out+"</em>";
+  if(bold) out="<strong>"+out+"</strong>";
+  if(style) out='<span style="'+style+'">'+out+"</span>";
+  return out;
+}
+function _wParaHtml(p, ctx){
+  const pPr=_wKids(p,"pPr")[0];
+  let tag="p", cls=' class="tut-p"', prefix="";
+  if(pPr){
+    const sv=_wTagOn(pPr,"pStyle")||"";
+    let m=sv.match(/^(?:heading|标题)?\s*([1-6])$/i);
+    if(sv==="Title") m=[,"1"];
+    if(m){ tag="h"+m[1]; cls=' class="tut-h tut-h'+m[1]+'"'; }
+    if(_wKids(pPr,"numPr").length) prefix="• ";
+    if((_wTagOn(pPr,"jc")||"")==="center") cls+=' style="text-align:center"';
+  }
+  let inner="";
+  (function walk(n){
+    for(let i=0;i<n.childNodes.length;i++){
+      const c=n.childNodes[i];
+      if(c.nodeType!==1||c.localName==="pPr") continue;
+      if(c.localName==="r"){ inner+=_wRunHtml(c,ctx); continue; }
+      if(c.localName==="hyperlink"){
+        const rid=_wAttr(c,"id"), rel=(rid&&ctx.rels[rid])||null;
+        const h=rel&&rel.external?rel.url:null;
+        const sub=(function(){ let s=""; walk2(c); function walk2(nn){ for(let i=0;i<nn.childNodes.length;i++){ const x=nn.childNodes[i]; if(x.nodeType!==1) continue; if(x.localName==="r") s+=_wRunHtml(x,ctx); else walk2(x); } } return s; })();
+        inner+=h?('<a href="'+esc(h)+'" target="_blank" rel="noopener">'+sub+"</a>"):sub;
+        continue;
+      }
+      if(c.localName==="br"){ inner+="<br>"; continue; }
+      walk(c);
+    }
+  })(p);
+  inner=prefix+inner;
+  if(!inner.replace(/<br\s*\/?>/g,"").trim()) return {tag:tag,html:""}; // 空段跳过
+  return {tag:tag,cls:cls,html:inner};
+}
+function _wTblHtml(tbl, ctx){
+  let rows="";
+  _wKids(tbl,"tr").forEach(function(tr){
+    let cells="";
+    _wKids(tr,"tc").forEach(function(tc){
+      let cellHtml="";
+      _wKids(tc,"p").forEach(function(p){ const h=_wParaHtml(p,ctx); if(h.html) cellHtml+=("<div>"+h.html+"</div>"); });
+      cells+='<td style="border:1px solid #d8cbb8;padding:4px 8px">'+(cellHtml||"&nbsp;")+"</td>";
+    });
+    rows+="<tr>"+cells+"</tr>";
+  });
+  return '<table style="border-collapse:collapse;margin:8px 0;max-width:100%">'+rows+"</table>";
+}
+async function wordDocxToHtml(buf){
+  try{
+    if(typeof JSZip==="undefined") return null;
+    const zip=await JSZip.loadAsync(buf);
+    const docFile=zip.file("word/document.xml"); if(!docFile) return null;
+    const xmlStr=await docFile.async("string");
+    const doc=new DOMParser().parseFromString(xmlStr,"application/xml");
+    if(!doc||!doc.documentElement||doc.getElementsByTagName("parsererror").length) return null;
+    const rels={};
+    const relsFile=zip.file("word/_rels/document.xml.rels");
+    if(relsFile){
+      const rd=new DOMParser().parseFromString(await relsFile.async("string"),"application/xml");
+      Array.prototype.slice.call(rd.getElementsByTagName("Relationship")).forEach(function(rel){
+        const id=rel.getAttribute("Id"), tgt=rel.getAttribute("Target")||"";
+        if(!id) return;
+        if(rel.getAttribute("TargetMode")==="External"){ rels[id]={external:true,url:tgt}; }
+        else { rels[id]={path:"word/"+tgt.replace(/^\//,"")}; }
+      });
+    }
+    const ctx={zip:zip,rels:rels,images:{}};
+    // 预载图片为 data URI（单张 >300KB 跳过，防止同步包无限膨胀——原图仍在 fileData 里）
+    const imgJobs=_wDesc(doc.documentElement,"blip");
+    for(const b of imgJobs){
+      const rid=_wAttr(b,"embed")||_wAttr(b,"link");
+      if(!rid||ctx.images[rid]) continue;
+      const rel=rels[rid]; if(!rel||rel.external) continue;
+      const f=zip.file(rel.path); if(!f) continue;
+      const ext=(rel.path.split(".").pop()||"png").toLowerCase();
+      try{ const b64=await f.async("base64"); if(b64.length<=400000) ctx.images[rid]="data:"+(_IMG_MIME[ext]||"image/png")+";base64,"+b64; }catch(e){}
+    }
+    const body=_wKids(doc.documentElement,"body")[0]; if(!body) return null;
+    let out="";
+    for(let i=0;i<body.childNodes.length;i++){
+      const child=body.childNodes[i];
+      if(child.nodeType!==1) continue;
+      if(child.localName==="p"){ const h=_wParaHtml(child,ctx); if(h.html) out+=("<"+h.tag+h.cls+">"+h.html+"</"+h.tag+">"); }
+      else if(child.localName==="tbl"){ out+=_wTblHtml(child,ctx); }
+    }
+    return out.trim()?out:null;
+  }catch(e){ return null; }
+}
+/* ================= 自研 Word 转换器结束 ================= */
 function openUploadModal(fileName, parsed, remaining, total){
   pendingUpload={fileName, ...parsed};
   if(uploadTarget==="tutorials") pendingUpload.category="短篇教程";
@@ -3196,6 +3336,8 @@ function renderTutorialBody(text){
 function tutInline(s){ return String(s||"").replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>"); }
 // Word → 带标题层级的 HTML（教程专用）
 async function mammothTutHtml(buf){
+  // v38.72：优先自研转换器（保留字体颜色/高亮底色）；失败退回 mammoth
+  try{ const html=await wordDocxToHtml(buf); if(html) return html; }catch(e){}
   const r=await mammoth.convertToHtml({arrayBuffer:buf, styleMap:[
     "p[style-name='Heading 1'] => h1:fresh", "p[style-name='标题 1'] => h1:fresh",
     "p[style-name='Heading 2'] => h2:fresh", "p[style-name='标题 2'] => h2:fresh",
@@ -4407,7 +4549,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.71";
+  var APP_VERSION = "v38.72";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
