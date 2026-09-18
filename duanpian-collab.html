@@ -843,6 +843,54 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   /* 禁止双击/长按缩放，但保留上下滑动 */
   a,button,input,textarea,select,label{ touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
 }
+  /* ===== v38.73 拆文 ===== */
+  .anl-wrap{display:grid;grid-template-columns:minmax(0,0.85fr) minmax(0,1.15fr);gap:14px;align-items:start}
+  .anl-panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:var(--shadow)}
+  .anl-ph{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .anl-ph>b{font-size:15px;color:var(--ink)}
+  .anl-ph .spacer{flex:1}
+  .anl-ta{width:100%;min-height:300px;resize:vertical;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink);font-size:13.5px;line-height:1.75;font-family:inherit;box-sizing:border-box}
+  .anl-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .anl-genre{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+  .anl-chip{padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--brand-soft);color:var(--ink2);font-size:12px;cursor:pointer;user-select:none}
+  .anl-chip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .anl-count{color:var(--sub);font-size:12px}
+  .anl-count b{color:var(--brand);font-size:14px}
+  .anl-go{width:100%;margin-top:10px;justify-content:center}
+  .anl-err{margin-top:8px;color:var(--danger);font-size:12.5px;line-height:1.6}
+  .anl-prog{color:var(--brand);font-size:12px}
+  .anl-report{max-height:72vh;overflow:auto}
+  .anl-sec{border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden;background:var(--bg-soft)}
+  .anl-sec-h{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;background:var(--brand-soft)}
+  .anl-sec-h .ic{font-size:15px}
+  .anl-sec-h .t{font-weight:700;color:var(--ink);font-size:13.5px}
+  .anl-sec-h .st{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--brand);font-size:11.5px}
+  .anl-sec-h .st .dot{width:8px;height:8px;border-radius:50%;background:var(--brand)}
+  .anl-sec-h .st.pending .dot{background:var(--sub)}
+  .anl-sec-h .st.pending{color:var(--sub)}
+  .anl-sec-b{padding:2px 14px 12px;font-size:13.5px;line-height:1.85;color:var(--ink2)}
+  .anl-sec.fold .anl-sec-b{display:none}
+  .anl-sec-b h3,.anl-sec-b h4{color:var(--ink);margin:12px 0 6px;font-size:14px}
+  .anl-sec-b h5{margin:10px 0 4px;color:var(--ink);font-size:13.5px}
+  .anl-sec-b p{margin:6px 0}
+  .anl-sec-b ul,.anl-sec-b ol{margin:6px 0;padding-left:20px}
+  .anl-sec-b li{margin:4px 0}
+  .anl-sec-b strong{color:var(--ink);font-weight:700}
+  .anl-sec-b hr{border:none;border-top:1px solid var(--line);margin:10px 0}
+  .anl-sec-b blockquote{margin:6px 0;padding:4px 12px;border-left:3px solid var(--brand2);color:var(--ink2)}
+  .anl-sec-b table{width:100%;border-collapse:collapse;margin:8px 0;font-size:12.5px}
+  .anl-sec-b th,.anl-sec-b td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+  .anl-sec-b th{background:var(--brand-soft);color:var(--ink)}
+  .anl-curve{margin:10px 0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 6px}
+  .anl-lib,.anl-tools{margin-top:20px}
+  .anl-wt-out{margin-top:12px;background:var(--bg-soft);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:13.5px;line-height:1.85;color:var(--ink2)}
+  .wt-btns{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px}
+  @media (max-width:1080px){ .anl-wrap{grid-template-columns:1fr} }
+  @media (max-width:600px){
+    .anl-panel{padding:10px}
+    .anl-ta{min-height:200px}
+    .anl-report{max-height:none}
+  }
 </style>
 </head>
 <body>
@@ -1069,6 +1117,66 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
         <input type="file" id="fileTutorial" class="hidden-file" accept=".docx,.txt" multiple />
       </div>
       <div class="grid" id="tutorialsGrid"></div>
+    </section>
+
+    <!-- 拆文（v38.73）：10 维 AI 拆文 + 拆文库 + 写作助手；纳入共享包，同一口令的朋友可见 -->
+    <section class="sec" id="sec-analyses">
+      <div class="sec-head">
+        <h2>拆文</h2>
+        <span class="hint">从「例文」里挑一篇，或直接粘贴 / 上传全文；AI 按 10 个维度深度拆解，报告存进下面「拆文库」，同口令的朋友也能看到</span>
+        <span class="spacer"></span>
+        <input type="text" id="anlSearch" placeholder="🔍 搜索拆文库" style="min-width:150px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink);font-size:13px" />
+      </div>
+
+      <div class="anl-wrap">
+        <div class="anl-panel">
+          <div class="anl-ph"><b>原文输入</b><span class="spacer"></span>
+            <select id="anlSrc" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink);font-size:13px;max-width:180px"></select>
+            <button class="btn sm" id="btnAnlDemo" type="button">填入示例</button>
+            <button class="btn sm" id="btnAnlClear" type="button">清空</button>
+            <button class="btn sm" id="btnAnlUpload" type="button">上传文档</button>
+            <input type="file" id="anlFile" class="hidden-file" accept=".txt,.md,.docx" />
+          </div>
+          <textarea id="anlText" class="anl-ta" placeholder="在此粘贴短篇小说全文，或直接把 .txt / .md / .docx 文件拖进来...支持知乎短篇、网文短篇、故事文案等。AI 将从 10 个维度为你深度拆解这篇小说"></textarea>
+          <div class="anl-foot">
+            <div class="anl-genre" id="anlGenre"></div>
+            <div class="anl-count"><b id="anlWords">0</b> 字</div>
+          </div>
+          <button class="btn primary anl-go" id="btnAnlStart" type="button">开始拆文</button>
+          <div class="anl-err" id="anlErr"></div>
+        </div>
+
+        <div class="anl-panel">
+          <div class="anl-ph"><b>拆文报告</b><span class="spacer"></span>
+            <span class="anl-prog" id="anlProg"></span>
+            <button class="btn sm" id="btnAnlFold" type="button">全部折叠</button>
+            <button class="btn sm" id="btnAnlCopy" type="button">复制报告</button>
+            <button class="btn sm" id="btnAnlSaveLib" type="button">保存到拆文库</button>
+            <button class="btn sm" id="btnAnlExport" type="button">导出报告</button>
+          </div>
+          <div class="anl-report" id="anlReport"><div class="empty">左边选好原文，点「开始拆文」，报告会在这里一段一段长出来</div></div>
+        </div>
+      </div>
+
+      <div class="anl-lib">
+        <div class="sec-head" style="margin:0 0 10px"><h3>拆文库</h3><span class="hint">拆过的报告按时间倒序排在这里，点「查看」装回上方继续读</span><span class="spacer"></span><span class="anl-count" id="anlLibCount"></span></div>
+        <div class="grid" id="anlLibGrid"></div>
+      </div>
+
+      <div class="anl-tools">
+        <div class="sec-head" style="margin:0 0 10px"><h3>✍️ 写作助手</h3><span class="hint">把自己的稿子粘进去，选一个工具，AI 当场给你结果</span></div>
+        <textarea id="wtText" class="anl-ta" style="min-height:140px" placeholder="把你要处理的段落粘在这里…"></textarea>
+        <div class="wt-btns">
+          <button class="btn soft" data-wt="diag" type="button">🩺 诊断这段</button>
+          <button class="btn soft" data-wt="cont" type="button">➡️ 帮我续写</button>
+          <button class="btn soft" data-wt="polish" type="button">✨ 润色改写</button>
+          <button class="btn soft" data-wt="twist" type="button">🌀 加个反转</button>
+          <button class="btn soft" data-wt="title" type="button">🏷️ 起个标题</button>
+          <button class="btn soft" data-wt="stuck" type="button">🆘 卡壳急救</button>
+          <span class="anl-prog" id="wtProg"></span>
+        </div>
+        <div class="anl-wt-out" id="wtOut"><div class="empty">结果会显示在这里</div></div>
+      </div>
     </section>
 
     <!-- 二、素材收集 -->
@@ -1350,6 +1458,7 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
         <button class="btn soft" id="btnRdDownload">⬇️ 下载原文</button>
         <button class="btn soft" id="btnRdEditAi">🤖 AI 分析</button>
         <button class="btn soft" id="btnRdAiTags">🏷️ AI 分析元素</button>
+        <button class="btn soft" id="btnRdAnalyse">✂️ AI 拆文</button>
         <button class="btn danger" id="btnRdDelete">删除</button>
         <button class="btn ghost" id="btnRdClose">关闭</button>
       </div>
@@ -1888,7 +1997,7 @@ const _COLLAB_TAB_ID = (Math.random().toString(36) + Date.now().toString(36)).sl
 const _collabBC = ('BroadcastChannel' in window) ? new BroadcastChannel('duanpian-collab') : null;
 async function _applyBroadcastState(shared, priv, ts){
   if(!shared && !priv) return;
-  const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
+  const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
   // v38.35：以当前 state 为合并基础——只覆盖包里真正带过来的字段，包里没有的保留本机内容（防旧版本包/另一窗口把脑洞想法清空）
   state = Object.assign({}, def, state||{}, shared||{}, priv||{});
   ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav'].forEach(function(k){ if(!Array.isArray(state[k])) state[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
@@ -1925,7 +2034,9 @@ function isStateEmpty(){
          (!state.misc||!state.misc.length) &&
          (!state.tags||!state.tags.length) &&
          (!state.ideas||!state.ideas.length) &&
-         (!state.crawlFav||!state.crawlFav.length);
+         (!state.crawlFav||!state.crawlFav.length) &&
+         (!state.tutorials||!state.tutorials.length) &&
+         (!state.analyses||!state.analyses.length);
 }
 function _countItems(s){
   if(!s) return 0;
@@ -1940,7 +2051,7 @@ let _savePending=false;   // 上传期间又有新改动：结束后自动补传
 let _lastSyncError="";    // 最后一次上传失败的简要原因（悬停状态条可见）
 let _cloudCorrupt=false;  // v38.59：云端分块解密失败（残留旧块混入）标志，触发本机干净重传自愈
 async function save(force=false){
-  if(!state || typeof state !== 'object'){ state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; }
+  if(!state || typeof state !== 'object'){ state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; }
   // 手动强制同步：清掉可能卡死的标志、停止旧重试，立即再试一次
   if(force){
     _saveUploading=false;
@@ -1965,7 +2076,7 @@ async function save(force=false){
   try{
     // v38.35 单保险箱：原私有字段（脑洞/想法拓展/抓取收藏/AI 记忆）与 AI 密钥一并进共享包，一个口令全共享
     const shared={examples:state.examples||[],intros:state.intros||[],materials:state.materials||[],misc:state.misc||[],tags:state.tags||[],tutorials:state.tutorials||[],aiFields:state.aiFields||[],nav:state.nav||[],
-      brainstorms:state.brainstorms||[],ideas:state.ideas||[],crawlFav:state.crawlFav||[],
+      brainstorms:state.brainstorms||[],ideas:state.ideas||[],crawlFav:state.crawlFav||[],analyses:state.analyses||[],
       aiCfg:state.aiCfg?{provider:state.aiCfg.provider||"",key:state.aiCfg.key||"",baseUrl:state.aiCfg.baseUrl||"",model:state.aiCfg.model||"",instruction:state.aiCfg.instruction||"",aiMemory:state.aiCfg.aiMemory||""}:null};
     const priv=null; // 私有保险箱已取消：保留变量只为兼容旧的广播消息格式
     const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
@@ -2085,13 +2196,13 @@ async function load(){
           if(pRow){ priv=await decBundle(await deriveKey(oldPriv), pRow.payload); if(priv) try{ localStorage.setItem("dp_collab_priv_migrated","1"); }catch(e){} }
         }
       }catch(e){}
-      const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
+      const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
       const cloudState = Object.assign(def, shared||{});
       if(priv){
         ['brainstorms','ideas','crawlFav'].forEach(function(k){ if(Array.isArray(priv[k])&&priv[k].length) cloudState[k]=_unionById(cloudState[k]||[], priv[k]); });
         if(priv.aiMemory && !(cloudState.aiCfg&&cloudState.aiCfg.aiMemory)) cloudState.aiCfg=Object.assign({},cloudState.aiCfg||{},{aiMemory:priv.aiMemory});
       }
-      ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','tutorials','aiFields','nav'].forEach(function(k){ if(!Array.isArray(cloudState[k])) cloudState[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
+      ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','tutorials','analyses','aiFields','nav'].forEach(function(k){ if(!Array.isArray(cloudState[k])) cloudState[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
       // 本地缓存作为「最后已知良好」副本：IndexedDB 全量优先（大容量，权威），localStorage 瘦身兜底
       let localState=null;
       try{ const full=await idbGet(IDB_KEY); if(full && typeof full==='object') localState=full; }catch(e){}
@@ -2169,7 +2280,7 @@ async function load(){
   try{ return await _loadPromise; }finally{ _loadPromise=null; }
 }
 function migrate(){
-  if(!state || typeof state !== 'object') state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
+  if(!state || typeof state !== 'object') state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
   // 容错：损坏数据可能把数组字段写成 null，先归一化为空数组，避免后续 .forEach 崩溃
   if(!Array.isArray(state.examples)) state.examples=[];
   if(!Array.isArray(state.intros)) state.intros=[];
@@ -2210,12 +2321,22 @@ function migrate(){
     if(exIdx>=0) state.nav.splice(exIdx+1,0,tutEntry); else state.nav.push(tutEntry);
   }
   if(!Array.isArray(state.tutorials)) state.tutorials=[];
+  if(Array.isArray(state.nav) && !state.nav.some(n=>n.sec==="analyses")){
+    const tutIdx=state.nav.findIndex(n=>n.sec==="tutorials");
+    const exIdx=state.nav.findIndex(n=>n.sec==="examples");
+    const anlEntry={sec:"analyses", name:"拆文"};
+    if(tutIdx>=0) state.nav.splice(tutIdx+1,0,anlEntry);
+    else if(exIdx>=0) state.nav.splice(exIdx+1,0,anlEntry);
+    else state.nav.push(anlEntry);
+  }
+  if(!Array.isArray(state.analyses)) state.analyses=[];
   state.tutorials.forEach(t=>{ if(!t.category) t.category="其他"; if(!t.createdAt) t.createdAt=Date.now(); if(typeof t.content!=="string") t.content=""; });
   mergeXlsx();
 }
 const DEFAULT_NAV=[
   {sec:"examples", name:"例文"},
   {sec:"tutorials", name:"教程"},
+  {sec:"analyses", name:"拆文"},
   {sec:"materials", name:"素材收集"},
   {sec:"brainstorms", name:"脑洞想法"},
   {sec:"misc", name:"杂项分类"},
@@ -2358,7 +2479,7 @@ function wireTagSearch(inputId, candId, containerId, getSelected, onChange){
 /* ---------- 左侧导航（可排序 / 重命名） ---------- */
 function cnOrd(n){ const d=["零","一","二","三","四","五","六","七","八","九","十"]; if(n<=10) return d[n]; if(n<20) return "十"+d[n-10]; if(n===20) return "二十"; return ""+n; }
 function fmtDate(ts){ if(!ts) return "—"; const d=new Date(ts); const p=n=>String(n).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes()); }
-const NAV_SUB={examples:"上传 word / txt",tutorials:"上传 word / txt",materials:"文字 / 图片 / 链接",brainstorms:"标题 / 想法 / 拓展",misc:"大项导览",tagmanage:"类型 / 核心梗",crawl:"每日全网热点",ideas:"组合成篇"};
+const NAV_SUB={examples:"上传 word / txt",tutorials:"上传 word / txt",analyses:"10 维 AI 拆解",materials:"文字 / 图片 / 链接",brainstorms:"标题 / 想法 / 拓展",misc:"大项导览",tagmanage:"类型 / 核心梗",crawl:"每日全网热点",ideas:"组合成篇"};
 let currentSec="examples";
 function switchSec(sec){
   currentSec=sec;
@@ -3803,7 +3924,7 @@ $("#fileImport").onchange=(e)=>{
   rd.onload=()=>{ try{ const d=JSON.parse(rd.result); if(d&&d.tags){ state=d; migrate(); save(); renderAll(); $("#maskBackup").classList.remove("on"); toast("导入成功"); } else toast("文件格式不对"); }catch(err){ toast("解析失败"); } };
   rd.readAsText(f); e.target.value="";
 };
-$("#btnWipe").onclick=()=>{ if(confirm("确定清空本协作空间的全部内容（例文/素材/杂项/元素/脑洞/想法/收藏）？此操作不可恢复！")){ state={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],aiMemory:"",aiCfg:state.aiCfg||{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; save(); renderAll(); $("#maskBackup").classList.remove("on"); toast("已清空"); } };
+$("#btnWipe").onclick=()=>{ if(confirm("确定清空本协作空间的全部内容（例文/素材/杂项/元素/脑洞/想法/收藏）？此操作不可恢复！")){ state={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],aiMemory:"",aiCfg:state.aiCfg||{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; save(); renderAll(); $("#maskBackup").classList.remove("on"); toast("已清空"); } };
 
 /* ---------- AI 设置（占位，密钥仅存本机；归纳维度可自定义） ---------- */
 function renderAiFieldManage(){
@@ -4225,7 +4346,7 @@ function enterCollabUI(){
 }
 // 最小可用离线状态（仅在明确需要本地空占位时使用，不再自动保存为缓存）
 function offlineCollabState(){
-  return {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
+  return {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
 }
 async function doCollabLogin(silent){
   if(_loggingIn) return;
@@ -4549,7 +4670,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.72";
+  var APP_VERSION = "v38.73";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
@@ -4562,6 +4683,524 @@ function hardRefresh(){
   }
   if(document.body){ addBadge(); } else { document.addEventListener('DOMContentLoaded', addBadge); }
 })();
+</script>
+<script>
+/* ===== v38.73 拆文模块：10 维 AI 拆文 + 拆文库 + 写作助手 ===== */
+var ANL_DIMS=[
+  {n:1,ic:"📋",k:"基础信息"},
+  {n:2,ic:"🎣",k:"开篇钩子"},
+  {n:3,ic:"👤",k:"人物设定"},
+  {n:4,ic:"📖",k:"情节结构"},
+  {n:5,ic:"📈",k:"情绪曲线"},
+  {n:6,ic:"🔄",k:"伏笔反转"},
+  {n:7,ic:"💎",k:"金句摘录"},
+  {n:8,ic:"⏱️",k:"节奏诊断"},
+  {n:9,ic:"⚖️",k:"优缺点总结"},
+  {n:10,ic:"✍️",k:"可复用仿写模板"}
+];
+var ANL_GENRES=["古言/现言","悬疑推理","系统流","追妻火葬场","重生复仇"];
+var ANL_TPL={
+  "追妻火葬场":"压抑期(男主冷漠/女主卑微) → 心死拐点(决定性瞬间) → 离开与后知后觉 → 花式追妻(爽点密集) → 结局收束",
+  "悬疑推理":"开篇抛谜题 → 连续三次反转(每次推翻前一结论) → 真相揭晓 → 余味收尾",
+  "重生复仇":"前世惨死(压) → 重生开局(爽点起) → 逐一清算(爽点密集) → 终极反杀(高潮) → 尘埃落定",
+  "系统流":"系统绑定 → 首个任务(小爽) → 任务升级加压 → 系统反噬/反转 → 破局通关",
+  "古言/现言":"相遇钩子 → 暧昧升温 → 误会冲突(虐点) → 化解和解(治愈)"
+};
+var ANL_EMO={"心碎":-10,"心死":-10,"崩溃":-9,"虐心":-9,"绝望":-9,"悲伤":-8,"心酸":-8,"遗憾":-6,"压抑":-6,"冷战":-6,"委屈":-7,"愤怒":-7,"争吵":-6,"误会":-5,"难过":-7,"不甘":-5,"焦虑":-5,
+  "高潮":9,"爽":9,"爽感":9,"打脸":9,"逆袭":9,"反转":7,"治愈":8,"感动":8,"圆满":8,"心动":7,"甜蜜":7,"甜":6,"和解":6,"温馨":6,"坚定":6,"希望":5,"暧昧":5,"升温":5,"期待":4,"悬念":3,"平静":1,"铺垫":0};
+var ANL={running:false,report:"",sections:[],title:"",srcId:"",srcTitle:"",genre:"追妻火葬场",words:0,libKw:""};
+function anlE(id){ return document.getElementById(id); }
+function anlList(){ if(!Array.isArray(state.analyses)) state.analyses=[]; return state.analyses; }
+function anlEsc(s){ try{ return (typeof esc==="function")?esc(s):String(s==null?"":s).replace(/[&<>"]/g,function(c){return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c];}); }catch(e){ return ""; } }
+
+/* ---------- Markdown → HTML（报告专用，够用即可） ---------- */
+function anlInline(s){
+  var x=anlEsc(s||"");
+  x=x.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>");
+  x=x.replace(/(^|[^*])\*([^*\n]{1,60})\*/g,"$1<em>$2</em>");
+  x=x.replace(/`([^`]+)`/g,"<code>$1</code>");
+  return x;
+}
+function anlTable(rows){
+  if(!rows||!rows.length) return "";
+  var head=rows[0], h="<table><thead><tr>";
+  head.forEach(function(c){ h+="<th>"+anlInline(c)+"</th>"; });
+  h+="</tr></thead><tbody>";
+  for(var i=1;i<rows.length;i++){ h+="<tr>"; rows[i].forEach(function(c){ h+="<td>"+anlInline(c)+"</td>"; }); h+="</tr>"; }
+  return h+"</tbody></table>";
+}
+function anlMd(s){
+  s=(s||"").replace(/\r/g,"");
+  var lines=s.split("\n"), out=[], para=[], list=null, tb=[];
+  function flushPara(){ if(para.length){ out.push("<p>"+anlInline(para.join(" "))+"</p>"); para=[]; } }
+  function flushList(){ if(list){ out.push("<"+list.tag+">"+list.items.map(function(i){return "<li>"+anlInline(i)+"</li>";}).join("")+"</"+list.tag+">"); list=null; } }
+  function flushTable(){ if(tb.length){ out.push(anlTable(tb.slice())); tb=[]; } }
+  function flushAll(){ flushPara(); flushList(); flushTable(); }
+  for(var i=0;i<lines.length;i++){
+    var t=lines[i].trim();
+    if(/^\|/.test(t)){
+      flushPara(); flushList();
+      if(!/^[\s|:-]+$/.test(t)) tb.push(t.replace(/^\|/,"").replace(/\|$/,"").split("|").map(function(c){return c.trim();}));
+      continue;
+    }
+    if(/^(-{3,}|\*{3,}|_{3,})$/.test(t)){ flushAll(); out.push("<hr/>"); continue; }
+    var h=t.match(/^(#{1,6})\s+(.*)$/);
+    if(h){ flushAll(); var lv=Math.min(6,h[1].length+1); out.push("<h"+lv+">"+anlInline(h[2])+"</h"+lv+">"); continue; }
+    var ol=t.match(/^\d{1,2}[\.、．]\s*(.+)$/), ul=t.match(/^[-*+]\s+(.+)$/);
+    if(ol||ul){ flushPara(); flushTable(); var tag=ol?"ol":"ul";
+      if(!list||list.tag!==tag){ flushList(); list={tag:tag,items:[]}; }
+      list.items.push(ol?ol[1]:ul[1]); continue; }
+    if(t===""){ flushAll(); continue; }
+    if(/^>\s?/.test(t)){ flushAll(); out.push("<blockquote>"+anlInline(t.replace(/^>\s?/,""))+"</blockquote>"); continue; }
+    flushList(); flushTable();
+    para.push(t);
+  }
+  flushAll();
+  return out.join("");
+}
+
+/* ---------- 把 AI 输出切成 10 个维度 ---------- */
+function anlScore(line){
+  var sum=0,maxAbs=0,hit=0;
+  for(var k in ANL_EMO){ if(line.indexOf(k)>=0){ sum+=ANL_EMO[k]; if(Math.abs(ANL_EMO[k])>maxAbs) maxAbs=Math.abs(ANL_EMO[k]); hit++; } }
+  if(!hit) return 0;
+  var v=(sum/(1+ (hit-1)*0.6));
+  if(v>10) v=10; if(v<-10) v=-10;
+  return Math.round(v*10)/10;
+}
+function anlParseReport(md){
+  var text=(md||"").replace(/\r/g,"");
+  var hits=[];
+  var re=/^[ \t]{0,3}#{1,4}[ \t]*([^\n]{0,40})$/gm, m;
+  while((m=re.exec(text))!==null){
+    var raw=m[1].replace(/\*\*/g,"").trim();
+    var num=raw.match(/^(?:第)?\s*(\d{1,2})\s*[\.、．:：]?\s*(.*)$/);
+    var no=num?parseInt(num[1],10):0, nm=num?num[2].trim():raw;
+    if(!nm) continue;
+    var dim=null;
+    if(no>=1&&no<=10){ dim=ANL_DIMS[no-1]; }
+    else{ for(var i=0;i<ANL_DIMS.length;i++){ if(nm.indexOf(ANL_DIMS[i].k)>=0){ dim=ANL_DIMS[i]; break; } } }
+    if(dim) hits.push({n:dim.n,dim:dim,start:m.index,title:dim.n+". "+dim.k});
+  }
+  if(hits.length<3){ // AI 没按格式写：用关键词行兜底
+    hits=[];
+    var lines=text.split("\n"), at=0;
+    for(var j=0;j<lines.length;j++){
+      var t=lines[j].trim();
+      for(var d=0;d<ANL_DIMS.length;d++){
+        if(t.indexOf(ANL_DIMS[d].k)>=0 && t.length<40){
+          hits.push({n:ANL_DIMS[d].n,dim:ANL_DIMS[d],start:at,title:ANL_DIMS[d].n+". "+ANL_DIMS[d].k}); break;
+        }
+        at+=lines[j].length+1;
+      }
+    }
+  }
+  hits.sort(function(a,b){ return a.n-b.n; });
+  var secs=[];
+  for(var x=0;x<hits.length;x++){
+    var start=hits[x].start, headLen=0;
+    var rest=text.slice(start); var nl=rest.indexOf("\n"); headLen=(nl<0?rest.length:nl+1);
+    var end=(x+1<hits.length)?hits[x+1].start:text.length;
+    var body=text.slice(start+headLen,end).replace(/^\s*\n/,"");
+    secs.push({n:hits[x].n,ic:hits[x].dim.ic,key:hits[x].dim.k,title:hits[x].title,body:body,done:false});
+  }
+  if(!secs.length && text.trim()) secs.push({n:0,ic:"📄",key:"报告",title:"AI 报告",body:text,done:false});
+  // 最后一个维度往往还在写；除最后一个外都算完成
+  for(var y=0;y<secs.length;y++) secs[y].done=(y<secs.length-1) && secs[y].body.trim().length>20;
+  return secs;
+}
+
+/* ---------- 情绪曲线（本地算，不花 AI 的钱） ---------- */
+function anlCurveData(body){
+  var rows=[];
+  (body||"").split("\n").forEach(function(l){
+    var t=l.trim();
+    if(/^\|/.test(t) && !/^[\s|:-]+$/.test(t)){
+      var cells=t.replace(/^\|/,"").replace(/\|$/,"").split("|").map(function(c){return c.trim();});
+      if(cells.length>=2) rows.push(cells);
+    }
+  });
+  var head=null, pts=[];
+  if(rows.length>=2){
+    head=rows[0]; var emoIdx=-1, stageIdx=0;
+    for(var c=0;c<head.length;c++){ if(head[c].indexOf("情绪")>=0) emoIdx=c; }
+    if(emoIdx<0) emoIdx=Math.min(2,head.length-1);
+    for(var r=1;r<rows.length;r++){
+      var cells=rows[r]; if(!cells.length) continue;
+      var label=(cells[stageIdx]||("阶段"+r)).replace(/\*\*/g,"");
+      var v=anlScore(cells[emoIdx]||"");
+      if(!v) v=anlScore(cells.join(" "));
+      pts.push({label:label.slice(0,10),v:v});
+    }
+  }
+  if(pts.length<2){ // 没有表格：按段落行打分
+    pts=[];
+    (body||"").split("\n").forEach(function(l){
+      var t=l.replace(/^[-*]\s*/,"").replace(/^\d{1,2}[\.、．]\s*/,"").trim();
+      if(t.length<6) return;
+      var v=anlScore(t); if(!v) return;
+      pts.push({label:t.slice(0,8),v:v});
+    });
+  }
+  return pts;
+}
+function anlCurveSvg(pts){
+  if(!pts||pts.length<2) return "";
+  var W=640,H=190,pl=30,pr=20,pt=18,pb=44;
+  var iw=W-pl-pr, ih=H-pt-pb;
+  function X(i){ return pl + (pts.length===1?iw/2:(iw*i/(pts.length-1))); }
+  function Y(v){ return pt + ih*((10-v)/20); }
+  var s='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" xmlns="http://www.w3.org/2000/svg">';
+  [10,5,0,-5,-10].forEach(function(g){
+    var y=Y(g);
+    s+='<line x1="'+pl+'" y1="'+y+'" x2="'+(W-pr)+'" y2="'+y+'" stroke="'+(g===0?"var(--line)":"var(--line)")+'" stroke-width="'+(g===0?1.4:1)+'" stroke-dasharray="'+(g===0?"":"4 5")+'"/>';
+    s+='<text x="'+(pl-6)+'" y="'+(y+4)+'" text-anchor="end" font-size="10" fill="var(--sub)">'+g+'</text>';
+  });
+  var d=pts.map(function(p,i){ return (i?"L":"M")+X(i).toFixed(1)+" "+Y(p.v).toFixed(1); }).join(" ");
+  s+='<path d="'+d+'" fill="none" stroke="var(--brand)" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>';
+  pts.forEach(function(p,i){
+    var x=X(i), y=Y(p.v);
+    s+='<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="3.6" fill="var(--brand)" stroke="var(--panel)" stroke-width="1.4"/>';
+    if(i%Math.ceil(pts.length/6)===0||i===pts.length-1){
+      var tx=x, anch="middle"; if(tx<pl+18) anch="start"; if(tx>W-pr-18) anch="end";
+      s+='<text x="'+tx.toFixed(1)+'" y="'+(H-24)+'" text-anchor="'+anch+'" font-size="10" fill="var(--ink2)">'+p.label.replace(/[<>&]/g,"")+'</text>';
+      s+='<text x="'+tx.toFixed(1)+'" y="'+(H-10)+'" text-anchor="'+anch+'" font-size="9" fill="var(--sub)">'+p.v+'</text>';
+    }
+  });
+  s+='</svg>';
+  return s;
+}
+
+/* ---------- 渲染 ---------- */
+function anlRender(){
+  var box=anlE("anlReport"); if(!box) return;
+  box.innerHTML=ANL.sections.map(function(s){
+    var body=anlMd(s.body);
+    if(s.key==="情绪曲线"){ var svg=anlCurveSvg(anlCurveData(s.body)); if(svg) body+='<div class="anl-curve">'+svg+'</div>'; }
+    if(!body.trim()) body='<div class="anl-err" style="margin:0">正在生成…</div>';
+    return '<div class="anl-sec" data-n="'+s.n+'">'+
+      '<div class="anl-sec-h" data-tog="'+s.n+'"><span class="ic">'+s.ic+'</span><span class="t">'+anlEsc(s.title)+'</span>'+
+      '<span class="st'+(s.done?"":" pending")+'"><span class="dot"></span>'+(s.done?"已完成":"生成中")+'</span></div>'+
+      '<div class="anl-sec-b">'+body+'</div></div>';
+  }).join("");
+  Array.prototype.forEach.call(box.querySelectorAll(".anl-sec-h"),function(h){ h.onclick=function(){ h.parentNode.classList.toggle("fold"); }; });
+}
+
+/* ---------- 流式调用 AI ---------- */
+function anlMessages(text, genre){
+  var dims=ANL_DIMS.map(function(d){ return d.n+". "+d.k; }).join("、");
+  var sys="你是一位深耕中文短篇小说的资深编辑，尤其熟悉这几类：追妻火葬场、爽文（打脸逆袭/扮猪吃虎）、世情文、悬疑推理、重生复仇、古言现言。\n"
+    +"用户会把一篇短篇小说的原文交给你，请你像编辑部开选题会一样，按下面 10 个维度逐一深度拆解：\n"+dims+"。\n\n"
+    +"输出要求（务必遵守）：\n"
+    +"1. 用 Markdown，一级标题只写一行：`# 《书名/篇名》短篇小说深度分析`（篇名从正文推断，读不到就用「本篇」）。\n"
+    +"2. 之后每个维度用一个二级标题，格式严格为 `## 1. 基础信息`、`## 2. 开篇钩子`……一直到 `## 10. 可复用仿写模板`，编号顺序不可乱、不可缺。\n"
+    +"3. 每个维度下面至少 3 条具体结论，必须引用原文中的细节（人物名、原句、段落位置）来支撑，不要写空泛的套话。\n"
+    +"4. 第 5 个维度「情绪曲线」请输出一张 Markdown 表格，表头为：| 情绪阶段 | 关键情节 | 读者情绪 | 作用 |，至少 6 行，情绪词要具体（如心动、压抑、虐心、心死、反转、爽感、和解）。\n"
+    +"5. 第 10 个维度要把这篇提炼成一句可复用的写作框架，再给出逐步操作指引，让别人照着能写出同类型的另一篇。\n"
+    +"6. 通篇简体中文，不要用英文小标题，不要重复原文大段内容。\n";
+  var tpl=ANL_TPL[genre];
+  if(tpl) sys+="\n本片的题材是「"+genre+"」，该类目的典型节奏模板供你参照比对：\n"+tpl+"\n";
+  var mem=(state.aiCfg&&state.aiCfg.aiMemory)||"";
+  if((mem||"").trim()) sys+="\n用户长期偏好（务必遵守）：\n"+mem.trim()+"\n";
+  var instr=(state.aiCfg&&state.aiCfg.instruction)||"";
+  if((instr||"").trim()) sys+="\n用户的归纳要求：\n"+instr.trim()+"\n";
+  var user="请拆解这篇短篇小说（约 "+(ANL.words||text.length)+" 字）：\n\n"+text;
+  return [{role:"system",content:sys},{role:"user",content:user}];
+}
+async function anlStream(messages, onDelta){
+  var cfg=(typeof ensureAiCfg==="function")? await ensureAiCfg() : (state.aiCfg||{});
+  if(!cfg || !cfg.key){ toast("还没填 AI 密钥：去右上角「🤖 AI 设置」填一次，之后永久记住"); return ""; }
+  var base=(cfg.baseUrl||"https://api.deepseek.com/v1").replace(/\/+$/,"");
+  var model=cfg.model||"deepseek-chat";
+  var body={model:model, messages:messages, temperature:0.4};
+  function plain(){
+    return fetch(base+"/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+cfg.key},body:JSON.stringify(body)})
+      .then(async function(r){
+        if(!r.ok){ var t=""; try{ t=await r.text(); }catch(e){} throw new Error("HTTP "+r.status+"："+String(t).slice(0,220)); }
+        var d=await r.json().catch(function(){ return null; });
+        var c=d&&d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content;
+        if(!c) throw new Error("AI 返回为空（可能是密钥失效或额度不足）");
+        if(onDelta) onDelta(c); return c;
+      });
+  }
+  try{
+    var resp=await fetch(base+"/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+cfg.key},body:JSON.stringify(Object.assign({},body,{stream:true}))});
+    if(!resp.ok){ return await plain(); }
+    if(!resp.body) return await plain();
+    var reader=resp.body.getReader(), dec=new TextDecoder("utf-8"), buf="", full="";
+    for(;;){
+      var rd=await reader.read(); if(rd.done) break;
+      buf+=dec.decode(rd.value,{stream:true});
+      var idx;
+      while((idx=buf.indexOf("\n"))>=0){
+        var line=buf.slice(0,idx).trim(); buf=buf.slice(idx+1);
+        if(line.indexOf("data:")!==0) continue;
+        var payload=line.slice(5).trim();
+        if(payload==="[DONE]"){ buf=""; break; }
+        if(!payload) continue;
+        try{
+          var j=JSON.parse(payload);
+          var dl=j&&j.choices&&j.choices[0]&&(j.choices[0].delta||{});
+          var tk=(dl&&dl.content)||"";
+          if(tk){ full+=tk; if(onDelta) onDelta(tk); }
+        }catch(e){}
+      }
+    }
+    if(!full) return await plain();
+    return full;
+  }catch(e){ return await plain(); }
+}
+
+/* ---------- 主流程 ---------- */
+async function anlStart(){
+  if(ANL.running){ toast("正在拆文中…"); return; }
+  var ta=anlE("anlText"); if(!ta) return;
+  var text=(ta.value||"").trim();
+  if(text.length<200){ toast("原文太短了，至少要 200 字才拆得动"); return; }
+  var MAXC=40000; var cut=false;
+  if(text.length>MAXC){ text=text.slice(0,MAXC); cut=true; }
+  ANL.running=true; ANL.report=""; ANL.sections=[]; ANL.words=text.length;
+  var btn=anlE("btnAnlStart"); if(btn){ btn.disabled=true; btn.textContent="拆文中…请稍候"; }
+  anlE("anlErr").textContent="";
+  anlE("anlReport").innerHTML='<div class="empty">AI 正在读这篇小说…</div>';
+  var raf=0, dirty=false;
+  function schedule(){
+    dirty=true;
+    if(raf) return;
+    raf=setTimeout(function(){ raf=0; if(dirty){ ANL.sections=anlParseReport(ANL.report); anlRender(); dirty=false;
+      var last=ANL.sections[ANL.sections.length-1]; if(last) anlE("anlProg").textContent="正在拆解："+last.title; } },400);
+  }
+  try{
+    var md=await anlStream(anlMessages(text, ANL.genre), function(d){ ANL.report+=d; schedule(); });
+    ANL.report=md||ANL.report;
+    ANL.sections=anlParseReport(ANL.report);
+    var m=(ANL.report.match(/^#\s+(.+)$/m)||[])[1];
+    ANL.title=(m||ANL.srcTitle||"未命名").replace(/[《》*]/g,"").trim();
+    if(!ANL.srcTitle){ ANL.srcTitle=ANL.title; }
+    anlRender();
+    anlE("anlProg").textContent="已完成 · 共 "+ANL.sections.length+" 个维度"+(cut?"（原文过长，已取前 4 万字）":"");
+    toast("拆文完成");
+  }catch(err){
+    anlE("anlErr").textContent="拆文失败："+((err&&err.message)||err);
+    if(!ANL.report.trim()) anlE("anlReport").innerHTML='<div class="empty">没跑起来。多半是 AI 密钥 / 模型名不对，去「🤖 AI 设置」检查一下</div>';
+  }finally{
+    ANL.running=false;
+    if(btn){ btn.disabled=false; btn.textContent="开始拆文"; }
+  }
+}
+function anlRefreshWords(){
+  var ta=anlE("anlText"); if(!ta) return;
+  var n=(ta.value||"").replace(/\s/g,"").length;
+  anlE("anlWords").textContent=String(n);
+}
+function anlFill(text, srcId, srcTitle){
+  var ta=anlE("anlText"); if(!ta) return;
+  ta.value=text||""; anlRefreshWords();
+  ANL.srcId=srcId||""; ANL.srcTitle=srcTitle||"";
+  if(srcId){ var sel=anlE("anlSrc"); if(sel) sel.value=srcId; }
+}
+function anlRefreshSrc(){
+  var sel=anlE("anlSrc"); if(!sel) return;
+  var cur=sel.value; sel.innerHTML="";
+  var o=document.createElement("option"); o.value=""; o.textContent="📂 从例文选择…"; sel.appendChild(o);
+  (state.examples||[]).forEach(function(e){
+    var op=document.createElement("option"); op.value=e.id; op.textContent=(e.title||e.fileName||"未命名").slice(0,18); sel.appendChild(op);
+  });
+  sel.value=cur;
+}
+function anlFromExample(id){
+  var ex=null; (state.examples||[]).forEach(function(e){ if(e.id===id) ex=e; });
+  if(!ex){ toast("这篇例文找不到了"); return; }
+  if(typeof switchSec==="function") switchSec("analyses");
+  anlFill((ex.content||"").trim(), ex.id, ex.title||ex.fileName||"未命名");
+  setTimeout(function(){ anlRefreshSrc(); },30);
+  toast("已带入《"+(ex.title||"未命名")+"》，点「开始拆文」即可");
+}
+
+/* ---------- 拆文库 ---------- */
+function anlExport(rec){
+  var name=(rec&&rec.title)||ANL.title||"拆文报告";
+  var txt=(rec&&rec.report)||ANL.report||"";
+  if(!txt.trim()){ toast("还没有内容可以导出"); return; }
+  var blob=new Blob([txt],{type:"text/markdown;charset=utf-8"});
+  var a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download=name.replace(/[\\/:*?"<>|]/g,"_")+"_拆文报告.md";
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },400);
+  toast("已导出");
+}
+function anlCopyText(txt){
+  txt=txt||"";
+  if(!txt.trim()){ toast("还没有内容"); return; }
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(function(){ toast("已复制到剪贴板"); },function(){ anlCopyFallback(txt); }); }
+    else anlCopyFallback(txt);
+  }catch(e){ anlCopyFallback(txt); }
+}
+function anlCopyFallback(txt){
+  try{
+    var ta=document.createElement("textarea"); ta.value=txt; ta.style.position="fixed"; ta.style.left="-9999px";
+    document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); toast("已复制");
+  }catch(e){ toast("复制失败，请手动选中文本"); }
+}
+async function anlSaveLib(){
+  if(!ANL.report.trim()){ toast("还没有报告可以保存"); return; }
+  anlList().unshift({id:("anl"+Date.now()+Math.random().toString(36).slice(2,6)),
+    title:ANL.title||"未命名",srcId:ANL.srcId||"",srcTitle:ANL.srcTitle||"",genre:ANL.genre,words:ANL.words||0,report:ANL.report,createdAt:Date.now()});
+  try{ await save(); }catch(e){}
+  anlRenderLib(); toast("已保存到拆文库");
+}
+function anlRenderLib(){
+  var grid=anlE("anlLibGrid"); if(!grid) return;
+  var kw=(ANL.libKw||"").trim().toLowerCase();
+  var list=anlList().slice().sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
+  if(kw) list=list.filter(function(r){ return ((r.title||"")+(r.srcTitle||"")+(r.genre||"")).toLowerCase().indexOf(kw)>=0; });
+  if(!list.length){ grid.innerHTML='<div class="empty">'+(kw?"没有匹配的拆文报告":"还没有拆过文。上面拆完一篇，点「保存到拆文库」就会存在这里")+'</div>'; anlE("anlLibCount").textContent=""; return; }
+  anlE("anlLibCount").textContent="共 "+list.length+" 篇";
+  grid.innerHTML=list.map(function(r){
+    var d=new Date(r.createdAt||Date.now()); var ds=(d.getMonth()+1)+"月"+d.getDate()+"日 "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+    var snip=(r.report||"").replace(/[#>*`|\-]/g," ").replace(/\s+/g," ").slice(0,70);
+    return '<div class="card"><h4>📖 '+anlEsc(r.title||"未命名")+'</h4>'+
+      '<div class="meta">'+ds+' ｜ '+anlEsc(r.genre||"—")+' ｜ '+(r.words||0)+' 字'+(r.srcTitle?(' ｜ 来自：'+anlEsc(r.srcTitle)):"")+'</div>'+
+      '<p class="snip">'+anlEsc(snip)+'…</p>'+
+      '<div class="acts">'+
+      '<button class="btn sm" data-anl-open="'+r.id+'">👀 查看</button>'+
+      '<button class="btn sm" data-anl-copy="'+r.id+'">📋 复制</button>'+
+      '<button class="btn sm" data-anl-exp="'+r.id+'">⬇️ 导出</button>'+
+      '<button class="btn sm danger" data-anl-del="'+r.id+'">删除</button>'+
+      '</div></div>';
+  }).join("");
+  Array.prototype.forEach.call(grid.querySelectorAll("[data-anl-open]"),function(b){ b.onclick=function(){ anlOpenRec(b.getAttribute("data-anl-open")); }; });
+  Array.prototype.forEach.call(grid.querySelectorAll("[data-anl-copy]"),function(b){ b.onclick=function(){ var r=anlFindRec(b.getAttribute("data-anl-copy")); if(r) anlCopyText(r.report); }; });
+  Array.prototype.forEach.call(grid.querySelectorAll("[data-anl-exp]"),function(b){ b.onclick=function(){ var r=anlFindRec(b.getAttribute("data-anl-exp")); if(r) anlExport(r); }; });
+  Array.prototype.forEach.call(grid.querySelectorAll("[data-anl-del]"),function(b){ b.onclick=async function(){
+    var id=b.getAttribute("data-anl-del");
+    if(!confirm("删除这份拆文报告？删除后本机和云端都会移除，不可恢复。")) return;
+    state.analyses=anlList().filter(function(r){ return r.id!==id; });
+    try{ await save(); }catch(e){}
+    anlRenderLib(); toast("已删除"); }; });
+}
+function anlFindRec(id){ var f=null; anlList().forEach(function(r){ if(r.id===id) f=r; }); return f; }
+function anlOpenRec(id){
+  var r=anlFindRec(id); if(!r) return;
+  ANL.report=r.report||""; ANL.title=r.title||""; ANL.srcId=r.srcId||""; ANL.srcTitle=r.srcTitle||""; ANL.genre=r.genre||ANL.genres;
+  ANL.words=r.words||0;
+  ANL.sections=anlParseReport(ANL.report); anlRender();
+  anlRenderGenre();
+  anlE("anlProg").textContent="已载入："+(r.title||"未命名");
+  try{ anlE("anlReport").scrollIntoView({behavior:"smooth",block:"start"}); }catch(e){}
+}
+function anlRenderGenre(){
+  var box=anlE("anlGenre"); if(!box) return;
+  box.innerHTML=ANL_GENRES.map(function(g){ return '<span class="anl-chip'+(g===ANL.genre?" on":"")+'" data-g="'+g+'">'+g+'</span>'; }).join("");
+  Array.prototype.forEach.call(box.querySelectorAll(".anl-chip"),function(c){ c.onclick=function(){ ANL.genre=c.getAttribute("data-g"); anlRenderGenre(); }; });
+}
+
+/* ---------- 写作助手 6 工具 ---------- */
+var WT_DEFS={
+  diag:{name:"诊断这段",tip:"逐句挑毛病：拖沓、说教、情绪不够、信息重复，给可改的具体意见"},
+  cont:{name:"帮我续写",tip:"顺着原文风格与情绪继续写 300-500 字，不要总结，直接接着写"},
+  polish:{name:"润色改写",tip:"保留原意与人物语气，把句子改得更精炼有画面感，输出改写后的全文"},
+  twist:{name:"加个反转",tip:"在现有基础上设计 3 个反转方案，每个说明怎么铺垫、在哪里揭、读者会什么反应"},
+  title:{name:"起个标题",tip:"给 5 个标题备选，标明各自吸引的是哪类读者、适合哪个平台"},
+  stuck:{name:"卡壳急救",tip:"给出 3 种后续走向选项，每种列出：接下来发生什么、人物怎么变、情绪怎么推"}
+};
+async function wtRun(kind){
+  if(ANL.running){ toast("等拆文跑完再用"); return; }
+  var ta=anlE("wtText"); if(!ta) return;
+  var text=(ta.value||"").trim();
+  if(!text){ toast("先粘一段你的稿子"); return; }
+  var sys="你是一位严格但实用的短篇小说编辑，说话直接、给具体意见，不写客套话。擅长追妻火葬场、爽文、世情、悬疑、重生复仇等中文短篇类型。\n";
+  var instr=(state.aiCfg&&state.aiCfg.instruction)||"";
+  if((instr||"").trim()) sys+="用户的长期写作要求："+instr.trim()+"\n";
+  var def=WT_DEFS[kind];
+  sys+="本次任务：["+def.name+"] —— "+def.tip+"。\n请只输出任务结果本身，不要写「好的」「以下是」这类开场白。";
+  ANL.running=true; var out=anlE("wtOut"), prog=anlE("wtProg");
+  out.textContent=""; prog.textContent="正在"+def.name+"…";
+  try{
+    var txt=await anlStream([{role:"system",content:sys},{role:"user",content:"我的稿子：\n"+text}], function(d){ out.textContent=(out.textContent||"")+d; });
+    out.textContent=txt||out.textContent||"（AI 没返回内容）";
+    prog.textContent="完成 · "+def.name;
+  }catch(e){ out.textContent="失败："+((e&&e.message)||e); prog.textContent=""; }
+  finally{ ANL.running=false; }
+}
+
+/* 独立读取文件（不复用上传流程的 parseFile，避免它内部的 fileData 膨胀与上传态依赖） */
+async function anlReadFile(f){
+  var nm=(f.name||"").toLowerCase();
+  if(nm.indexOf(".docx")>=0){
+    if(typeof mammoth==="undefined"){ toast("Word 解析库还没加载好，刷新页面再试，或先收录为例文再从下拉里选"); return ""; }
+    var r=await mammoth.extractRawText({arrayBuffer:await f.arrayBuffer()});
+    return (r&&r.value)||"";
+  }
+  var txt=await f.text();
+  return typeof decodeTxt==="function" ? decodeTxt(await f.arrayBuffer()) : txt;
+}
+var ANL_DEMO="林晚第一次见到沈屹，是在凌晨十二点零七分的末班地铁站。\n那天她加班到深夜，整个城市都睡了。地铁里空荡荡的，只有她和一个坐在角落的男人。他穿一件洗得发白的牛仔外套，膝盖上摊着一本速写本，笔尖在纸上沙沙地画着什么。\n林晚找了个离他不远的位置坐下，抬起头——画的是她。\n准确来说，是地铁车厢灯光下的她，额前碎发垂着，指尖捏着手机，眉头微蹙，连她眼尾那颗小痣都点了出来。\n「你偷画我？」\n男人抬眼，眼神有点懵，像是刚从自己的世界里被拽出来。可他那副窘迫的样子，反倒让林晚笑出了声。\n那是他们的第一次见面。后来他们常常在末班地铁上碰到，他给她带热牛奶，她给他讲公司里的奇葩需求。两个人影在时间缝里错位地拼在了一起。\n半年后他把那本速写本送给她，一页一页，全是她。她说好。\n可有些东西不是说放下就能放下的。那天她提早下班，买了草莓蛋糕坐了四十分钟地铁到他家，门没锁。她推开门，看见他坐在地上，面前摊着一堆旧照片。照片上是一个女孩，眉眼和她有七分像。\n「她是谁？」\n他沉默的那几秒，像一个世纪那么长。\n她怕自己真的只是一个替代品。于是她收拾东西搬回了自己的出租屋，他发消息她敷衍回，他约见面她说加班。\n冷战到第十五天，暴雨。她没带伞，站在公司楼下犹豫要不要冲出去，然后看见了他——黑伞撑着，浑身湿透，不知道站了多久。\n「我只是很想你。」\n那一刻她眼泪混着雨往下掉。可她心里清楚，和好不等于过去真的过去了。\n直到那年冬天，他蒙着她的眼睛开车开了很久，摘下眼罩时，她站在一间画室里。满墙的画，全是她。\n最大的那幅右下角写着一行小字——「致林晚：我的光。」\n她转过身，他单膝跪地。\n末班地铁上的相遇，原来不是偶然。";
+/* ---------- 初始化 ---------- */
+function anlInit(){
+  ANL.genre=ANL_GENRES[3];
+  anlRenderGenre(); anlRefreshSrc(); anlRenderLib();
+  var ta=anlE("anlText");
+  if(ta){
+    ta.addEventListener("input",anlRefreshWords);
+    ta.addEventListener("dragover",function(e){ e.preventDefault(); });
+    ta.addEventListener("drop",async function(e){
+      e.preventDefault();
+      var f=e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if(!f) return;
+      try{ var t=await anlReadFile(f); anlFill(t,"",f.name); anlRefreshWords(); }
+      catch(err){ toast("读取文件失败："+((err&&err.message)||err)); }
+    });
+  }
+  var clear=anlE("btnAnlClear"); if(clear) clear.onclick=function(){ anlFill("","",""); ANL.sections=[]; ANL.report=""; anlE("anlReport").innerHTML='<div class="empty">左边选好原文，点「开始拆文」，报告会在这里一段一段长出来</div>'; anlE("anlProg").textContent=""; };
+  var src=anlE("anlSrc");
+  if(src) src.onchange=function(){
+    var id=src.value; if(!id){ return; }
+    var ex=null; (state.examples||[]).forEach(function(e){ if(e.id===id) ex=e; });
+    if(ex) anlFill((ex.content||"").trim(), ex.id, ex.title||ex.fileName||"未命名");
+  };
+  var up=anlE("btnAnlUpload"); if(up) up.onclick=function(){ var f=anlE("anlFile"); if(f) f.click(); };
+  var fi=anlE("anlFile");
+  if(fi) fi.onchange=async function(){
+    var f=fi.files && fi.files[0]; if(!f) return;
+    try{ anlFill(await anlReadFile(f),"",f.name); }
+    catch(err){ toast("读取失败："+((err&&err.message)||err)); }
+    fi.value="";
+  };
+  var demo=anlE("btnAnlDemo"); if(demo) demo.onclick=function(){ anlFill(ANL_DEMO,"","示例：最后一班地铁"); toast("已填入示例，直接点「开始拆文」试试"); };
+  var start=anlE("btnAnlStart"); if(start) start.onclick=anlStart;
+  var copy=anlE("btnAnlCopy"); if(copy) copy.onclick=function(){ anlCopyText(ANL.report); };
+  var exp=anlE("btnAnlExport"); if(exp) exp.onclick=function(){ anlExport(null); };
+  var saveLib=anlE("btnAnlSaveLib"); if(saveLib) saveLib.onclick=anlSaveLib;
+  var fold=anlE("btnAnlFold");
+  if(fold) fold.onclick=function(){
+    var secs=document.querySelectorAll("#anlReport .anl-sec"); var allFold=true;
+    Array.prototype.forEach.call(secs,function(s){ if(!s.classList.contains("fold")) allFold=false; });
+    Array.prototype.forEach.call(secs,function(s){ s.classList.toggle("fold",!allFold); });
+    fold.textContent=allFold?"全部展开":"全部折叠";
+  };
+  var se=anlE("anlSearch");
+  if(se) se.oninput=function(){ ANL.libKw=se.value; anlRenderLib(); };
+  Array.prototype.forEach.call(document.querySelectorAll("[data-wt]"),function(b){ b.onclick=function(){ wtRun(b.getAttribute("data-wt")); }; });
+}
+// 例文阅读器里的「✂️ AI 拆文」：把这篇带进拆文页
+try{
+  var rdAnl=document.getElementById("btnRdAnalyse");
+  if(rdAnl) rdAnl.onclick=function(){
+    var ex=(typeof curEx==="function")?curEx():null;
+    if(!ex){ toast("先打开一篇例文再点"); return; }
+    anlFromExample(ex.id);
+  };
+}catch(e){}
+// 切到「拆文」页时刷新例文下拉与拆文库
+try{
+  var _anlOrigSwitch=(typeof switchSec==="function")?switchSec:null;
+  if(_anlOrigSwitch) window.switchSec=function(s){
+    _anlOrigSwitch(s);
+    if(s==="analyses"){ try{ anlRefreshSrc(); anlRenderLib(); }catch(e){} }
+  };
+}catch(e){}
+try{ anlInit(); }catch(e){ if(window.console) console.error("anlInit",e); }
 </script>
 </body>
 </html>
