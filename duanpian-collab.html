@@ -2319,17 +2319,27 @@ function migrate(){
     else state.nav.push(anlEntry);
   }
   if(!Array.isArray(state.analyses)) state.analyses=[];
-  // v38.77：素材收集 + 脑洞想法 合并为「素材脑洞」单一 tab（老用户迁移）
+  // v38.78：素材收集 + 脑洞想法 合并为「素材脑洞」单一 tab（老用户迁移）
   if(Array.isArray(state.nav)){
-    const iMb=state.nav.findIndex(n=>n.sec==="matebrain");
-    const iMat=state.nav.findIndex(n=>n.sec==="materials");
-    const iBr=state.nav.findIndex(n=>n.sec==="brainstorms");
-    if(iMat>=0) state.nav.splice(iMat,1);
-    if(iBr>=0) state.nav.splice(iBr,1);
-    if(iMb<0){
+    const hadMat=state.nav.some(n=>n.sec==="materials");
+    const hadBr=state.nav.some(n=>n.sec==="brainstorms");
+    if(hadMat||hadBr){
+      let at=state.nav.findIndex(n=>n.sec==="materials");
+      if(at<0) at=state.nav.findIndex(n=>n.sec==="brainstorms");
+      // v38.77 旧写法是"先 splice(materials) 再 splice(brainstorms)"——删第一项后数组前移，
+      // 第二个 splice 用旧索引会误删紧邻的「杂项分类」。改为一次性 filter，索引问题消失。
+      state.nav=state.nav.filter(n=>n.sec!=="materials" && n.sec!=="brainstorms");
+      if(!state.nav.some(n=>n.sec==="matebrain")){
+        state.nav.splice(Math.min(at<0?state.nav.length:at, state.nav.length),0,{sec:"matebrain", name:"素材脑洞"});
+      }
+    } else if(!state.nav.some(n=>n.sec==="matebrain")){
       const ai=state.nav.findIndex(n=>n.sec==="analyses");
-      const pos = ai>=0 ? ai+1 : state.nav.length;
-      state.nav.splice(pos,0,{sec:"matebrain", name:"素材脑洞"});
+      state.nav.splice(ai>=0?ai+1:state.nav.length,0,{sec:"matebrain", name:"素材脑洞"});
+    }
+    // v38.78 修复：把被 v38.77 旧迁移误删的「杂项分类」入口补回（其内容 state.misc 从未丢失）
+    if(!state.nav.some(n=>n.sec==="misc")){
+      const iMb2=state.nav.findIndex(n=>n.sec==="matebrain");
+      state.nav.splice(iMb2>=0?iMb2+1:state.nav.length,0,{sec:"misc", name:"杂项分类"});
     }
   }
   state.tutorials.forEach(t=>{ if(!t.category) t.category="其他"; if(!t.createdAt) t.createdAt=Date.now(); if(typeof t.content!=="string") t.content=""; });
@@ -4667,7 +4677,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.77";
+  var APP_VERSION = "v38.78";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
