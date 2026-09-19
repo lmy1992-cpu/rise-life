@@ -908,6 +908,22 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   .se-stats b{font-weight:700}
   .se-stats span{display:inline-flex;align-items:center;gap:4px}
   .se-stats span::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--brand);opacity:.55}
+  /* v38.82：统计行右侧的搜索框 + 匹配下拉 + 跳转高亮 */
+  .se-topline{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .se-topline .se-stats{flex:1 1 auto;min-width:0;margin-bottom:12px}
+  .se-search{position:relative;flex:0 1 240px;min-width:170px;margin-bottom:12px}
+  .se-search input{width:100%;box-sizing:border-box;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font-size:13px;outline:none;font-family:inherit}
+  .se-search input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(255,142,114,.15)}
+  .se-search-drop{display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 28px rgba(0,0,0,.12);max-height:300px;overflow:auto;z-index:40}
+  .se-search-drop.open{display:block}
+  .se-search-item{display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-size:13px;color:var(--ink)}
+  .se-search-item:hover{background:rgba(255,142,114,.14)}
+  .se-search-item .tag{flex:0 0 auto;font-size:11px;color:var(--brand);border:1px solid var(--brand);border-radius:6px;padding:1px 6px;opacity:.9}
+  .se-search-item b{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .se-search-item .sub{margin-left:auto;color:var(--ink);opacity:.55;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55%}
+  .se-search-empty{padding:10px 12px;color:var(--ink);opacity:.55;font-size:13px}
+  @keyframes seFlashKf{0%,55%{box-shadow:0 0 0 3px var(--brand)}100%{box-shadow:0 0 0 3px transparent}}
+  .se-flash{animation:seFlashKf 1.8s ease;border-radius:14px}
   .se-plat-r{flex:1;min-width:0}
   .se-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 0}
   .se-row+.se-row{border-top:1px dashed var(--line)}
@@ -1218,7 +1234,13 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
         <button class="btn sm" id="btnSeImport" type="button">⬇ 批量导入</button>
         <button class="btn primary sm" id="btnAddSubEmail" type="button">+ 添加平台</button>
       </div>
-      <div class="se-stats" id="seStatsBar"></div>
+      <div class="se-topline">
+        <div class="se-stats" id="seStatsBar"></div>
+        <div class="se-search">
+          <input id="seSearchInput" type="text" placeholder="🔍 搜平台或编辑" autocomplete="off">
+          <div class="se-search-drop" id="seSearchDrop"></div>
+        </div>
+      </div>
       <div class="se-import" id="seImportPanel" style="display:none">
         <textarea id="seImportText" rows="6" placeholder="每行一条：平台 | 编辑 | 邮箱 | 备注 | 分部&#10;后两项可省略；纯数字邮箱自动补 @qq.com；自动跳过重复记录"></textarea>
         <div class="se-import-actions">
@@ -4734,7 +4756,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.81";
+  var APP_VERSION = "v38.82";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
@@ -5269,6 +5291,75 @@ function seRenderStats(list){
   Object.keys(plats).forEach(function(k){ total++; const c=seCatOf(plats[k].name); if(c===3) zh++; else if(c===1) zd++; });
   bar.innerHTML='<span><b>平台 '+total+'</b></span><span><b>编辑 '+list.length+'</b></span><span><b>第三方 '+(total-zh-zd)+'</b></span><span><b>知乎 '+zh+'</b></span><span><b>中短 '+zd+'</b></span>';
 }
+/* v38.82：搜索平台/编辑 —— 关键字实时匹配，点结果滚动到对应行并高亮 */
+function seSearchMatches(kw){
+  kw=String(kw||"").trim().toLowerCase();
+  if(!kw) return [];
+  const list=Array.isArray(state.subEmails)?state.subEmails:[];
+  const seenP={}, seenE={}; const out=[];
+  list.forEach(function(e){
+    const p=(e.platform||"").trim(); const k=p.toLowerCase()||"__";
+    if(!seenP[k] && k!=="__" && k.indexOf(kw)>=0){ seenP[k]=1; out.push({type:"plat",key:k,name:p}); }
+  });
+  list.forEach(function(e){
+    if(seenE[e.id]) return;
+    const nm=(e.editor||"").trim(), em=(e.email||"").trim();
+    if((nm&&nm.toLowerCase().indexOf(kw)>=0)||(em&&em.toLowerCase().indexOf(kw)>=0)){
+      seenE[e.id]=1;
+      out.push({type:"ed",id:e.id,name:nm||"(未命名)",sub:[(e.platform||"").trim(),em].filter(Boolean).join(" · ")});
+    }
+  });
+  return out.slice(0,12);
+}
+function seSearchJump(key,eid){
+  const box=eid?(window.__seEdEls||{})[eid]:((window.__sePlatEls||{})[key]||null);
+  if(!box) return;
+  if(eid&&box.closest){
+    const more=box.closest(".se-more");
+    if(more&&!more.classList.contains("open")){
+      const tog=more.previousElementSibling;
+      if(tog&&tog.classList.contains("se-toggle")) tog.click(); /* 展开折叠区让目标编辑露出来 */
+    }
+  }
+  try{ box.scrollIntoView({behavior:"smooth",block:"center"}); }catch(e){ try{ box.scrollIntoView(); }catch(e2){} }
+  box.classList.remove("se-flash"); void box.offsetWidth; box.classList.add("se-flash");
+  setTimeout(function(){ box.classList.remove("se-flash"); },1900);
+}
+function seSearchRender(){
+  const inp=$("#seSearchInput"), drop=$("#seSearchDrop");
+  if(!inp||!drop) return;
+  const kw=inp.value.trim();
+  if(!kw){ drop.classList.remove("open"); drop.innerHTML=""; return; }
+  const items=seSearchMatches(kw);
+  drop.innerHTML="";
+  if(!items.length){
+    const d=document.createElement("div"); d.className="se-search-empty"; d.textContent="没有匹配的平台或编辑"; drop.appendChild(d);
+  }else{
+    items.forEach(function(it){
+      const d=document.createElement("div"); d.className="se-search-item";
+      const tag=document.createElement("span"); tag.className="tag"; tag.textContent=it.type==="plat"?"平台":"编辑";
+      const nm=document.createElement("b"); nm.textContent=it.name;
+      const sub=document.createElement("span"); sub.className="sub"; sub.textContent=it.type==="plat"?"整个平台":(it.sub||"");
+      sub.title=sub.textContent;
+      d.appendChild(tag); d.appendChild(nm); d.appendChild(sub);
+      d.onmousedown=function(ev){ ev.preventDefault(); seSearchJump(it.key,it.id); inp.value=""; drop.classList.remove("open"); drop.innerHTML=""; inp.blur(); };
+      drop.appendChild(d);
+    });
+  }
+  drop.classList.add("open");
+}
+if($("#seSearchInput")){
+  $("#seSearchInput").addEventListener("input",seSearchRender);
+  $("#seSearchInput").addEventListener("focus",seSearchRender);
+  $("#seSearchInput").addEventListener("keydown",function(ev){
+    if(ev.key==="Escape"){ this.value=""; const d=$("#seSearchDrop"); if(d){ d.classList.remove("open"); d.innerHTML=""; } this.blur(); }
+    else if(ev.key==="Enter"){ const first=document.querySelector("#seSearchDrop .se-search-item"); if(first&&first.onmousedown) first.onmousedown({preventDefault:function(){}}); }
+  });
+  document.addEventListener("click",function(ev){
+    const inp=$("#seSearchInput"), drop=$("#seSearchDrop"); if(!inp||!drop) return;
+    if(ev.target!==inp&&!drop.contains(ev.target)) drop.classList.remove("open");
+  });
+}
 /* v38.80：批量导入 —— 每行一条「平台 | 编辑 | 邮箱 | 备注 | 分部」，备注/分部可省略；纯数字邮箱自动补 @qq.com；与已有记录完全相同的自动跳过。
    v38.81 新增指令行：「删除平台 | 平台名」「平台改名 | 旧名 | 新名」 */
 function seImportGo(){
@@ -5357,6 +5448,7 @@ function renderSubEmails(){
   renderSeFav(list, $("#seFavWrap"));
   if(!list.length){ wrap.innerHTML='<div class="empty">还没有投稿邮箱。点右上「+ 添加平台」，先建平台，再往里加编辑。</div>'; return; }
   wrap.innerHTML="";
+  window.__sePlatEls={}; window.__seEdEls={}; /* v38.82：搜索跳转用的行元素映射，每次渲染重建 */
   // 按平台分组（平台名去空格、转小写作分组键；同平台多个编辑归到一组）
   const groups={}; const order=[];
   list.forEach(function(e){
@@ -5382,7 +5474,7 @@ function renderSubEmails(){
   order.forEach(function(gk){
     const g=groups[gk];
     g.items=seSortItems(g.items); /* v38.80：置顶第一 → 无分部按拼音 → 各分部按拼音，分部内也按拼音 */
-    const box=document.createElement("div"); box.className="se-plat";
+    const box=document.createElement("div"); box.className="se-plat"; box.dataset.plat=gk; window.__sePlatEls[gk]=box;
     /* 左列：平台名（短框）+ 删除 / 置顶（v38.81：去掉「+ 编辑」和宽的「删除平台」） */
     const left=document.createElement("div"); left.className="se-plat-l";
     const gname=document.createElement("input"); gname.className="se-platform"; gname.value=g.name; gname.placeholder="平台名"; gname.title="修改平台名会同步到该平台下所有编辑";
@@ -5401,12 +5493,13 @@ function renderSubEmails(){
     let top=null; g.items.forEach(function(e){ if(e.pinned && !top) top=e; });
     if(!top) top=g.items[0];
     const rest=g.items.filter(function(e){ return e!==top; });
-    right.appendChild(seEditorRow(top, list, true));
+    const topRow=seEditorRow(top, list, true); if(top&&top.id){ topRow.dataset.eid=top.id; window.__seEdEls[top.id]=topRow; }
+    right.appendChild(topRow);
     if(rest.length){
       const tog=document.createElement("button"); tog.className="se-toggle"; tog.type="button";
       tog.textContent="▾ 展开同平台其他 "+rest.length+" 位编辑";
       const more=document.createElement("div"); more.className="se-more";
-      rest.forEach(function(e){ more.appendChild(seEditorRow(e, list, false)); });
+      rest.forEach(function(e){ const r=seEditorRow(e, list, false); if(e.id){ r.dataset.eid=e.id; window.__seEdEls[e.id]=r; } more.appendChild(r); });
       more.appendChild(seAddBtn()); /* v38.81：展开区底部「+ 加编辑」 */
       tog.onclick=function(){ const open=more.classList.toggle("open"); tog.textContent=open?"▴ 收起其他编辑":"▾ 展开同平台其他 "+rest.length+" 位编辑"; };
       right.appendChild(tog); right.appendChild(more);
