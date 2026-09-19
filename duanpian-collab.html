@@ -930,6 +930,14 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   .se-settle-pop button{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit}
   .se-settle-pop button:hover{border-color:var(--brand);color:var(--brand)}
   .se-settle-pop .se-settle-clear{color:var(--ink);opacity:.6;border-style:dashed}
+  /* v38.85：结算周期筛选 chips（统计行与搜索框之间），带平台计数，点选筛选 */
+  .se-settle-filter{display:flex;gap:6px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+  .se-filter-chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:5px 11px;font-size:12px;cursor:pointer;font-family:inherit}
+  .se-filter-chip span{font-weight:700}
+  .se-filter-chip i{font-style:normal;font-size:11px;background:rgba(255,142,114,.18);color:var(--brand);border-radius:999px;padding:1px 7px;font-weight:700}
+  .se-filter-chip:hover{border-color:var(--brand)}
+  .se-filter-chip.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  .se-filter-chip.on i{background:rgba(255,255,255,.25);color:#fff}
   .se-plat-r{flex:1;min-width:0}
   .se-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 0}
   .se-row+.se-row{border-top:1px dashed var(--line)}
@@ -1243,6 +1251,7 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
       </div>
       <div class="se-topline">
         <div class="se-stats" id="seStatsBar"></div>
+        <div class="se-settle-filter" id="seSettleFilter"></div>
         <div class="se-search">
           <input id="seSearchInput" type="text" placeholder="🔍 搜平台或编辑" autocomplete="off">
           <div class="se-search-drop" id="seSearchDrop"></div>
@@ -4763,7 +4772,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.84";
+  var APP_VERSION = "v38.85";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
@@ -5370,6 +5379,41 @@ document.addEventListener("click",function(ev){
   const p=window.__seSettlePop;
   if(p&&p.classList.contains("open")&&!(ev.target&&p.contains(ev.target))) seSettleHide();
 });
+/* v38.85：结算周期筛选 —— 「结算/日结/周结/月结」按钮带平台计数，点选只看匹配平台，再点取消 */
+function seSettleCounts(fullList){
+  fullList=Array.isArray(fullList)?fullList:[];
+  const seen={}; let any=0, ri=0, zhou=0, yue=0;
+  fullList.forEach(function(e){
+    const k=(((e.platform||"").trim().toLowerCase())||"__");
+    if(seen[k]) return; seen[k]=1;
+    if(e.settle==="日结") ri++;
+    else if(e.settle==="周结") zhou++;
+    else if(e.settle==="月结") yue++;
+    if(e.settle) any++;
+  });
+  return {any:any, ri:ri, zhou:zhou, yue:yue};
+}
+function seSettleFilterMatch(e){
+  const f=window.__seSettleFilter||"";
+  if(!f) return true;
+  if(f==="any") return !!e.settle;
+  return e.settle===f;
+}
+function seRenderSettleFilter(fullList){
+  const box=$("#seSettleFilter"); if(!box) return;
+  const c=seSettleCounts(fullList);
+  const cur=window.__seSettleFilter||"";
+  box.innerHTML="";
+  [["any","结算",c.any],["日结","日结",c.ri],["周结","周结",c.zhou],["月结","月结",c.yue]].forEach(function(d){
+    const b=document.createElement("button");
+    b.type="button";
+    b.className="se-filter-chip"+(cur===d[0]?" on":"");
+    b.innerHTML='<span>'+d[1]+'</span><i>'+d[2]+'</i>';
+    b.title=(cur===d[0]?"再点一次取消筛选":(d[0]==="any"?"只看设置了结算周期的平台":"只看结算周期为「"+d[1]+"」的平台"));
+    b.onclick=function(){ window.__seSettleFilter=(cur===d[0])?"":d[0]; renderSubEmails(); };
+    box.appendChild(b);
+  });
+}
 /* v38.82：搜索平台/编辑 —— 关键字实时匹配，点结果滚动到对应行并高亮 */
 function seSearchMatches(kw){
   kw=String(kw||"").trim().toLowerCase();
@@ -5391,7 +5435,11 @@ function seSearchMatches(kw){
   return out.slice(0,12);
 }
 function seSearchJump(key,eid){
-  const box=eid?(window.__seEdEls||{})[eid]:((window.__sePlatEls||{})[key]||null);
+  let box=eid?(window.__seEdEls||{})[eid]:((window.__sePlatEls||{})[key]||null);
+  if(!box&&(window.__seSettleFilter||"")){ /* v38.85：目标被结算筛选挡住时，自动取消筛选再跳 */
+    window.__seSettleFilter=""; renderSubEmails();
+    box=eid?(window.__seEdEls||{})[eid]:((window.__sePlatEls||{})[key]||null);
+  }
   if(!box) return;
   if(eid&&box.closest){
     const more=box.closest(".se-more");
@@ -5523,14 +5571,17 @@ function renderSeFav(list, box){
 function renderSubEmails(){
   const wrap=$("#subEmailWrap"); if(!wrap) return;
   const list=Array.isArray(state.subEmails)?state.subEmails:[];
-  seRenderStats(list); /* v38.81：顶部统计行，每次渲染自动重算 */
-  renderSeFav(list, $("#seFavWrap"));
-  if(!list.length){ wrap.innerHTML='<div class="empty">还没有投稿邮箱。点右上「+ 添加平台」，先建平台，再往里加编辑。</div>'; return; }
+  seRenderSettleFilter(list); /* v38.85：结算筛选按钮+计数（始终按全量数据统计） */
+  const sf=window.__seSettleFilter||"";
+  const view=sf?list.filter(seSettleFilterMatch):list;
+  seRenderStats(view); /* 顶部统计行跟随筛选视图 */
+  renderSeFav(view, $("#seFavWrap"));
+  if(!view.length){ wrap.innerHTML=sf?'<div class="empty">没有符合当前筛选的平台。点一下上方选中的筛选按钮可取消筛选。</div>':'<div class="empty">还没有投稿邮箱。点右上「+ 添加平台」，先建平台，再往里加编辑。</div>'; return; }
   wrap.innerHTML="";
   window.__sePlatEls={}; window.__seEdEls={}; /* v38.82：搜索跳转用的行元素映射，每次渲染重建 */
-  // 按平台分组（平台名去空格、转小写作分组键；同平台多个编辑归到一组）
+  // 按平台分组（平台名去空格、转小写作分组键；同平台多个编辑归到一组）—— v38.85 起用筛选后的 view
   const groups={}; const order=[];
-  list.forEach(function(e){
+  view.forEach(function(e){
     const raw=(e.platform||"").trim();
     const key=raw.toLowerCase()||"__未命名平台__";
     if(!groups[key]){ groups[key]={name:raw||"(未命名平台)",items:[]}; order.push(key); }
