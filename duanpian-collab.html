@@ -882,9 +882,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   .anl-sec-b th,.anl-sec-b td{border:1px solid var(--line);padding:6px 8px;text-align:left}
   .anl-sec-b th{background:var(--brand-soft);color:var(--ink)}
   .anl-curve{margin:10px 0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 6px}
-  .anl-lib,.anl-tools{margin-top:20px}
-  .anl-wt-out{margin-top:12px;background:var(--bg-soft);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:13.5px;line-height:1.85;color:var(--ink2)}
-  .wt-btns{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px}
+  .anl-lib{margin-top:20px}
   @media (max-width:1080px){ .anl-wrap{grid-template-columns:1fr} }
   @media (max-width:600px){
     .anl-panel{padding:10px}
@@ -1131,6 +1129,7 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
       <div class="anl-wrap">
         <div class="anl-panel">
           <div class="anl-ph"><b>原文输入</b><span class="spacer"></span>
+            <input type="text" id="anlSrcKw" placeholder="🔍 搜例文" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink);font-size:13px;max-width:110px" />
             <select id="anlSrc" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink);font-size:13px;max-width:180px"></select>
             <button class="btn sm" id="btnAnlDemo" type="button">填入示例</button>
             <button class="btn sm" id="btnAnlClear" type="button">清空</button>
@@ -1163,20 +1162,6 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
         <div class="grid" id="anlLibGrid"></div>
       </div>
 
-      <div class="anl-tools">
-        <div class="sec-head" style="margin:0 0 10px"><h3>✍️ 写作助手</h3><span class="hint">把自己的稿子粘进去，选一个工具，AI 当场给你结果</span></div>
-        <textarea id="wtText" class="anl-ta" style="min-height:140px" placeholder="把你要处理的段落粘在这里…"></textarea>
-        <div class="wt-btns">
-          <button class="btn soft" data-wt="diag" type="button">🩺 诊断这段</button>
-          <button class="btn soft" data-wt="cont" type="button">➡️ 帮我续写</button>
-          <button class="btn soft" data-wt="polish" type="button">✨ 润色改写</button>
-          <button class="btn soft" data-wt="twist" type="button">🌀 加个反转</button>
-          <button class="btn soft" data-wt="title" type="button">🏷️ 起个标题</button>
-          <button class="btn soft" data-wt="stuck" type="button">🆘 卡壳急救</button>
-          <span class="anl-prog" id="wtProg"></span>
-        </div>
-        <div class="anl-wt-out" id="wtOut"><div class="empty">结果会显示在这里</div></div>
-      </div>
     </section>
 
     <!-- 二、素材收集 -->
@@ -2499,7 +2484,7 @@ function renderNav(){
     el.onclick=()=>switchSec(it.sec);
     nav.appendChild(el);
     const h2=document.querySelector("#sec-"+it.sec+" .sec-head h2");
-    if(h2) h2.textContent=cnOrd(idx+1)+"、"+it.name;
+    if(h2) h2.textContent=it.name;
   });
 }
 function renderNavSettings(){
@@ -4343,6 +4328,7 @@ function enterCollabUI(){
   collabStartPoll();
   renderNav(); buildTagPicker($("#matTagPicker"),matTags,()=>{}); buildTagPicker($("#brTagPicker"),brTags,()=>{});
   renderAll(); updateFilterBtns(); renderIdeasSaved();
+  try{ if(typeof anlRefreshSrc==="function") anlRefreshSrc(); if(typeof anlRenderLib==="function") anlRenderLib(); }catch(e){}
 }
 // 最小可用离线状态（仅在明确需要本地空占位时使用，不再自动保存为缓存）
 function offlineCollabState(){
@@ -4670,7 +4656,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.73";
+  var APP_VERSION = "v38.74";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
@@ -4710,7 +4696,7 @@ var ANL_EMO={"心碎":-10,"心死":-10,"崩溃":-9,"虐心":-9,"绝望":-9,"悲�
   "高潮":9,"爽":9,"爽感":9,"打脸":9,"逆袭":9,"反转":7,"治愈":8,"感动":8,"圆满":8,"心动":7,"甜蜜":7,"甜":6,"和解":6,"温馨":6,"坚定":6,"希望":5,"暧昧":5,"升温":5,"期待":4,"悬念":3,"平静":1,"铺垫":0};
 var ANL={running:false,report:"",sections:[],title:"",srcId:"",srcTitle:"",genre:"追妻火葬场",words:0,libKw:""};
 function anlE(id){ return document.getElementById(id); }
-function anlList(){ if(!Array.isArray(state.analyses)) state.analyses=[]; return state.analyses; }
+function anlList(){ if(typeof state==="undefined"||!state) return []; if(!Array.isArray(state.analyses)) state.analyses=[]; return state.analyses; }
 function anlEsc(s){ try{ return (typeof esc==="function")?esc(s):String(s==null?"":s).replace(/[&<>"]/g,function(c){return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c];}); }catch(e){ return ""; } }
 
 /* ---------- Markdown → HTML（报告专用，够用即可） ---------- */
@@ -5001,10 +4987,14 @@ function anlFill(text, srcId, srcTitle){
 }
 function anlRefreshSrc(){
   var sel=anlE("anlSrc"); if(!sel) return;
+  var kw=""; var kb=anlE("anlSrcKw"); if(kb) kw=(kb.value||"").trim().toLowerCase();
   var cur=sel.value; sel.innerHTML="";
   var o=document.createElement("option"); o.value=""; o.textContent="📂 从例文选择…"; sel.appendChild(o);
-  (state.examples||[]).forEach(function(e){
-    var op=document.createElement("option"); op.value=e.id; op.textContent=(e.title||e.fileName||"未命名").slice(0,18); sel.appendChild(op);
+  var exs=(typeof state!=="undefined"&&state&&Array.isArray(state.examples))?state.examples:[];
+  exs.forEach(function(e){
+    var t=((e.title||e.fileName||"未命名")+"").trim();
+    if(kw && t.toLowerCase().indexOf(kw)<0) return;
+    var op=document.createElement("option"); op.value=e.id; op.textContent=t.slice(0,18); sel.appendChild(op);
   });
   sel.value=cur;
 }
@@ -5096,35 +5086,6 @@ function anlRenderGenre(){
   Array.prototype.forEach.call(box.querySelectorAll(".anl-chip"),function(c){ c.onclick=function(){ ANL.genre=c.getAttribute("data-g"); anlRenderGenre(); }; });
 }
 
-/* ---------- 写作助手 6 工具 ---------- */
-var WT_DEFS={
-  diag:{name:"诊断这段",tip:"逐句挑毛病：拖沓、说教、情绪不够、信息重复，给可改的具体意见"},
-  cont:{name:"帮我续写",tip:"顺着原文风格与情绪继续写 300-500 字，不要总结，直接接着写"},
-  polish:{name:"润色改写",tip:"保留原意与人物语气，把句子改得更精炼有画面感，输出改写后的全文"},
-  twist:{name:"加个反转",tip:"在现有基础上设计 3 个反转方案，每个说明怎么铺垫、在哪里揭、读者会什么反应"},
-  title:{name:"起个标题",tip:"给 5 个标题备选，标明各自吸引的是哪类读者、适合哪个平台"},
-  stuck:{name:"卡壳急救",tip:"给出 3 种后续走向选项，每种列出：接下来发生什么、人物怎么变、情绪怎么推"}
-};
-async function wtRun(kind){
-  if(ANL.running){ toast("等拆文跑完再用"); return; }
-  var ta=anlE("wtText"); if(!ta) return;
-  var text=(ta.value||"").trim();
-  if(!text){ toast("先粘一段你的稿子"); return; }
-  var sys="你是一位严格但实用的短篇小说编辑，说话直接、给具体意见，不写客套话。擅长追妻火葬场、爽文、世情、悬疑、重生复仇等中文短篇类型。\n";
-  var instr=(state.aiCfg&&state.aiCfg.instruction)||"";
-  if((instr||"").trim()) sys+="用户的长期写作要求："+instr.trim()+"\n";
-  var def=WT_DEFS[kind];
-  sys+="本次任务：["+def.name+"] —— "+def.tip+"。\n请只输出任务结果本身，不要写「好的」「以下是」这类开场白。";
-  ANL.running=true; var out=anlE("wtOut"), prog=anlE("wtProg");
-  out.textContent=""; prog.textContent="正在"+def.name+"…";
-  try{
-    var txt=await anlStream([{role:"system",content:sys},{role:"user",content:"我的稿子：\n"+text}], function(d){ out.textContent=(out.textContent||"")+d; });
-    out.textContent=txt||out.textContent||"（AI 没返回内容）";
-    prog.textContent="完成 · "+def.name;
-  }catch(e){ out.textContent="失败："+((e&&e.message)||e); prog.textContent=""; }
-  finally{ ANL.running=false; }
-}
-
 /* 独立读取文件（不复用上传流程的 parseFile，避免它内部的 fileData 膨胀与上传态依赖） */
 async function anlReadFile(f){
   var nm=(f.name||"").toLowerCase();
@@ -5140,7 +5101,11 @@ var ANL_DEMO="林晚第一次见到沈屹，是在凌晨十二点零七分的末
 /* ---------- 初始化 ---------- */
 function anlInit(){
   ANL.genre=ANL_GENRES[3];
-  anlRenderGenre(); anlRefreshSrc(); anlRenderLib();
+  /* v38.74：加载时 state 可能还没就绪（异步 load 未完成），渲染必须逐个兜底，
+     否则任何一个抛错都会中断 anlInit，后面所有按钮的 onclick 全绑不上（线上「开始拆文/填入示例」没反应的真因） */
+  try{ anlRenderGenre(); }catch(e){}
+  try{ anlRefreshSrc(); }catch(e){}
+  try{ anlRenderLib(); }catch(e){}
   var ta=anlE("anlText");
   if(ta){
     ta.addEventListener("input",anlRefreshWords);
@@ -5181,7 +5146,7 @@ function anlInit(){
   };
   var se=anlE("anlSearch");
   if(se) se.oninput=function(){ ANL.libKw=se.value; anlRenderLib(); };
-  Array.prototype.forEach.call(document.querySelectorAll("[data-wt]"),function(b){ b.onclick=function(){ wtRun(b.getAttribute("data-wt")); }; });
+  var skb=anlE("anlSrcKw"); if(skb) skb.oninput=function(){ anlRefreshSrc(); };
 }
 // 例文阅读器里的「✂️ AI 拆文」：把这篇带进拆文页
 try{
