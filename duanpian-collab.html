@@ -1229,6 +1229,7 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
         <h2>投稿邮箱</h2>
         <span class="hint">左列是平台（可置顶/删除），右列是置顶编辑；点「▾」展开同平台其他编辑</span>
         <span class="spacer"></span>
+        <button class="btn sm" id="btnSeAutoSort" type="button">⇅ 自动排序</button>
         <button class="btn sm" id="btnSeRecount" type="button">🔄 自动统计数</button>
         <button class="btn sm del" id="btnSeClearAll" type="button">🗑 全部清空</button>
         <button class="btn sm" id="btnSeImport" type="button">⬇ 批量导入</button>
@@ -4756,7 +4757,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.82";
+  var APP_VERSION = "v38.83";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
@@ -5289,8 +5290,47 @@ function seRenderStats(list){
   list.forEach(function(e){ const nm=(e.platform||"").trim(); const k=nm.toLowerCase()||"__"; if(!plats[k]) plats[k]={name:nm,n:0}; plats[k].n++; });
   let total=0,zh=0,zd=0;
   Object.keys(plats).forEach(function(k){ total++; const c=seCatOf(plats[k].name); if(c===3) zh++; else if(c===1) zd++; });
-  bar.innerHTML='<span><b>平台 '+total+'</b></span><span><b>编辑 '+list.length+'</b></span><span><b>第三方 '+(total-zh-zd)+'</b></span><span><b>知乎 '+zh+'</b></span><span><b>中短 '+zd+'</b></span>';
+  bar.innerHTML='<span><b>平台 '+total+'</b></span><span><b>编辑 '+list.length+'</b></span><span><b>第三方 '+(total-zh-zd)+'</b></span><span><b>知乎 '+zh+'</b></span>'; /* v38.83：按用户要求去掉「中短」显示（第三方口径不变=总-知乎-中短） */
 }
+/* v38.83：平台排序比较器（渲染与「⇅ 自动排序」共用）—— 置顶平台最前(最近置顶在前) → 无括号 →（主收中短）→（海外短篇）→（主收知乎）→ 同类内拼音 */
+function sePlatCmp(groups){
+  return function(a,b){
+    const ga=groups[a], gb=groups[b];
+    const pa=ga.items.some(function(e){ return e.platPinned; }), pb=gb.items.some(function(e){ return e.platPinned; });
+    if(pa!==pb) return pa?-1:1;
+    if(pa&&pb){
+      const ta=Math.max.apply(null,ga.items.map(function(e){ return e.platPinTs||0; }));
+      const tb=Math.max.apply(null,gb.items.map(function(e){ return e.platPinTs||0; }));
+      if(ta!==tb) return tb-ta;
+    }
+    const ca=seCatOf(ga.name), cb=seCatOf(gb.name);
+    if(ca!==cb) return ca-cb;
+    return sePyCmp(ga.name,gb.name);
+  };
+}
+/* v38.83：⇅ 自动排序 —— 把保存的数据数组本身按上面同一规则重排（置顶平台忽略排序、保持最前不动），编辑行内部也顺手排好 */
+function seAutoSort(){
+  if(!Array.isArray(state.subEmails)) state.subEmails=[];
+  const groups={}; const order=[];
+  state.subEmails.forEach(function(e){
+    const raw=(e.platform||"").trim();
+    const key=raw.toLowerCase()||"__未命名平台__";
+    if(!groups[key]){ groups[key]={name:raw||"(未命名平台)",items:[]}; order.push(key); }
+    groups[key].items.push(e);
+  });
+  order.sort(sePlatCmp(groups));
+  let out=[]; let pinned=0;
+  order.forEach(function(k){
+    const g=groups[k];
+    if(g.items.some(function(e){ return e.platPinned; })) pinned++;
+    out=out.concat(seSortItems(g.items));
+  });
+  state.subEmails=out;
+  save();
+  renderSubEmails();
+  toast("已自动排序：置顶 "+pinned+" 个平台保持最前，其余 "+(order.length-pinned)+" 个按分类+拼音排好");
+}
+if($("#btnSeAutoSort")) $("#btnSeAutoSort").onclick=seAutoSort;
 /* v38.82：搜索平台/编辑 —— 关键字实时匹配，点结果滚动到对应行并高亮 */
 function seSearchMatches(kw){
   kw=String(kw||"").trim().toLowerCase();
@@ -5457,20 +5497,8 @@ function renderSubEmails(){
     if(!groups[key]){ groups[key]={name:raw||"(未命名平台)",items:[]}; order.push(key); }
     groups[key].items.push(e);
   });
-  /* v38.81：平台排序 —— 置顶平台最前（最近置顶的在前）→ 无括号 →（主收中短）→（海外短篇）→（主收知乎），同类内按拼音 */
-  order.sort(function(a,b){
-    const ga=groups[a], gb=groups[b];
-    const pa=ga.items.some(function(e){ return e.platPinned; }), pb=gb.items.some(function(e){ return e.platPinned; });
-    if(pa!==pb) return pa?-1:1;
-    if(pa&&pb){
-      const ta=Math.max.apply(null,ga.items.map(function(e){ return e.platPinTs||0; }));
-      const tb=Math.max.apply(null,gb.items.map(function(e){ return e.platPinTs||0; }));
-      if(ta!==tb) return tb-ta;
-    }
-    const ca=seCatOf(ga.name), cb=seCatOf(gb.name);
-    if(ca!==cb) return ca-cb;
-    return sePyCmp(ga.name,gb.name);
-  });
+  /* v38.83：平台排序改用共享比较器 sePlatCmp（规则不变：置顶最前→无括号→中短→海外→知乎→同类内拼音） */
+  order.sort(sePlatCmp(groups));
   order.forEach(function(gk){
     const g=groups[gk];
     g.items=seSortItems(g.items); /* v38.80：置顶第一 → 无分部按拼音 → 各分部按拼音，分部内也按拼音 */
