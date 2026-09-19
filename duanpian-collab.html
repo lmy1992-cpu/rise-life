@@ -883,17 +883,31 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   .anl-sec-b th{background:var(--brand-soft);color:var(--ink)}
   .anl-curve{margin:10px 0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 6px}
   .anl-lib{margin-top:20px}
-  /* ===== v38.77 投稿邮箱 ===== */
-  .se-block{margin-top:8px}
-  .se-group{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px;box-shadow:var(--shadow)}
-  .se-group-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-  .se-platform{flex:1;min-width:140px;font-weight:700;font-size:14px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink)}
-  .se-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 0;border-top:1px dashed var(--line)}
-  .se-row:first-of-type{border-top:none}
-  .se-editor{min-width:110px;width:18%;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink)}
-  .se-email{flex:1;min-width:160px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink);font-family:inherit}
-  .se-note{flex:1;min-width:140px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink);resize:vertical;font-family:inherit}
+  /* ===== v38.79 投稿邮箱（独立 tab：左列平台 + 右列置顶编辑 + ▾展开 + 收藏） ===== */
+  .se-wrap{display:flex;flex-direction:column;gap:12px}
+  .se-fav{background:var(--panel);border:1px solid var(--brand);border-radius:12px;padding:10px 12px;box-shadow:var(--shadow)}
+  .se-fav-head{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:8px}
+  .se-fav-list{display:flex;flex-wrap:wrap;gap:8px}
+  .se-chip{display:inline-flex;align-items:center;gap:4px;background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:3px 6px 3px 12px;font-size:13px}
+  .se-chip b{color:var(--ink)}
+  .se-chip i{color:var(--ink);opacity:.55;font-style:normal;font-size:12px;margin-right:2px}
+  .se-plat{display:flex;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px;box-shadow:var(--shadow)}
+  .se-plat-l{width:190px;flex:0 0 190px;display:flex;flex-direction:column;gap:6px;border-right:1px dashed var(--line);padding-right:12px}
+  .se-platform{font-weight:700;font-size:14px;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink)}
+  .se-plat-l .btn{width:100%}
+  .se-plat-r{flex:1;min-width:0}
+  .se-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 0}
+  .se-row+.se-row{border-top:1px dashed var(--line)}
+  .se-tag{flex:none;font-size:11px;font-weight:700;color:#fff;background:var(--brand);border-radius:6px;padding:3px 6px}
+  .se-editor{min-width:100px;width:16%;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink)}
+  .se-email{flex:1;min-width:150px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink);font-family:inherit}
+  .se-note{flex:1;min-width:110px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink);font-family:inherit}
   .se-row .btn.del{color:var(--danger);border-color:var(--danger)}
+  .se-favbtn.on,.se-pinbtn.on{color:#fff;background:var(--brand);border-color:var(--brand)}
+  .se-toggle{margin-top:6px;border:0;background:transparent;color:var(--brand);font-size:13px;font-weight:600;cursor:pointer;padding:4px 2px}
+  .se-toggle:hover{text-decoration:underline}
+  .se-more{display:none}
+  .se-more.open{display:block}
   /* ===== v38.77 素材脑洞子标题 ===== */
   .sub-sec-title{margin:18px 0 8px;font-size:15px;color:var(--ink);border-left:3px solid var(--brand);padding-left:8px}
   @media (max-width:1080px){ .anl-wrap{grid-template-columns:1fr} }
@@ -902,6 +916,8 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     .anl-ta{min-height:200px}
     .anl-report{max-height:none}
     .se-editor,.se-email,.se-note{width:100%}
+    .se-plat{flex-direction:column}
+    .se-plat-l{width:100%;flex:none;border-right:none;border-bottom:1px dashed var(--line);padding-right:0;padding-bottom:10px}
   }
 </style>
 </head>
@@ -1176,12 +1192,20 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
         <div class="grid" id="anlLibGrid"></div>
       </div>
 
-      <!-- v38.77：投稿邮箱（按平台收纳编辑邮箱，可编辑 / 复制 / 删除） -->
-      <div class="se-block">
-        <div class="sec-head" style="margin:22px 0 10px"><h3>投稿邮箱</h3><span class="hint">按平台收纳编辑邮箱：平台 / 编辑 / 邮箱 / 备注，可编辑、复制、删除</span><span class="spacer"></span><button class="btn primary sm" id="btnAddSubEmail" type="button">+ 添加投稿邮箱</button></div>
+    </section>
+
+    <!-- 投稿邮箱（v38.79：独立 tab，位于「拆文」与「素材脑洞」之间） -->
+    <section class="sec" id="sec-subemails">
+      <div class="sec-head">
+        <h2>投稿邮箱</h2>
+        <span class="hint">左列是平台，右列直接显示你置顶的那位编辑；点「▾」展开同平台其他编辑</span>
+        <span class="spacer"></span>
+        <button class="btn primary sm" id="btnAddSubEmail" type="button">+ 添加平台</button>
+      </div>
+      <div class="se-wrap">
+        <div class="se-fav" id="seFavWrap" style="display:none"></div>
         <div id="subEmailWrap"></div>
       </div>
-
     </section>
 
     <!-- 素材脑洞（v38.77：素材收集 + 脑洞想法 合并为一 tab） -->
@@ -2336,6 +2360,13 @@ function migrate(){
       const ai=state.nav.findIndex(n=>n.sec==="analyses");
       state.nav.splice(ai>=0?ai+1:state.nav.length,0,{sec:"matebrain", name:"素材脑洞"});
     }
+    // v38.79：投稿邮箱 独立成 tab（老用户迁移），插在「拆文」之后、「素材脑洞」之前
+    if(!state.nav.some(n=>n.sec==="subemails")){
+      const ai2=state.nav.findIndex(n=>n.sec==="analyses");
+      const iMb3=state.nav.findIndex(n=>n.sec==="matebrain");
+      const pos=ai2>=0?ai2+1:(iMb3>=0?iMb3:state.nav.length);
+      state.nav.splice(pos,0,{sec:"subemails", name:"投稿邮箱"});
+    }
     // v38.78 修复：把被 v38.77 旧迁移误删的「杂项分类」入口补回（其内容 state.misc 从未丢失）
     if(!state.nav.some(n=>n.sec==="misc")){
       const iMb2=state.nav.findIndex(n=>n.sec==="matebrain");
@@ -2349,6 +2380,7 @@ const DEFAULT_NAV=[
   {sec:"examples", name:"例文"},
   {sec:"tutorials", name:"教程"},
   {sec:"analyses", name:"拆文"},
+  {sec:"subemails", name:"投稿邮箱"},
   {sec:"matebrain", name:"素材脑洞"},
   {sec:"misc", name:"杂项分类"},
   {sec:"tagmanage", name:"元素标签"},
@@ -2490,7 +2522,7 @@ function wireTagSearch(inputId, candId, containerId, getSelected, onChange){
 /* ---------- 左侧导航（可排序 / 重命名） ---------- */
 function cnOrd(n){ const d=["零","一","二","三","四","五","六","七","八","九","十"]; if(n<=10) return d[n]; if(n<20) return "十"+d[n-10]; if(n===20) return "二十"; return ""+n; }
 function fmtDate(ts){ if(!ts) return "—"; const d=new Date(ts); const p=n=>String(n).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes()); }
-const NAV_SUB={examples:"上传 word / txt",tutorials:"上传 word / txt",analyses:"10 维 AI 拆解",matebrain:"素材 / 脑洞 / 灵感",materials:"文字 / 图片 / 链接",brainstorms:"标题 / 想法 / 拓展",misc:"大项导览",tagmanage:"类型 / 核心梗",crawl:"每日全网热点",ideas:"组合成篇"};
+const NAV_SUB={examples:"上传 word / txt",tutorials:"上传 word / txt",analyses:"10 维 AI 拆解",subemails:"平台 / 编辑 / 邮箱",matebrain:"素材 / 脑洞 / 灵感",materials:"文字 / 图片 / 链接",brainstorms:"标题 / 想法 / 拓展",misc:"大项导览",tagmanage:"类型 / 核心梗",crawl:"每日全网热点",ideas:"组合成篇"};
 let currentSec="examples";
 function switchSec(sec){
   currentSec=sec;
@@ -2502,7 +2534,7 @@ function switchSec(sec){
   if(sec==="ideas") renderIdeas();
   if(sec==="crawl") renderCrawl();
   if(sec==="matebrain"){ renderMaterials(); renderBrainstorms(); }
-  if(sec==="analyses"){ renderSubEmails(); }
+  if(sec==="subemails"){ renderSubEmails(); }
 }
 function renderNav(){
   const nav=$("#sideNav"); if(!nav) return; nav.innerHTML="";
@@ -4677,7 +4709,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.78";
+  var APP_VERSION = "v38.79";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
@@ -5143,12 +5175,61 @@ async function anlReadFile(f){
 }
 var ANL_DEMO="林晚第一次见到沈屹，是在凌晨十二点零七分的末班地铁站。\n那天她加班到深夜，整个城市都睡了。地铁里空荡荡的，只有她和一个坐在角落的男人。他穿一件洗得发白的牛仔外套，膝盖上摊着一本速写本，笔尖在纸上沙沙地画着什么。\n林晚找了个离他不远的位置坐下，抬起头——画的是她。\n准确来说，是地铁车厢灯光下的她，额前碎发垂着，指尖捏着手机，眉头微蹙，连她眼尾那颗小痣都点了出来。\n「你偷画我？」\n男人抬眼，眼神有点懵，像是刚从自己的世界里被拽出来。可他那副窘迫的样子，反倒让林晚笑出了声。\n那是他们的第一次见面。后来他们常常在末班地铁上碰到，他给她带热牛奶，她给他讲公司里的奇葩需求。两个人影在时间缝里错位地拼在了一起。\n半年后他把那本速写本送给她，一页一页，全是她。她说好。\n可有些东西不是说放下就能放下的。那天她提早下班，买了草莓蛋糕坐了四十分钟地铁到他家，门没锁。她推开门，看见他坐在地上，面前摊着一堆旧照片。照片上是一个女孩，眉眼和她有七分像。\n「她是谁？」\n他沉默的那几秒，像一个世纪那么长。\n她怕自己真的只是一个替代品。于是她收拾东西搬回了自己的出租屋，他发消息她敷衍回，他约见面她说加班。\n冷战到第十五天，暴雨。她没带伞，站在公司楼下犹豫要不要冲出去，然后看见了他——黑伞撑着，浑身湿透，不知道站了多久。\n「我只是很想你。」\n那一刻她眼泪混着雨往下掉。可她心里清楚，和好不等于过去真的过去了。\n直到那年冬天，他蒙着她的眼睛开车开了很久，摘下眼罩时，她站在一间画室里。满墙的画，全是她。\n最大的那幅右下角写着一行小字——「致林晚：我的光。」\n她转过身，他单膝跪地。\n末班地铁上的相遇，原来不是偶然。";
 /* ---------- 投稿邮箱（v38.77：拆文 tab 下，按平台收纳编辑邮箱） ---------- */
+/* 单行编辑器：姓名 / 邮箱 / 备注 / 📋复制 / ⭐收藏 / ⇧置顶 / ✕删除 */
+function seEditorRow(e, list, isTop){
+  const row=document.createElement("div"); row.className="se-row"+(isTop?" se-top":"");
+  if(isTop){ const tag=document.createElement("span"); tag.className="se-tag"; tag.textContent="置顶"; row.appendChild(tag); }
+  const ed=document.createElement("input"); ed.className="se-editor"; ed.value=e.editor||""; ed.placeholder="编辑姓名"; ed.title="编辑姓名";
+  ed.onchange=function(){ e.editor=ed.value; save(); };
+  const em=document.createElement("input"); em.className="se-email"; em.value=e.email||""; em.placeholder="邮箱地址"; em.title="编辑邮箱（点 📋 复制）";
+  em.onchange=function(){ e.email=em.value; save(); };
+  const note=document.createElement("input"); note.className="se-note"; note.value=e.note||""; note.placeholder="备注（选填）"; note.title="备注";
+  note.onchange=function(){ e.note=note.value; save(); };
+  const copy=document.createElement("button"); copy.className="btn sm"; copy.type="button"; copy.textContent="📋"; copy.title="复制该编辑的邮箱";
+  copy.onclick=function(){ copyText(e.email); };
+  const fav=document.createElement("button"); fav.className="btn sm se-favbtn"+(e.fav?" on":""); fav.type="button"; fav.textContent=e.fav?"★":"☆"; fav.title=e.fav?"取消收藏":"收藏到顶部收藏列表";
+  fav.onclick=function(){ e.fav=!e.fav; save(); renderSubEmails(); };
+  const pin=document.createElement("button"); pin.className="btn sm se-pinbtn"+(e.pinned?" on":""); pin.type="button"; pin.textContent="⇧"; pin.title=e.pinned?"取消置顶":"设为该平台置顶编辑（显示在第一行）";
+  pin.onclick=function(){
+    const pk=(e.platform||"").trim().toLowerCase();
+    if(e.pinned){ e.pinned=false; }
+    else{ list.forEach(function(x){ if(((x.platform||"").trim().toLowerCase())===pk) x.pinned=false; }); e.pinned=true; }
+    save(); renderSubEmails();
+  };
+  const del=document.createElement("button"); del.className="btn sm del"; del.type="button"; del.textContent="✕"; del.title="删除该编辑邮箱";
+  del.onclick=function(){ if(confirm("删除编辑「"+(e.editor||e.email||"未命名")+"」？")){ state.subEmails=list.filter(function(x){ return x.id!==e.id; }); save(); renderSubEmails(); } };
+  row.appendChild(ed); row.appendChild(em); row.appendChild(note); row.appendChild(copy); row.appendChild(fav); row.appendChild(pin); row.appendChild(del);
+  return row;
+}
+/* 顶部「收藏的编辑」：跨平台汇总所有 ⭐，一键复制 */
+function renderSeFav(list, box){
+  if(!box) return;
+  const favs=list.filter(function(e){ return e.fav; });
+  if(!favs.length){ box.style.display="none"; box.innerHTML=""; return; }
+  box.style.display="";
+  box.innerHTML='<div class="se-fav-head">⭐ 收藏的编辑（'+favs.length+'）· 点「📋」直接复制邮箱</div>';
+  const row=document.createElement("div"); row.className="se-fav-list";
+  favs.forEach(function(e){
+    const chip=document.createElement("span"); chip.className="se-chip";
+    const nm=document.createElement("b"); nm.textContent=e.editor||"未命名";
+    const pf=document.createElement("i"); pf.textContent=e.platform||"未命名平台";
+    const cp=document.createElement("button"); cp.className="btn sm"; cp.type="button"; cp.textContent="📋"; cp.title="复制邮箱";
+    cp.onclick=function(){ copyText(e.email); };
+    const un=document.createElement("button"); un.className="btn sm on"; un.type="button"; un.textContent="★"; un.title="取消收藏";
+    un.onclick=function(){ e.fav=false; save(); renderSubEmails(); };
+    chip.appendChild(nm); chip.appendChild(pf); chip.appendChild(cp); chip.appendChild(un);
+    row.appendChild(chip);
+  });
+  box.appendChild(row);
+}
+/* 主渲染：左列平台 → 右列「置顶编辑(第一行) + ▾展开其他编辑」 */
 function renderSubEmails(){
   const wrap=$("#subEmailWrap"); if(!wrap) return;
   const list=Array.isArray(state.subEmails)?state.subEmails:[];
-  if(!list.length){ wrap.innerHTML='<div class="empty">还没有投稿邮箱。点上方「+ 添加投稿邮箱」添加：平台 / 编辑 / 邮箱 / 备注，可编辑、复制、删除。</div>'; return; }
+  renderSeFav(list, $("#seFavWrap"));
+  if(!list.length){ wrap.innerHTML='<div class="empty">还没有投稿邮箱。点右上「+ 添加平台」，先建平台，再往里加编辑。</div>'; return; }
   wrap.innerHTML="";
-  // 按平台分组（平台名去空格、转小写作分组键；同平台多个编辑并列）
+  // 按平台分组（平台名去空格、转小写作分组键；同平台多个编辑归到一组）
   const groups={}; const order=[];
   list.forEach(function(e){
     const raw=(e.platform||"").trim();
@@ -5158,33 +5239,32 @@ function renderSubEmails(){
   });
   order.forEach(function(gk){
     const g=groups[gk];
-    const grp=document.createElement("div"); grp.className="se-group";
-    const head=document.createElement("div"); head.className="se-group-head";
+    const box=document.createElement("div"); box.className="se-plat";
+    /* 左列：平台名 + 加编辑 / 删平台 */
+    const left=document.createElement("div"); left.className="se-plat-l";
     const gname=document.createElement("input"); gname.className="se-platform"; gname.value=g.name; gname.placeholder="平台名（如：九州）"; gname.title="修改平台名会同步到该平台下所有编辑";
     gname.onchange=function(){ const v=gname.value.trim(); g.items.forEach(function(e){ e.platform=v; }); save(); renderSubEmails(); };
-    const gAdd=document.createElement("button"); gAdd.className="btn sm"; gAdd.textContent="+ 编辑"; gAdd.title="给该平台新增一位编辑";
-    gAdd.onclick=function(){ list.push({id:uid(),platform:g.name,editor:"",email:"",note:""}); save(); renderSubEmails(); };
-    const gDel=document.createElement("button"); gDel.className="btn sm del"; gDel.textContent="删除平台"; gDel.title="删除该平台及其下所有编辑邮箱";
+    const gAdd=document.createElement("button"); gAdd.className="btn sm"; gAdd.type="button"; gAdd.textContent="+ 编辑"; gAdd.title="给该平台新增一位编辑";
+    gAdd.onclick=function(){ state.subEmails.push({id:uid(),platform:(g.name==="(未命名平台)"?"":g.name),editor:"",email:"",note:"",fav:false,pinned:false}); save(); renderSubEmails(); };
+    const gDel=document.createElement("button"); gDel.className="btn sm del"; gDel.type="button"; gDel.textContent="删除平台"; gDel.title="删除该平台及其下所有编辑邮箱";
     gDel.onclick=function(){ if(confirm("删除平台「"+(g.name||"未命名")+"」及其下所有编辑邮箱？此操作不可恢复。")){ state.subEmails=list.filter(function(e){ return ((e.platform||"").trim().toLowerCase())!==gk; }); save(); renderSubEmails(); } };
-    head.appendChild(gname); head.appendChild(gAdd); head.appendChild(gDel);
-    grp.appendChild(head);
-    g.items.forEach(function(e){
-      const row=document.createElement("div"); row.className="se-row";
-      const ed=document.createElement("input"); ed.className="se-editor"; ed.value=e.editor||""; ed.placeholder="编辑姓名"; ed.title="编辑姓名";
-      ed.onchange=function(){ e.editor=ed.value; save(); };
-      const em=document.createElement("input"); em.className="se-email"; em.value=e.email||""; em.placeholder="邮箱地址"; em.title="编辑邮箱（点右侧📋复制）";
-      em.onchange=function(){ e.email=em.value; save(); };
-      const copy=document.createElement("button"); copy.className="btn sm"; copy.textContent="📋 复制"; copy.title="复制该编辑的邮箱";
-      copy.onclick=function(){ copyText(e.email); };
-      const note=document.createElement("textarea"); note.className="se-note"; note.value=e.note||""; note.placeholder="备注（选填）"; note.rows=1; note.title="备注";
-      note.oninput=function(){ note.style.height="auto"; note.style.height=(note.scrollHeight)+"px"; };
-      note.onchange=function(){ e.note=note.value; save(); };
-      const del=document.createElement("button"); del.className="btn sm del"; del.textContent="✕"; del.title="删除该编辑邮箱";
-      del.onclick=function(){ if(confirm("删除该编辑邮箱「"+(e.editor||e.email||"未命名")+"」？")){ state.subEmails=list.filter(function(x){ return x.id!==e.id; }); save(); renderSubEmails(); } };
-      row.appendChild(ed); row.appendChild(em); row.appendChild(copy); row.appendChild(note); row.appendChild(del);
-      grp.appendChild(row);
-    });
-    wrap.appendChild(grp);
+    left.appendChild(gname); left.appendChild(gAdd); left.appendChild(gDel);
+    /* 右列：置顶编辑在第一行，其余折叠在 ▾ 里 */
+    const right=document.createElement("div"); right.className="se-plat-r";
+    let top=null; g.items.forEach(function(e){ if(e.pinned && !top) top=e; });
+    if(!top) top=g.items[0];
+    const rest=g.items.filter(function(e){ return e!==top; });
+    right.appendChild(seEditorRow(top, list, true));
+    if(rest.length){
+      const tog=document.createElement("button"); tog.className="se-toggle"; tog.type="button";
+      tog.textContent="▾ 展开同平台其他 "+rest.length+" 位编辑";
+      const more=document.createElement("div"); more.className="se-more";
+      rest.forEach(function(e){ more.appendChild(seEditorRow(e, list, false)); });
+      tog.onclick=function(){ const open=more.classList.toggle("open"); tog.textContent=open?"▴ 收起其他编辑":"▾ 展开同平台其他 "+rest.length+" 位编辑"; };
+      right.appendChild(tog); right.appendChild(more);
+    }
+    box.appendChild(left); box.appendChild(right);
+    wrap.appendChild(box);
   });
 }
 function copyText(t){
@@ -5200,7 +5280,7 @@ function fallbackCopy(t){
     toast(ok?"已复制："+t:"复制失败，请手动复制："+t);
   }catch(e){ toast("复制失败，请手动复制："+t); }
 }
-if($("#btnAddSubEmail")) $("#btnAddSubEmail").onclick=function(){ if(!Array.isArray(state.subEmails)) state.subEmails=[]; state.subEmails.push({id:uid(),platform:"",editor:"",email:"",note:""}); save(); renderSubEmails(); };
+if($("#btnAddSubEmail")) $("#btnAddSubEmail").onclick=function(){ if(!Array.isArray(state.subEmails)) state.subEmails=[]; state.subEmails.push({id:uid(),platform:"",editor:"",email:"",note:"",fav:false,pinned:false}); save(); renderSubEmails(); };
 
 /* ---------- 初始化 ---------- */
 function anlInit(){
