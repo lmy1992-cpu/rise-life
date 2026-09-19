@@ -883,11 +883,25 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   .anl-sec-b th{background:var(--brand-soft);color:var(--ink)}
   .anl-curve{margin:10px 0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 6px}
   .anl-lib{margin-top:20px}
+  /* ===== v38.77 投稿邮箱 ===== */
+  .se-block{margin-top:8px}
+  .se-group{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px;box-shadow:var(--shadow)}
+  .se-group-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .se-platform{flex:1;min-width:140px;font-weight:700;font-size:14px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink)}
+  .se-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 0;border-top:1px dashed var(--line)}
+  .se-row:first-of-type{border-top:none}
+  .se-editor{min-width:110px;width:18%;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink)}
+  .se-email{flex:1;min-width:160px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink);font-family:inherit}
+  .se-note{flex:1;min-width:140px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink);resize:vertical;font-family:inherit}
+  .se-row .btn.del{color:var(--danger);border-color:var(--danger)}
+  /* ===== v38.77 素材脑洞子标题 ===== */
+  .sub-sec-title{margin:18px 0 8px;font-size:15px;color:var(--ink);border-left:3px solid var(--brand);padding-left:8px}
   @media (max-width:1080px){ .anl-wrap{grid-template-columns:1fr} }
   @media (max-width:600px){
     .anl-panel{padding:10px}
     .anl-ta{min-height:200px}
     .anl-report{max-height:none}
+    .se-editor,.se-email,.se-note{width:100%}
   }
 </style>
 </head>
@@ -896,7 +910,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 <div class="mask" id="maskLogin" style="z-index:999">
   <div class="modal" style="max-width:440px">
     <h3>🔗 短篇协作版</h3>
-    <div class="sub">和好友共用全部内容：例文 / 素材 / 杂项 / 元素 / 脑洞想法 / 想法拓展 / 抓取收藏 / AI 设置，两台设备实时同步。只需一个「协作空间口令」就能打开。</div>
+    <div class="sub">和好友共用全部内容：例文 / 教程 / 拆文 / 素材脑洞 / 杂项 / 元素 / 想法拓展 / 抓取收藏 / AI 设置，两台设备实时同步。只需一个「协作空间口令」就能打开。</div>
     <div class="field"><label>协作空间口令（两人约定同一个词）</label><input id="collabShare" type="password" placeholder="例如 rose2026" /></div>
     <input id="collabPriv" type="hidden" value="" />
     <div class="field" style="margin-top:6px"><label style="font-weight:normal;color:#555;font-size:13px"><input id="collabRemember" type="checkbox" checked /> 记住我，下次自动进入</label></div>
@@ -1162,16 +1176,24 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
         <div class="grid" id="anlLibGrid"></div>
       </div>
 
+      <!-- v38.77：投稿邮箱（按平台收纳编辑邮箱，可编辑 / 复制 / 删除） -->
+      <div class="se-block">
+        <div class="sec-head" style="margin:22px 0 10px"><h3>投稿邮箱</h3><span class="hint">按平台收纳编辑邮箱：平台 / 编辑 / 邮箱 / 备注，可编辑、复制、删除</span><span class="spacer"></span><button class="btn primary sm" id="btnAddSubEmail" type="button">+ 添加投稿邮箱</button></div>
+        <div id="subEmailWrap"></div>
+      </div>
+
     </section>
 
-    <!-- 二、素材收集 -->
-    <section class="sec" id="sec-materials">
+    <!-- 素材脑洞（v38.77：素材收集 + 脑洞想法 合并为一 tab） -->
+    <section class="sec" id="sec-matebrain">
       <div class="sec-head">
-        <h2>二、素材收集</h2>
-        <span class="hint">上传方式：文字 / 图片 / 链接</span>
+        <h2>素材脑洞</h2>
+        <span class="hint">素材与灵感，一处收纳</span>
         <span class="spacer"></span>
         <button class="btn sm btnFilter" id="btnFilterMaterials">⚲ 元素筛选</button>
       </div>
+
+      <h3 class="sub-sec-title">素材收集</h3>
       <div class="form">
         <div class="field">
           <label>上传方式</label>
@@ -1203,16 +1225,8 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
         <div class="modal-actions"><button class="btn primary" id="btnAddMaterial">+ 添加素材</button></div>
       </div>
       <div class="grid" id="materialsGrid" style="margin-top:16px"></div>
-    </section>
 
-    <!-- 三、脑洞想法 -->
-    <section class="sec" id="sec-brainstorms">
-      <div class="sec-head">
-        <h2>三、脑洞想法</h2>
-        <span class="hint">随手记灵感</span>
-        <span class="spacer"></span>
-        <button class="btn sm btnFilter" id="btnFilterBrainstorms">⚲ 元素筛选</button>
-      </div>
+      <h3 class="sub-sec-title">脑洞想法</h3>
       <div class="form">
         <div class="field"><label>标题</label><input type="text" id="brTitle" placeholder="脑洞标题" /></div>
         <div class="field"><label>想法</label><textarea id="brIdea" placeholder="核心想法"></textarea></div>
@@ -1972,10 +1986,10 @@ const _COLLAB_TAB_ID = (Math.random().toString(36) + Date.now().toString(36)).sl
 const _collabBC = ('BroadcastChannel' in window) ? new BroadcastChannel('duanpian-collab') : null;
 async function _applyBroadcastState(shared, priv, ts){
   if(!shared && !priv) return;
-  const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
+  const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],subEmails:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
   // v38.35：以当前 state 为合并基础——只覆盖包里真正带过来的字段，包里没有的保留本机内容（防旧版本包/另一窗口把脑洞想法清空）
   state = Object.assign({}, def, state||{}, shared||{}, priv||{});
-  ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav'].forEach(function(k){ if(!Array.isArray(state[k])) state[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
+  ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav','subEmails'].forEach(function(k){ if(!Array.isArray(state[k])) state[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):(k==='subEmails'?[]:[]))); });
   // v38.33：恢复本地 AI 设置（补空语义）：云端/广播包不含 key，本机备份补回空位——key 永不丢、云端非空字段不被旧备份覆盖
   await ensureAiCfg();
   if(!state.aiCfg || typeof state.aiCfg !== 'object') state.aiCfg={provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""};
@@ -2026,7 +2040,7 @@ let _savePending=false;   // 上传期间又有新改动：结束后自动补传
 let _lastSyncError="";    // 最后一次上传失败的简要原因（悬停状态条可见）
 let _cloudCorrupt=false;  // v38.59：云端分块解密失败（残留旧块混入）标志，触发本机干净重传自愈
 async function save(force=false){
-  if(!state || typeof state !== 'object'){ state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; }
+  if(!state || typeof state !== 'object'){ state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],subEmails:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; }
   // 手动强制同步：清掉可能卡死的标志、停止旧重试，立即再试一次
   if(force){
     _saveUploading=false;
@@ -2051,7 +2065,7 @@ async function save(force=false){
   try{
     // v38.35 单保险箱：原私有字段（脑洞/想法拓展/抓取收藏/AI 记忆）与 AI 密钥一并进共享包，一个口令全共享
     const shared={examples:state.examples||[],intros:state.intros||[],materials:state.materials||[],misc:state.misc||[],tags:state.tags||[],tutorials:state.tutorials||[],aiFields:state.aiFields||[],nav:state.nav||[],
-      brainstorms:state.brainstorms||[],ideas:state.ideas||[],crawlFav:state.crawlFav||[],analyses:state.analyses||[],
+      brainstorms:state.brainstorms||[],ideas:state.ideas||[],crawlFav:state.crawlFav||[],analyses:state.analyses||[],subEmails:state.subEmails||[],
       aiCfg:state.aiCfg?{provider:state.aiCfg.provider||"",key:state.aiCfg.key||"",baseUrl:state.aiCfg.baseUrl||"",model:state.aiCfg.model||"",instruction:state.aiCfg.instruction||"",aiMemory:state.aiCfg.aiMemory||""}:null};
     const priv=null; // 私有保险箱已取消：保留变量只为兼容旧的广播消息格式
     const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
@@ -2112,7 +2126,7 @@ let _loadPromise=null;
    ② 否则云端是同步基准：每个字段云端有数据就用云端（其它设备的增/删/改都能同步），
       云端为空的字段才用本地补（防空覆盖）并回推补齐；
    ③ 云端全空 → 本地兜底并回推；两边全空 → 空状态。 */
-const _DATA_KEYS=['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','tutorials'];
+const _DATA_KEYS=['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','tutorials','subEmails'];
 function _unionById(base,extra){
   const seen={}, out=[];
   (base||[]).forEach(function(x){ out.push(x); if(x&&x.id!=null) seen[x.id]=1; });
@@ -2171,13 +2185,13 @@ async function load(){
           if(pRow){ priv=await decBundle(await deriveKey(oldPriv), pRow.payload); if(priv) try{ localStorage.setItem("dp_collab_priv_migrated","1"); }catch(e){} }
         }
       }catch(e){}
-      const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
+      const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],subEmails:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
       const cloudState = Object.assign(def, shared||{});
       if(priv){
         ['brainstorms','ideas','crawlFav'].forEach(function(k){ if(Array.isArray(priv[k])&&priv[k].length) cloudState[k]=_unionById(cloudState[k]||[], priv[k]); });
         if(priv.aiMemory && !(cloudState.aiCfg&&cloudState.aiCfg.aiMemory)) cloudState.aiCfg=Object.assign({},cloudState.aiCfg||{},{aiMemory:priv.aiMemory});
       }
-      ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','tutorials','analyses','aiFields','nav'].forEach(function(k){ if(!Array.isArray(cloudState[k])) cloudState[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
+      ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','tutorials','analyses','aiFields','nav','subEmails'].forEach(function(k){ if(!Array.isArray(cloudState[k])) cloudState[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):(k==='subEmails'?[]:[]))); });
       // 本地缓存作为「最后已知良好」副本：IndexedDB 全量优先（大容量，权威），localStorage 瘦身兜底
       let localState=null;
       try{ const full=await idbGet(IDB_KEY); if(full && typeof full==='object') localState=full; }catch(e){}
@@ -2219,7 +2233,7 @@ async function load(){
       }catch(e){}
       state = chosen;
       if(!state || typeof state !== 'object') state = Object.assign({}, def);
-      ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav'].forEach(function(k){ if(!Array.isArray(state[k])) state[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):[])); });
+      ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav','subEmails'].forEach(function(k){ if(!Array.isArray(state[k])) state[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):(k==='subEmails'?[]:[]))); });
       _DATA_KEYS.forEach(function(k){ if(Array.isArray(state[k])) _dedupItems(state[k]); }); // v38.63：同名同正文重复收录只留一篇，根治删除后从云端复活
       // v38.33：恢复本地 AI 设置（补空语义）：云端包不含 key，本机备份补回空位——key 永不丢
       await ensureAiCfg();
@@ -2255,7 +2269,7 @@ async function load(){
   try{ return await _loadPromise; }finally{ _loadPromise=null; }
 }
 function migrate(){
-  if(!state || typeof state !== 'object') state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
+  if(!state || typeof state !== 'object') state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],subEmails:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
   // 容错：损坏数据可能把数组字段写成 null，先归一化为空数组，避免后续 .forEach 崩溃
   if(!Array.isArray(state.examples)) state.examples=[];
   if(!Array.isArray(state.intros)) state.intros=[];
@@ -2305,6 +2319,19 @@ function migrate(){
     else state.nav.push(anlEntry);
   }
   if(!Array.isArray(state.analyses)) state.analyses=[];
+  // v38.77：素材收集 + 脑洞想法 合并为「素材脑洞」单一 tab（老用户迁移）
+  if(Array.isArray(state.nav)){
+    const iMb=state.nav.findIndex(n=>n.sec==="matebrain");
+    const iMat=state.nav.findIndex(n=>n.sec==="materials");
+    const iBr=state.nav.findIndex(n=>n.sec==="brainstorms");
+    if(iMat>=0) state.nav.splice(iMat,1);
+    if(iBr>=0) state.nav.splice(iBr,1);
+    if(iMb<0){
+      const ai=state.nav.findIndex(n=>n.sec==="analyses");
+      const pos = ai>=0 ? ai+1 : state.nav.length;
+      state.nav.splice(pos,0,{sec:"matebrain", name:"素材脑洞"});
+    }
+  }
   state.tutorials.forEach(t=>{ if(!t.category) t.category="其他"; if(!t.createdAt) t.createdAt=Date.now(); if(typeof t.content!=="string") t.content=""; });
   mergeXlsx();
 }
@@ -2312,8 +2339,7 @@ const DEFAULT_NAV=[
   {sec:"examples", name:"例文"},
   {sec:"tutorials", name:"教程"},
   {sec:"analyses", name:"拆文"},
-  {sec:"materials", name:"素材收集"},
-  {sec:"brainstorms", name:"脑洞想法"},
+  {sec:"matebrain", name:"素材脑洞"},
   {sec:"misc", name:"杂项分类"},
   {sec:"tagmanage", name:"元素标签"},
   {sec:"crawl", name:"内容抓取"},
@@ -2333,7 +2359,7 @@ function seed(){
       {id:"t9",kind:"trope",name:"出轨",intro:"情感背叛情节"},
       {id:"t10",kind:"trope",name:"偷听",intro:"偷听/隔墙有耳制造误会或打脸"},
     ],
-    examples:[], intros:[], materials:[], brainstorms:[], misc:[], ideas:[], crawlFav:[],
+    examples:[], intros:[], materials:[], brainstorms:[], misc:[], ideas:[], crawlFav:[], subEmails:[],
     aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},
     aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),
     nav: DEFAULT_NAV.map(x=>({...x})),
@@ -2454,7 +2480,7 @@ function wireTagSearch(inputId, candId, containerId, getSelected, onChange){
 /* ---------- 左侧导航（可排序 / 重命名） ---------- */
 function cnOrd(n){ const d=["零","一","二","三","四","五","六","七","八","九","十"]; if(n<=10) return d[n]; if(n<20) return "十"+d[n-10]; if(n===20) return "二十"; return ""+n; }
 function fmtDate(ts){ if(!ts) return "—"; const d=new Date(ts); const p=n=>String(n).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes()); }
-const NAV_SUB={examples:"上传 word / txt",tutorials:"上传 word / txt",analyses:"10 维 AI 拆解",materials:"文字 / 图片 / 链接",brainstorms:"标题 / 想法 / 拓展",misc:"大项导览",tagmanage:"类型 / 核心梗",crawl:"每日全网热点",ideas:"组合成篇"};
+const NAV_SUB={examples:"上传 word / txt",tutorials:"上传 word / txt",analyses:"10 维 AI 拆解",matebrain:"素材 / 脑洞 / 灵感",materials:"文字 / 图片 / 链接",brainstorms:"标题 / 想法 / 拓展",misc:"大项导览",tagmanage:"类型 / 核心梗",crawl:"每日全网热点",ideas:"组合成篇"};
 let currentSec="examples";
 function switchSec(sec){
   currentSec=sec;
@@ -2465,6 +2491,8 @@ function switchSec(sec){
   if(sec==="misc") renderMisc();
   if(sec==="ideas") renderIdeas();
   if(sec==="crawl") renderCrawl();
+  if(sec==="matebrain"){ renderMaterials(); renderBrainstorms(); }
+  if(sec==="analyses"){ renderSubEmails(); }
 }
 function renderNav(){
   const nav=$("#sideNav"); if(!nav) return; nav.innerHTML="";
@@ -3892,7 +3920,7 @@ $("#fileImport").onchange=(e)=>{
   rd.onload=()=>{ try{ const d=JSON.parse(rd.result); if(d&&d.tags){ state=d; migrate(); save(); renderAll(); $("#maskBackup").classList.remove("on"); toast("导入成功"); } else toast("文件格式不对"); }catch(err){ toast("解析失败"); } };
   rd.readAsText(f); e.target.value="";
 };
-$("#btnWipe").onclick=()=>{ if(confirm("确定清空本协作空间的全部内容（例文/素材/杂项/元素/脑洞/想法/收藏）？此操作不可恢复！")){ state={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],aiMemory:"",aiCfg:state.aiCfg||{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; save(); renderAll(); $("#maskBackup").classList.remove("on"); toast("已清空"); } };
+$("#btnWipe").onclick=()=>{ if(confirm("确定清空本协作空间的全部内容（例文/素材/杂项/元素/脑洞/想法/收藏）？此操作不可恢复！")){ state={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],subEmails:[],aiMemory:"",aiCfg:state.aiCfg||{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; save(); renderAll(); $("#maskBackup").classList.remove("on"); toast("已清空"); } };
 
 /* ---------- AI 设置（占位，密钥仅存本机；归纳维度可自定义） ---------- */
 function renderAiFieldManage(){
@@ -3960,7 +3988,7 @@ $("#btnAiInstrDefault").onclick=()=>{ $("#aiInstruction").value=defaultAiInstruc
 $$(".mask").forEach(m=>m.addEventListener("click",e=>{ if(e.target===m) m.classList.remove("on"); }));
 
 /* ---------- 渲染总入口 ---------- */
-function renderAll(){ renderExamples(); renderTutorials(); renderMaterials(); renderBrainstorms(); }
+function renderAll(){ renderExamples(); renderTutorials(); renderMaterials(); renderBrainstorms(); renderSubEmails(); }
 
 /* ---------- 七、想法拓展 ---------- */
 let ideaSel={examples:new Set(),intros:new Set(),materials:new Set(),brainstorms:new Set(),misc:new Set(),tags:new Set(),crawl:new Set()};
@@ -4315,7 +4343,7 @@ function enterCollabUI(){
 }
 // 最小可用离线状态（仅在明确需要本地空占位时使用，不再自动保存为缓存）
 function offlineCollabState(){
-  return {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
+  return {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],subEmails:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
 }
 async function doCollabLogin(silent){
   if(_loggingIn) return;
@@ -4639,7 +4667,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.76";
+  var APP_VERSION = "v38.77";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
@@ -5104,6 +5132,66 @@ async function anlReadFile(f){
   return typeof decodeTxt==="function" ? decodeTxt(await f.arrayBuffer()) : txt;
 }
 var ANL_DEMO="林晚第一次见到沈屹，是在凌晨十二点零七分的末班地铁站。\n那天她加班到深夜，整个城市都睡了。地铁里空荡荡的，只有她和一个坐在角落的男人。他穿一件洗得发白的牛仔外套，膝盖上摊着一本速写本，笔尖在纸上沙沙地画着什么。\n林晚找了个离他不远的位置坐下，抬起头——画的是她。\n准确来说，是地铁车厢灯光下的她，额前碎发垂着，指尖捏着手机，眉头微蹙，连她眼尾那颗小痣都点了出来。\n「你偷画我？」\n男人抬眼，眼神有点懵，像是刚从自己的世界里被拽出来。可他那副窘迫的样子，反倒让林晚笑出了声。\n那是他们的第一次见面。后来他们常常在末班地铁上碰到，他给她带热牛奶，她给他讲公司里的奇葩需求。两个人影在时间缝里错位地拼在了一起。\n半年后他把那本速写本送给她，一页一页，全是她。她说好。\n可有些东西不是说放下就能放下的。那天她提早下班，买了草莓蛋糕坐了四十分钟地铁到他家，门没锁。她推开门，看见他坐在地上，面前摊着一堆旧照片。照片上是一个女孩，眉眼和她有七分像。\n「她是谁？」\n他沉默的那几秒，像一个世纪那么长。\n她怕自己真的只是一个替代品。于是她收拾东西搬回了自己的出租屋，他发消息她敷衍回，他约见面她说加班。\n冷战到第十五天，暴雨。她没带伞，站在公司楼下犹豫要不要冲出去，然后看见了他——黑伞撑着，浑身湿透，不知道站了多久。\n「我只是很想你。」\n那一刻她眼泪混着雨往下掉。可她心里清楚，和好不等于过去真的过去了。\n直到那年冬天，他蒙着她的眼睛开车开了很久，摘下眼罩时，她站在一间画室里。满墙的画，全是她。\n最大的那幅右下角写着一行小字——「致林晚：我的光。」\n她转过身，他单膝跪地。\n末班地铁上的相遇，原来不是偶然。";
+/* ---------- 投稿邮箱（v38.77：拆文 tab 下，按平台收纳编辑邮箱） ---------- */
+function renderSubEmails(){
+  const wrap=$("#subEmailWrap"); if(!wrap) return;
+  const list=Array.isArray(state.subEmails)?state.subEmails:[];
+  if(!list.length){ wrap.innerHTML='<div class="empty">还没有投稿邮箱。点上方「+ 添加投稿邮箱」添加：平台 / 编辑 / 邮箱 / 备注，可编辑、复制、删除。</div>'; return; }
+  wrap.innerHTML="";
+  // 按平台分组（平台名去空格、转小写作分组键；同平台多个编辑并列）
+  const groups={}; const order=[];
+  list.forEach(function(e){
+    const raw=(e.platform||"").trim();
+    const key=raw.toLowerCase()||"__未命名平台__";
+    if(!groups[key]){ groups[key]={name:raw||"(未命名平台)",items:[]}; order.push(key); }
+    groups[key].items.push(e);
+  });
+  order.forEach(function(gk){
+    const g=groups[gk];
+    const grp=document.createElement("div"); grp.className="se-group";
+    const head=document.createElement("div"); head.className="se-group-head";
+    const gname=document.createElement("input"); gname.className="se-platform"; gname.value=g.name; gname.placeholder="平台名（如：九州）"; gname.title="修改平台名会同步到该平台下所有编辑";
+    gname.onchange=function(){ const v=gname.value.trim(); g.items.forEach(function(e){ e.platform=v; }); save(); renderSubEmails(); };
+    const gAdd=document.createElement("button"); gAdd.className="btn sm"; gAdd.textContent="+ 编辑"; gAdd.title="给该平台新增一位编辑";
+    gAdd.onclick=function(){ list.push({id:uid(),platform:g.name,editor:"",email:"",note:""}); save(); renderSubEmails(); };
+    const gDel=document.createElement("button"); gDel.className="btn sm del"; gDel.textContent="删除平台"; gDel.title="删除该平台及其下所有编辑邮箱";
+    gDel.onclick=function(){ if(confirm("删除平台「"+(g.name||"未命名")+"」及其下所有编辑邮箱？此操作不可恢复。")){ state.subEmails=list.filter(function(e){ return ((e.platform||"").trim().toLowerCase())!==gk; }); save(); renderSubEmails(); } };
+    head.appendChild(gname); head.appendChild(gAdd); head.appendChild(gDel);
+    grp.appendChild(head);
+    g.items.forEach(function(e){
+      const row=document.createElement("div"); row.className="se-row";
+      const ed=document.createElement("input"); ed.className="se-editor"; ed.value=e.editor||""; ed.placeholder="编辑姓名"; ed.title="编辑姓名";
+      ed.onchange=function(){ e.editor=ed.value; save(); };
+      const em=document.createElement("input"); em.className="se-email"; em.value=e.email||""; em.placeholder="邮箱地址"; em.title="编辑邮箱（点右侧📋复制）";
+      em.onchange=function(){ e.email=em.value; save(); };
+      const copy=document.createElement("button"); copy.className="btn sm"; copy.textContent="📋 复制"; copy.title="复制该编辑的邮箱";
+      copy.onclick=function(){ copyText(e.email); };
+      const note=document.createElement("textarea"); note.className="se-note"; note.value=e.note||""; note.placeholder="备注（选填）"; note.rows=1; note.title="备注";
+      note.oninput=function(){ note.style.height="auto"; note.style.height=(note.scrollHeight)+"px"; };
+      note.onchange=function(){ e.note=note.value; save(); };
+      const del=document.createElement("button"); del.className="btn sm del"; del.textContent="✕"; del.title="删除该编辑邮箱";
+      del.onclick=function(){ if(confirm("删除该编辑邮箱「"+(e.editor||e.email||"未命名")+"」？")){ state.subEmails=list.filter(function(x){ return x.id!==e.id; }); save(); renderSubEmails(); } };
+      row.appendChild(ed); row.appendChild(em); row.appendChild(copy); row.appendChild(note); row.appendChild(del);
+      grp.appendChild(row);
+    });
+    wrap.appendChild(grp);
+  });
+}
+function copyText(t){
+  if(!t || !t.trim()){ toast("邮箱为空，无法复制"); return; }
+  t=t.trim();
+  try{ if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(function(){ toast("已复制："+t); }, function(){ fallbackCopy(t); }); return; } }catch(e){}
+  fallbackCopy(t);
+}
+function fallbackCopy(t){
+  try{
+    const ta=document.createElement("textarea"); ta.value=t; ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select();
+    const ok=document.execCommand("copy"); document.body.removeChild(ta);
+    toast(ok?"已复制："+t:"复制失败，请手动复制："+t);
+  }catch(e){ toast("复制失败，请手动复制："+t); }
+}
+if($("#btnAddSubEmail")) $("#btnAddSubEmail").onclick=function(){ if(!Array.isArray(state.subEmails)) state.subEmails=[]; state.subEmails.push({id:uid(),platform:"",editor:"",email:"",note:""}); save(); renderSubEmails(); };
+
 /* ---------- 初始化 ---------- */
 function anlInit(){
   ANL.genre=ANL_GENRES[3];
