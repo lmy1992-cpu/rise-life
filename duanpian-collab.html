@@ -895,9 +895,19 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   .se-chip b{color:var(--ink)}
   .se-chip i{color:var(--ink);opacity:.55;font-style:normal;font-size:12px;margin-right:2px}
   .se-plat{display:flex;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px;box-shadow:var(--shadow)}
-  .se-plat-l{width:190px;flex:0 0 190px;display:flex;flex-direction:column;gap:6px;border-right:1px dashed var(--line);padding-right:12px}
+  .se-plat-l{width:150px;flex:0 0 150px;display:flex;flex-direction:column;gap:6px;border-right:1px dashed var(--line);padding-right:12px}
   .se-platform{font-weight:700;font-size:14px;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink)}
   .se-plat-l .btn{width:100%}
+  .se-l-actions{display:flex;gap:6px}
+  .se-act{border:0;background:transparent;color:var(--brand);font-size:12px;font-weight:700;cursor:pointer;padding:3px 8px;border-radius:6px}
+  .se-act:hover{background:var(--soft)}
+  .se-act.on{color:#fff;background:var(--brand)}
+  .se-act-del{color:var(--brand)}
+  .se-add{align-self:flex-start;margin-top:6px;padding-left:2px}
+  .se-stats{display:flex;flex-wrap:wrap;gap:14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:9px 14px;margin-bottom:12px;font-size:13px;color:var(--ink);box-shadow:var(--shadow)}
+  .se-stats b{font-weight:700}
+  .se-stats span{display:inline-flex;align-items:center;gap:4px}
+  .se-stats span::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--brand);opacity:.55}
   .se-plat-r{flex:1;min-width:0}
   .se-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 0}
   .se-row+.se-row{border-top:1px dashed var(--line)}
@@ -1201,11 +1211,14 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
     <section class="sec" id="sec-subemails">
       <div class="sec-head">
         <h2>投稿邮箱</h2>
-        <span class="hint">左列是平台，右列直接显示你置顶的那位编辑；点「▾」展开同平台其他编辑</span>
+        <span class="hint">左列是平台（可置顶/删除），右列是置顶编辑；点「▾」展开同平台其他编辑</span>
         <span class="spacer"></span>
+        <button class="btn sm" id="btnSeRecount" type="button">🔄 自动统计数</button>
+        <button class="btn sm del" id="btnSeClearAll" type="button">🗑 全部清空</button>
         <button class="btn sm" id="btnSeImport" type="button">⬇ 批量导入</button>
         <button class="btn primary sm" id="btnAddSubEmail" type="button">+ 添加平台</button>
       </div>
+      <div class="se-stats" id="seStatsBar"></div>
       <div class="se-import" id="seImportPanel" style="display:none">
         <textarea id="seImportText" rows="6" placeholder="每行一条：平台 | 编辑 | 邮箱 | 备注 | 分部&#10;后两项可省略；纯数字邮箱自动补 @qq.com；自动跳过重复记录"></textarea>
         <div class="se-import-actions">
@@ -4721,7 +4734,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.80";
+  var APP_VERSION = "v38.81";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
@@ -5190,7 +5203,7 @@ var ANL_DEMO="林晚第一次见到沈屹，是在凌晨十二点零七分的末
 /* 单行编辑器：姓名 / 邮箱 / 备注 / 📋复制 / ⭐收藏 / ⇧置顶 / ✕删除 */
 function seEditorRow(e, list, isTop){
   const row=document.createElement("div"); row.className="se-row"+(isTop?" se-top":"");
-  if(isTop){ const tag=document.createElement("span"); tag.className="se-tag"; tag.textContent="置顶"; row.appendChild(tag); }
+  /* v38.81：去掉编辑行的「置顶」标签——编辑已能用 ⇧ 顶到第一行，标签多余 */
   const ed=document.createElement("input"); ed.className="se-editor"; ed.value=e.editor||""; ed.placeholder="编辑姓名"; ed.title="编辑姓名";
   ed.onchange=function(){ e.editor=ed.value; save(); };
   const em=document.createElement("input"); em.className="se-email"; em.value=e.email||""; em.placeholder="邮箱地址"; em.title="编辑邮箱（点 📋 复制）";
@@ -5238,15 +5251,47 @@ function seSortItems(items){
   });
   return pin.concat(rest);
 }
-/* v38.80：批量导入 —— 每行一条「平台 | 编辑 | 邮箱 | 备注 | 分部」，备注/分部可省略；纯数字邮箱自动补 @qq.com；与已有记录完全相同的自动跳过 */
+/* v38.81：平台分类（按平台名后缀括号）——0 无括号 / 1 主收中短 / 2 海外短篇 / 3 主收知乎 */
+function seCatOf(name){
+  const n=String(name||"");
+  if(n.indexOf("（主收知乎）")>=0) return 3;
+  if(n.indexOf("（海外短篇）")>=0) return 2;
+  if(n.indexOf("（主收中短）")>=0) return 1;
+  return 0;
+}
+/* v38.81：顶部统计行 —— 总平台数 / 总编辑数 / 第三方数 / 知乎数 / 中短数（后三个按平台数，第三方=总-知乎-中短） */
+function seRenderStats(list){
+  const bar=$("#seStatsBar"); if(!bar) return;
+  list=Array.isArray(list)?list:[];
+  const plats={};
+  list.forEach(function(e){ const nm=(e.platform||"").trim(); const k=nm.toLowerCase()||"__"; if(!plats[k]) plats[k]={name:nm,n:0}; plats[k].n++; });
+  let total=0,zh=0,zd=0;
+  Object.keys(plats).forEach(function(k){ total++; const c=seCatOf(plats[k].name); if(c===3) zh++; else if(c===1) zd++; });
+  bar.innerHTML='<span><b>平台 '+total+'</b></span><span><b>编辑 '+list.length+'</b></span><span><b>第三方 '+(total-zh-zd)+'</b></span><span><b>知乎 '+zh+'</b></span><span><b>中短 '+zd+'</b></span>';
+}
+/* v38.80：批量导入 —— 每行一条「平台 | 编辑 | 邮箱 | 备注 | 分部」，备注/分部可省略；纯数字邮箱自动补 @qq.com；与已有记录完全相同的自动跳过。
+   v38.81 新增指令行：「删除平台 | 平台名」「平台改名 | 旧名 | 新名」 */
 function seImportGo(){
   const ta=$("#seImportText"); if(!ta) return;
   const lines=ta.value.split(/\r?\n/);
   if(!Array.isArray(state.subEmails)) state.subEmails=[];
-  let add=0, skip=0, bad=0;
+  let add=0, skip=0, bad=0, delN=0, renN=0, nomatch=0;
   lines.forEach(function(line){
-    line=line.trim(); if(!line) return;
+    line=line.trim(); if(!line) return; if(line.charAt(0)==="#") return; /* v38.81：# 注释行直接跳过 */
     const parts=line.split(/\s*[｜|]\s*/);
+    if(parts.length>0 && parts[0]==="删除平台"){
+      const nm=(parts[1]||"").trim(); if(!nm){ bad++; return; }
+      const before=state.subEmails.length;
+      state.subEmails=state.subEmails.filter(function(e){ const p=(e.platform||"").trim(); return p!==nm && p.toLowerCase()!==nm.toLowerCase(); });
+      const rm=before-state.subEmails.length; delN+=rm; if(rm>0) skip++; else nomatch++; return;
+    }
+    if(parts.length>0 && parts[0]==="平台改名"){
+      const oldN=(parts[1]||"").trim(), newN=(parts[2]||"").trim();
+      if(!oldN||!newN){ bad++; return; }
+      let rn=0;
+      state.subEmails.forEach(function(e){ const p=(e.platform||"").trim(); if(p===oldN||p.toLowerCase()===oldN.toLowerCase()){ e.platform=newN; rn++; } });
+      renN+=rn; if(rn>0) skip++; else nomatch++; return;
+    }
     if(parts.length<3){ bad++; return; }
     let platform=(parts[0]||"").trim(), editor=(parts[1]||"").trim(), email=(parts[2]||"").trim(), note=(parts[3]||"").trim(), branch=(parts[4]||"").trim();
     if(/^-+$|^官方$|^平台$/.test(editor)){ editor=""; if(!note) note="官方收稿"; }
@@ -5257,15 +5302,32 @@ function seImportGo(){
     state.subEmails.push({id:uid(),platform:platform,editor:editor,email:email,note:note,branch:branch,fav:false,pinned:false});
     add++;
   });
-  if(add>0) save();
+  /* 改名后同一平台内可能出现完全重复（同名同编辑同邮箱），去重保留第一条 */
+  if(renN>0){
+    const seen={};
+    state.subEmails=state.subEmails.filter(function(e){ const k=[(e.platform||"").trim(),(e.editor||"").trim(),(e.email||"").trim()].join("||"); if(seen[k]) return false; seen[k]=1; return true; });
+  }
+  if(add>0||delN>0||renN>0) save();
   renderSubEmails();
   ta.value="";
   const panel=$("#seImportPanel"); if(panel) panel.style.display="none";
-  toast("导入完成：新增 "+add+" 条，重复跳过 "+skip+" 条"+(bad?("，无法识别 "+bad+" 条"):""));
+  let msg="导入完成：新增 "+add+" 条，重复/已处理跳过 "+skip+" 条";
+  if(delN>0) msg+="，删除 "+delN+" 条";
+  if(renN>0) msg+="，改名 "+renN+" 条";
+  if(bad>0) msg+="，无法识别 "+bad+" 条";
+  if(nomatch>0) msg+="，未命中 "+nomatch+" 条（可能已处理过）";
+  toast(msg);
 }
 if($("#btnSeImport")) $("#btnSeImport").onclick=function(){ const p=$("#seImportPanel"); if(p) p.style.display=(p.style.display==="none"?"":"none"); };
 if($("#btnSeImportCancel")) $("#btnSeImportCancel").onclick=function(){ const p=$("#seImportPanel"); if(p) p.style.display="none"; };
 if($("#btnSeImportGo")) $("#btnSeImportGo").onclick=seImportGo;
+/* v38.81：手动刷新统计 + 全部清空（带确认防误按） */
+if($("#btnSeRecount")) $("#btnSeRecount").onclick=function(){ seRenderStats(state.subEmails); toast("统计已刷新"); };
+if($("#btnSeClearAll")) $("#btnSeClearAll").onclick=function(){
+  const n=Array.isArray(state.subEmails)?state.subEmails.length:0;
+  if(!n){ toast("当前没有投稿邮箱数据"); return; }
+  if(confirm("确定要清空全部投稿邮箱吗？将删除所有平台和 "+n+" 位编辑的邮箱，此操作不可恢复！")){ state.subEmails=[]; save(); renderSubEmails(); toast("已全部清空"); }
+};
 /* 顶部「收藏的编辑」：跨平台汇总所有 ⭐，一键复制 */
 function renderSeFav(list, box){
   if(!box) return;
@@ -5287,10 +5349,11 @@ function renderSeFav(list, box){
   });
   box.appendChild(row);
 }
-/* 主渲染：左列平台 → 右列「置顶编辑(第一行) + ▾展开其他编辑」 */
+/* 主渲染：左列平台（短框+删除+置顶）→ 右列「置顶编辑(第一行) + ▾展开其他编辑(+ 加编辑)」 */
 function renderSubEmails(){
   const wrap=$("#subEmailWrap"); if(!wrap) return;
   const list=Array.isArray(state.subEmails)?state.subEmails:[];
+  seRenderStats(list); /* v38.81：顶部统计行，每次渲染自动重算 */
   renderSeFav(list, $("#seFavWrap"));
   if(!list.length){ wrap.innerHTML='<div class="empty">还没有投稿邮箱。点右上「+ 添加平台」，先建平台，再往里加编辑。</div>'; return; }
   wrap.innerHTML="";
@@ -5302,19 +5365,37 @@ function renderSubEmails(){
     if(!groups[key]){ groups[key]={name:raw||"(未命名平台)",items:[]}; order.push(key); }
     groups[key].items.push(e);
   });
+  /* v38.81：平台排序 —— 置顶平台最前（最近置顶的在前）→ 无括号 →（主收中短）→（海外短篇）→（主收知乎），同类内按拼音 */
+  order.sort(function(a,b){
+    const ga=groups[a], gb=groups[b];
+    const pa=ga.items.some(function(e){ return e.platPinned; }), pb=gb.items.some(function(e){ return e.platPinned; });
+    if(pa!==pb) return pa?-1:1;
+    if(pa&&pb){
+      const ta=Math.max.apply(null,ga.items.map(function(e){ return e.platPinTs||0; }));
+      const tb=Math.max.apply(null,gb.items.map(function(e){ return e.platPinTs||0; }));
+      if(ta!==tb) return tb-ta;
+    }
+    const ca=seCatOf(ga.name), cb=seCatOf(gb.name);
+    if(ca!==cb) return ca-cb;
+    return sePyCmp(ga.name,gb.name);
+  });
   order.forEach(function(gk){
     const g=groups[gk];
     g.items=seSortItems(g.items); /* v38.80：置顶第一 → 无分部按拼音 → 各分部按拼音，分部内也按拼音 */
     const box=document.createElement("div"); box.className="se-plat";
-    /* 左列：平台名 + 加编辑 / 删平台 */
+    /* 左列：平台名（短框）+ 删除 / 置顶（v38.81：去掉「+ 编辑」和宽的「删除平台」） */
     const left=document.createElement("div"); left.className="se-plat-l";
-    const gname=document.createElement("input"); gname.className="se-platform"; gname.value=g.name; gname.placeholder="平台名（如：九州）"; gname.title="修改平台名会同步到该平台下所有编辑";
+    const gname=document.createElement("input"); gname.className="se-platform"; gname.value=g.name; gname.placeholder="平台名"; gname.title="修改平台名会同步到该平台下所有编辑";
     gname.onchange=function(){ const v=gname.value.trim(); g.items.forEach(function(e){ e.platform=v; }); save(); renderSubEmails(); };
-    const gAdd=document.createElement("button"); gAdd.className="btn sm"; gAdd.type="button"; gAdd.textContent="+ 编辑"; gAdd.title="给该平台新增一位编辑";
-    gAdd.onclick=function(){ state.subEmails.push({id:uid(),platform:(g.name==="(未命名平台)"?"":g.name),editor:"",email:"",note:"",fav:false,pinned:false}); save(); renderSubEmails(); };
-    const gDel=document.createElement("button"); gDel.className="btn sm del"; gDel.type="button"; gDel.textContent="删除平台"; gDel.title="删除该平台及其下所有编辑邮箱";
+    const isPin=g.items.some(function(e){ return e.platPinned; });
+    const gPin=document.createElement("button"); gPin.className="se-act"+(isPin?" on":""); gPin.type="button"; gPin.textContent=isPin?"已置顶":"置顶"; gPin.title="把该平台排到列表最前面";
+    gPin.onclick=function(){ const ts=Date.now(); const to=!isPin; g.items.forEach(function(e){ e.platPinned=to; if(to) e.platPinTs=ts; }); save(); renderSubEmails(); };
+    const gDel=document.createElement("button"); gDel.className="se-act se-act-del"; gDel.type="button"; gDel.textContent="删除"; gDel.title="删除该平台及其下所有编辑邮箱";
     gDel.onclick=function(){ if(confirm("删除平台「"+(g.name||"未命名")+"」及其下所有编辑邮箱？此操作不可恢复。")){ state.subEmails=list.filter(function(e){ return ((e.platform||"").trim().toLowerCase())!==gk; }); save(); renderSubEmails(); } };
-    left.appendChild(gname); left.appendChild(gAdd); left.appendChild(gDel);
+    const lrow=document.createElement("div"); lrow.className="se-l-actions"; lrow.appendChild(gDel); lrow.appendChild(gPin);
+    left.appendChild(gname); left.appendChild(lrow);
+    /* 加编辑小按钮（v38.81：原「+ 编辑」挪到这里） */
+    function seAddBtn(){ const b=document.createElement("button"); b.className="se-act se-add"; b.type="button"; b.textContent="+ 加编辑"; b.title="给该平台新增一位编辑"; b.onclick=function(){ state.subEmails.push({id:uid(),platform:(g.name==="(未命名平台)"?"":g.name),editor:"",email:"",note:"",fav:false,pinned:false}); save(); renderSubEmails(); }; return b; }
     /* 右列：置顶编辑在第一行，其余折叠在 ▾ 里 */
     const right=document.createElement("div"); right.className="se-plat-r";
     let top=null; g.items.forEach(function(e){ if(e.pinned && !top) top=e; });
@@ -5326,8 +5407,11 @@ function renderSubEmails(){
       tog.textContent="▾ 展开同平台其他 "+rest.length+" 位编辑";
       const more=document.createElement("div"); more.className="se-more";
       rest.forEach(function(e){ more.appendChild(seEditorRow(e, list, false)); });
+      more.appendChild(seAddBtn()); /* v38.81：展开区底部「+ 加编辑」 */
       tog.onclick=function(){ const open=more.classList.toggle("open"); tog.textContent=open?"▴ 收起其他编辑":"▾ 展开同平台其他 "+rest.length+" 位编辑"; };
       right.appendChild(tog); right.appendChild(more);
+    }else{
+      right.appendChild(seAddBtn()); /* 只有一位编辑时也提供加编辑入口 */
     }
     box.appendChild(left); box.appendChild(right);
     wrap.appendChild(box);
