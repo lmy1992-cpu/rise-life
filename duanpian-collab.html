@@ -1475,20 +1475,22 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
           <button class="btn primary" id="btnRdMetaSave">保存</button>
         </div>
       </div>
-      <!-- AI 分析：可手动填，或接 LLM 一键自动填充；你随时能改 -->
+      <!-- AI 分析：与「拆文」同一套引擎，结构风格一致 -->
       <div id="rdEditAi" style="display:none">
-        <div class="sub">可手动填写下面这些维度（维度在「🤖 AI 设置 → 归纳维度」里由你自定义）。填好的内容会汇总到「杂项分类 · 🤖 AI 自动归类」。AI 自动分析后，你也能在这里直接改，防止 AI 写错。</div>
+        <div class="sub">例文分析和「拆文」用同一套引擎，生成的 10 维深度报告排版完全一致。下面这份报告就是 AI 的分析结果。</div>
         <button class="btn sm ghost" id="btnRdAiOpenSettings" style="margin:6px 0 10px">⚙️ 改 AI 设置（模型名 / API Key）</button>
-        <div id="aiFields"></div>
-        <label class="up-batch" style="margin:2px 0 4px"><input type="checkbox" id="aiOverwrite" /> <span>AI 分析时覆盖我已手动填写的内容（默认只填空白项，保留我改对的）</span></label>
+        <div id="aiReport" class="anl-report"><div class="empty">还没有分析。点「🤖 AI 自动分析」生成报告。</div></div>
+        <details class="anl-manual" style="margin:10px 0">
+          <summary style="cursor:pointer;color:var(--brand);font-size:13px">手动标注（可选 · 自定义维度，不覆盖上方报告）</summary>
+          <div id="aiFields" style="margin-top:8px"></div>
+        </details>
         <div class="field" style="margin-top:8px"><label>本次补充指令（可选，只影响这一篇）</label><textarea id="aiRunNote" style="min-height:60px" placeholder="例如：这篇重点是男主的白月光，仔细看她出场的方式"></textarea></div>
         <div id="aiRunPreview" style="display:none;margin:8px 0;padding:10px;border:1px dashed var(--line);border-radius:10px;background:var(--soft);font-size:13px;white-space:pre-wrap;max-height:240px;overflow:auto"></div>
-        <button class="btn" id="btnRdAiChat" style="width:100%;margin:2px 0 8px">💬 跟 AI 聊这篇（多轮问答，随时教 AI 怎么归纳）</button>
+        <button class="btn" id="btnRdAiChat" style="width:100%;margin:2px 0 8px">💬 跟 AI 聊这篇（多轮问答）</button>
         <div class="modal-actions">
           <button class="btn" id="btnRdAiTrial">试跑看效果</button>
           <button class="btn primary" id="btnRdAiRun">🤖 AI 自动分析</button>
           <button class="btn ghost" id="btnRdAiCancel">取消</button>
-          <button class="btn primary" id="btnRdAiSave">保存</button>
         </div>
       </div>
     </div>
@@ -1700,7 +1702,7 @@ const DEFAULT_AI_FIELDS = [
 ];
 // 当前生效的维度：优先用你自定义的 state.aiFields，否则用默认
 function aiFields(){ return (state && state.aiFields && state.aiFields.length) ? state.aiFields : DEFAULT_AI_FIELDS; }
-function aiHasContent(ai){ if(!ai) return false; return aiFields().some(f=>(ai[f.key]||"").trim()); }
+function aiHasContent(ai){ if(!ai) return false; if((ai.report||"").trim()) return true; return aiFields().some(f=>(ai[f.key]||"").trim()); }
 // 把 AI 解析结果合并进例文：默认只填空白项，保留你手动改对的；overwrite=true 才整体覆盖
 function mergeAiInto(ex, parsed, overwrite){
   if(!ex.ai) ex.ai={};
@@ -1743,31 +1745,19 @@ function aiChat(messages, useJson, temperature){
     body:JSON.stringify(body)
   });
 }
-// 对单篇例文执行分析，返回 {raw, parsed}
-async function callAiForExample(ex, extraNote){
+// 例文分析：与「拆文」共用同一套引擎（anlMessages + anlStream），保证两处结构、风格、排版完全一致
+async function callAiForExample(ex, extraNote, onDelta){
   const cfg=await ensureAiCfg();
-  if(!cfg || !cfg.key){ toast("本机还没存过 API Key，填一次保存即可（之后永久记住，不再弹窗）"); if($("#btnAiSettings") && typeof $("#btnAiSettings").onclick==="function") $("#btnAiSettings").onclick(); return null; }
-  const fields=aiFields();
-  const fieldSpec=fields.map(f=>'"'+f.key+'": "'+f.label+'"').join(", ");
-  const userInstruction=(cfg.instruction||"").trim();
-  let sys="你是一位擅长拆解中文短篇小说的创作分析助手，尤其熟悉这几类：①「追妻火葬场」（男主前期冷/渣 → 女主心死离开 → 男主卑微追妻）；②「爽文」（打脸逆袭 / 扮猪吃虎 / 富二代觉醒）；③「世情文」（家长里短：婆媳 / 父母偏心 / 邻里扰民 / 领导穿小鞋 / 裁员）；④「复仇文」（被坑后精密反击）。\n"
-        +"用户会给你一篇例文，请按下面的维度提取结构化信息，并以 JSON 对象返回，字段为：{"+fieldSpec+"}。\n"
-        +"每个字段用简体中文填写，抓住关键情节与人设，控制长度。若例文不属于上述任一类型也无妨，按实际内容分析即可。";
-  if(userInstruction){ sys+="\n\n用户的归纳要求（请严格遵守）：\n"+userInstruction; }
-  const mem=(cfg.aiMemory||"").trim();
-  if(mem){ sys+="\n\n【你的长期偏好，跨所有例文都适用，请一并严格遵守】：\n"+mem; }
-  let user="请分析这篇例文：\n标题："+(ex.title||"未命名")+"\n正文：\n"+(ex.content||"（正文为空）");
-  if(extraNote) user+="\n\n本次补充要求："+extraNote;
-  const messages=[{role:"system",content:sys},{role:"user",content:user}];
-  let resp=await aiChat(messages,true);
-  if(!resp.ok && resp.status===400){ resp=await aiChat(messages,false); } // 部分服务商不支持 response_format，自动降级
-  if(!resp.ok){ const t=await resp.text().catch(()=> ""); throw new Error("HTTP "+resp.status+"："+t.slice(0,300)); }
-  const data=await resp.json().catch(()=>null);
-  const content=data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-  if(!content) throw new Error("AI 返回为空（可能是密钥或额度问题）");
-  const parsed=tryParseJson(content);
-  if(!parsed) throw new Error("AI 返回无法解析为 JSON，请检查「归纳指令」或换模型");
-  return {raw:content, parsed:parsed};
+  if(!cfg || !cfg.key){ toast("本机还没存过 API Key，填一次保存即可（之后永久记住）"); if($("#btnAiSettings") && typeof $("#btnAiSettings").onclick==="function") $("#btnAiSettings").onclick(); return null; }
+  const text=(ex.content||"").trim();
+  if(text.length<200){ toast("原文太短了，至少 200 字才能分析"); return null; }
+  const genre=(typeof ANL!=="undefined" && ANL.genre) || (typeof ANL_GENRES!=="undefined"?ANL_GENRES[3]:"");
+  const messages=anlMessages(text, genre);
+  if(extraNote) messages[messages.length-1].content += "\n\n【本次补充要求（只影响这一篇）】：\n"+extraNote;
+  let full="";
+  const md=await anlStream(messages, function(d){ full+=d; if(onDelta) onDelta(full); });
+  if(!md) throw new Error("AI 返回为空（可能密钥失效或额度不足）");
+  return {raw:md, report:md};
 }
 
 // ===== 多轮对话：跟 AI 聊这一篇例文（自由问答，你来教 AI 怎么归纳）=====
@@ -2729,7 +2719,7 @@ function renderAiFields(){
     wrap.append(lab,ta); box.appendChild(wrap);
   });
 }
-$("#btnRdEditAi").onclick=()=>{ renderAiFields(); showReaderView("ai"); };
+$("#btnRdEditAi").onclick=()=>{ const ex=curEx(); renderAiFields(); if(ex&&ex.ai&&ex.ai.report) anlRenderTo($("#aiReport"), ex.ai.report); showReaderView("ai"); };
 $("#btnRdAiOpenSettings").onclick=()=>{ if($("#btnAiSettings").onclick) $("#btnAiSettings").onclick(); };
 $("#btnRdAiCancel").onclick=()=>showReaderView("read");
 $("#btnRdAiRun").onclick=()=>runAiAnalysis(curEx());
@@ -2740,27 +2730,20 @@ $("#btnAiChatMemory").onclick=()=>saveChatToMemory();
 $("#btnAiChatClose").onclick=()=>$("#maskAiChat").classList.remove("on");
 $("#btnAiChatClear").onclick=()=>clearAiChat();
 const _ci=$("#aiChatInput"); if(_ci) _ci.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); sendAiChat(); } });
-$("#btnRdAiSave").onclick=()=>{
-  const ex=curEx(); if(!ex) return;
-  if(!ex.ai) ex.ai={};
-  aiFields().forEach(f=>{ ex.ai[f.key]=$("#ai_"+f.key).value; });
-  ex.ai.done=aiHasContent(ex.ai);
-  save(); renderReadingView(); renderExamples(); renderMisc(); showReaderView("read");
-  toast(ex.ai.done?"已保存 AI 分析":"已清空 AI 分析");
-};
-// AI 分析：真实调用 LLM，按你自定义维度解析，结果合并进例文（默认只填空白项，不覆盖你改对的）
+// 手动标注的保存：在「编辑例文」里逐条 onchange 即存；阅读器 AI 视图报告为自动保存，无需单独保存按钮
+// 例文 AI 分析：生成与「拆文」一致的 10 维报告，渲染进阅读器并保存
 async function runAiAnalysis(ex){
   if(!ex) return;
-  const overwrite=$("#aiOverwrite") ? $("#aiOverwrite").checked : false;
   const note=$("#aiRunNote") ? $("#aiRunNote").value.trim() : "";
   const btn=$("#btnRdAiRun"); if(btn){ btn.disabled=true; btn.textContent="分析中…"; }
+  const rep=$("#aiReport");
   try{
-    const r=await callAiForExample(ex, note);
+    const r=await callAiForExample(ex, note, function(d){ if(rep) anlRenderTo(rep, d); });
     if(!r) return;
-    mergeAiInto(ex, r.parsed, overwrite);
-    aiFields().forEach(f=>{ const ta=$("#ai_"+f.key); if(ta) ta.value=ex.ai[f.key]||""; }); // 把结果回填到面板输入框
+    ex.ai=ex.ai||{}; ex.ai.report=r.report; ex.ai.done=true;
+    if(rep) anlRenderTo(rep, r.report);
     save(); renderReadingView(); renderExamples(); renderMisc();
-    toast("AI 分析完成，已"+(overwrite?"覆盖":"填充空白项")+"写入");
+    toast("AI 分析完成");
   }catch(err){
     toast("AI 分析失败："+err.message);
   }finally{
@@ -2776,7 +2759,7 @@ async function trialAiAnalysis(ex){
   try{
     const r=await callAiForExample(ex, note);
     if(!r) return;
-    if(prev){ prev.innerHTML="<b>AI 原始返回（确认无误后点「🤖 AI 自动分析」正式写入）：</b>\n<pre style='white-space:pre-wrap;margin:6px 0 0;font-family:inherit'>"+esc(r.raw)+"</pre>"; }
+    if(prev){ prev.innerHTML="<b>AI 原始返回（就是会写入的报告，确认风格 OK 后点「🤖 AI 自动分析」）：</b>\n<pre style='white-space:pre-wrap;margin:6px 0 0;font-family:inherit'>"+esc(r.raw)+"</pre>"; }
     toast("试跑完成");
   }catch(err){
     if(prev){ prev.style.display="block"; prev.textContent="试跑失败："+err.message; }
@@ -4656,7 +4639,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.74";
+  var APP_VERSION = "v38.75";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
@@ -4857,10 +4840,10 @@ function anlCurveSvg(pts){
   return s;
 }
 
-/* ---------- 渲染 ---------- */
-function anlRender(){
-  var box=anlE("anlReport"); if(!box) return;
-  box.innerHTML=ANL.sections.map(function(s){
+/* ---------- 渲染（拆文与例文分析共用同一套，保证排版一致） ---------- */
+function anlSectionsHtml(secs){
+  if(!secs||!secs.length) return '<div class="empty">还没有分析内容</div>';
+  return secs.map(function(s){
     var body=anlMd(s.body);
     if(s.key==="情绪曲线"){ var svg=anlCurveSvg(anlCurveData(s.body)); if(svg) body+='<div class="anl-curve">'+svg+'</div>'; }
     if(!body.trim()) body='<div class="anl-err" style="margin:0">正在生成…</div>';
@@ -4869,28 +4852,48 @@ function anlRender(){
       '<span class="st'+(s.done?"":" pending")+'"><span class="dot"></span>'+(s.done?"已完成":"生成中")+'</span></div>'+
       '<div class="anl-sec-b">'+body+'</div></div>';
   }).join("");
+}
+function anlRenderTo(el, md){
+  if(!el) return;
+  el.innerHTML=anlSectionsHtml(anlParseReport(md||""));
+  Array.prototype.forEach.call(el.querySelectorAll(".anl-sec-h"),function(h){ h.onclick=function(){ h.parentNode.classList.toggle("fold"); }; });
+}
+function anlRender(){
+  var box=anlE("anlReport"); if(!box) return;
+  box.innerHTML=anlSectionsHtml(ANL.sections);
   Array.prototype.forEach.call(box.querySelectorAll(".anl-sec-h"),function(h){ h.onclick=function(){ h.parentNode.classList.toggle("fold"); }; });
 }
 
 /* ---------- 流式调用 AI ---------- */
 function anlMessages(text, genre){
   var dims=ANL_DIMS.map(function(d){ return d.n+". "+d.k; }).join("、");
-  var sys="你是一位深耕中文短篇小说的资深编辑，尤其熟悉这几类：追妻火葬场、爽文（打脸逆袭/扮猪吃虎）、世情文、悬疑推理、重生复仇、古言现言。\n"
-    +"用户会把一篇短篇小说的原文交给你，请你像编辑部开选题会一样，按下面 10 个维度逐一深度拆解：\n"+dims+"。\n\n"
-    +"输出要求（务必遵守）：\n"
-    +"1. 用 Markdown，一级标题只写一行：`# 《书名/篇名》短篇小说深度分析`（篇名从正文推断，读不到就用「本篇」）。\n"
-    +"2. 之后每个维度用一个二级标题，格式严格为 `## 1. 基础信息`、`## 2. 开篇钩子`……一直到 `## 10. 可复用仿写模板`，编号顺序不可乱、不可缺。\n"
-    +"3. 每个维度下面至少 3 条具体结论，必须引用原文中的细节（人物名、原句、段落位置）来支撑，不要写空泛的套话。\n"
-    +"4. 第 5 个维度「情绪曲线」请输出一张 Markdown 表格，表头为：| 情绪阶段 | 关键情节 | 读者情绪 | 作用 |，至少 6 行，情绪词要具体（如心动、压抑、虐心、心死、反转、爽感、和解）。\n"
-    +"5. 第 10 个维度要把这篇提炼成一句可复用的写作框架，再给出逐步操作指引，让别人照着能写出同类型的另一篇。\n"
-    +"6. 通篇简体中文，不要用英文小标题，不要重复原文大段内容。\n";
+  var sys="你是一位深耕中文短篇小说的资深编辑与写作教练，尤其熟悉这几类：追妻火葬场（男主前期冷/渣→女主心死离开→男主卑微追妻）、爽文（打脸逆袭/扮猪吃虎/富二代觉醒）、世情文（家长里短：婆媳/父母偏心/邻里/职场穿小鞋/裁员）、复仇文（被坑后精密反击）、古言现言、悬疑。\n"
+    +"用户把一篇短篇小说原文交给你，请像专业「短篇拆写助手」一样，按下面 10 个维度逐一深度拆解，目的是帮作者照着写出同类型的另一篇。\n维度顺序："+dims+"。\n\n"
+    +"【整体要求，务必遵守】\n"
+    +"1. 用 Markdown。一级标题只一行：`# 《篇名》短篇小说深度分析`（篇名从正文推断，推断不出用「本篇」）。\n"
+    +"2. 之后每个维度一个二级标题，严格 `## 1. 基础信息` …… `## 10. 可复用仿写模板`，编号顺序不可乱、不可缺、不可合并。\n"
+    +"3. 每个维度至少 3 条具体结论，必须引用原文细节（人物名、原句、关键情节位置）支撑，禁止空泛套话、禁止编造文中没有的情节。\n"
+    +"4. 第 5 维「情绪曲线」输出 Markdown 表格：| 情绪阶段 | 关键情节 | 读者情绪 | 作用 |，至少 6 行，情绪词要具体（心动/压抑/虐心/心死/反转/爽感/和解）。\n"
+    +"5. 第 10 维把本篇提炼成一句可复用写作框架 + 逐步操作指引，让别人照着能写同类型另一篇。\n"
+    +"6. 通篇简体中文，不用英文小标题，不大段复述原文。\n\n"
+    +"【各维度分析要点（照这个深度写）】\n"
+    +"- 基础信息：题材 / 字数体量 / 视角（第几人称）/ 时代背景 / 节奏快慢，一句话定位。\n"
+    +"- 开篇钩子：前 300 字怎么把人勾住？是悬念 / 反差 / 情绪 / 设定？具体到第一句或第一个场景。\n"
+    +"- 人物设定：男女主（及白月光 / 男二）各自人设、动机、弧光；用「人设感」强的标签。\n"
+    +"- 情节结构：起承转合 / 三幕 / 爽点密度；标出关键转折在哪、为什么成立。\n"
+    +"- 情绪曲线：见上，给出起伏节奏地图。\n"
+    +"- 伏笔反转：埋了哪些钩子、在哪揭、揭得干不干净、读者是否被反将一军。\n"
+    +"- 金句摘录：摘 3-5 句值得学的原句，点明好在哪（节奏 / 反差 / 人设）。\n"
+    +"- 节奏诊断：哪里拖、哪里太快、哪里该加一个打脸 / 该收；给可改的具体建议。\n"
+    +"- 优缺点总结：最值得学的 2-3 点 + 最容易翻车的 2-3 点。\n"
+    +"- 可复用仿写模板：抽象成「人设模板 + 开头 30 字钩子 + 3 个必放节点 + 结尾落点」的可抄框架。\n";
   var tpl=ANL_TPL[genre];
-  if(tpl) sys+="\n本片的题材是「"+genre+"」，该类目的典型节奏模板供你参照比对：\n"+tpl+"\n";
+  if(tpl) sys+="\n本片题材「"+genre+"」的典型节奏模板，供你参照比对：\n"+tpl+"\n";
   var mem=(state.aiCfg&&state.aiCfg.aiMemory)||"";
   if((mem||"").trim()) sys+="\n用户长期偏好（务必遵守）：\n"+mem.trim()+"\n";
   var instr=(state.aiCfg&&state.aiCfg.instruction)||"";
   if((instr||"").trim()) sys+="\n用户的归纳要求：\n"+instr.trim()+"\n";
-  var user="请拆解这篇短篇小说（约 "+(ANL.words||text.length)+" 字）：\n\n"+text;
+  var user="请拆解这篇短篇小说（约 "+text.length+" 字）：\n\n"+text;
   return [{role:"system",content:sys},{role:"user",content:user}];
 }
 async function anlStream(messages, onDelta){
