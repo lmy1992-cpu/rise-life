@@ -924,6 +924,12 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   .se-search-empty{padding:10px 12px;color:var(--ink);opacity:.55;font-size:13px}
   @keyframes seFlashKf{0%,55%{box-shadow:0 0 0 3px var(--brand)}100%{box-shadow:0 0 0 3px transparent}}
   .se-flash{animation:seFlashKf 1.8s ease;border-radius:14px}
+  /* v38.84：「结算」按钮的周期选择小浮层（日结/周结/月结/恢复） */
+  .se-settle-pop{position:fixed;display:none;gap:6px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 28px rgba(0,0,0,.14);padding:8px;z-index:60}
+  .se-settle-pop.open{display:flex}
+  .se-settle-pop button{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit}
+  .se-settle-pop button:hover{border-color:var(--brand);color:var(--brand)}
+  .se-settle-pop .se-settle-clear{color:var(--ink);opacity:.6;border-style:dashed}
   .se-plat-r{flex:1;min-width:0}
   .se-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 0}
   .se-row+.se-row{border-top:1px dashed var(--line)}
@@ -4757,7 +4763,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.83";
+  var APP_VERSION = "v38.84";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
@@ -5331,6 +5337,39 @@ function seAutoSort(){
   toast("已自动排序：置顶 "+pinned+" 个平台保持最前，其余 "+(order.length-pinned)+" 个按分类+拼音排好");
 }
 if($("#btnSeAutoSort")) $("#btnSeAutoSort").onclick=seAutoSort;
+/* v38.84：结算周期 —— 平台行「结算」按钮点开选 日结/周结/月结，选完按钮文字跟着变；不选保持「结算」。
+   settle 字段挂编辑条目上随现有同步走（与 platPinned 同模式，不加新 _DATA_KEYS） */
+function seSettleApply(items,v){
+  (items||[]).forEach(function(e){ e.settle=v; });
+  save(); renderSubEmails();
+}
+function seSettleHide(){ const p=window.__seSettlePop; if(p) p.classList.remove("open"); window.__seSettleItems=null; }
+function seSettleOpen(btn, items){
+  let pop=window.__seSettlePop;
+  if(!pop){
+    pop=document.createElement("div"); pop.className="se-settle-pop"; pop.id="seSettlePop";
+    ["日结","周结","月结"].forEach(function(v){ const b=document.createElement("button"); b.type="button"; b.textContent=v; b.dataset.v=v; pop.appendChild(b); });
+    const c=document.createElement("button"); c.type="button"; c.className="se-settle-clear"; c.textContent="恢复「结算」"; c.dataset.v=""; pop.appendChild(c);
+    pop.addEventListener("click",function(ev){
+      const t=ev.target&&ev.target.closest?ev.target.closest("button[data-v]"):null; if(!t) return;
+      seSettleApply(window.__seSettleItems, t.dataset.v||"");
+      seSettleHide();
+    });
+    document.body.appendChild(pop);
+    window.__seSettlePop=pop;
+  }
+  window.__seSettleItems=items||[];
+  const r=btn.getBoundingClientRect();
+  pop.classList.add("open");
+  const pw=pop.offsetWidth||240, ph=pop.offsetHeight||46;
+  let left=r.left; if(left+pw>window.innerWidth-8) left=window.innerWidth-8-pw;
+  let top=r.bottom+6; if(top+ph>window.innerHeight-8) top=r.top-ph-6;
+  pop.style.left=Math.max(8,left)+"px"; pop.style.top=Math.max(8,top)+"px";
+}
+document.addEventListener("click",function(ev){
+  const p=window.__seSettlePop;
+  if(p&&p.classList.contains("open")&&!(ev.target&&p.contains(ev.target))) seSettleHide();
+});
 /* v38.82：搜索平台/编辑 —— 关键字实时匹配，点结果滚动到对应行并高亮 */
 function seSearchMatches(kw){
   kw=String(kw||"").trim().toLowerCase();
@@ -5512,7 +5551,11 @@ function renderSubEmails(){
     gPin.onclick=function(){ const ts=Date.now(); const to=!isPin; g.items.forEach(function(e){ e.platPinned=to; if(to) e.platPinTs=ts; }); save(); renderSubEmails(); };
     const gDel=document.createElement("button"); gDel.className="se-act se-act-del"; gDel.type="button"; gDel.textContent="删除"; gDel.title="删除该平台及其下所有编辑邮箱";
     gDel.onclick=function(){ if(confirm("删除平台「"+(g.name||"未命名")+"」及其下所有编辑邮箱？此操作不可恢复。")){ state.subEmails=list.filter(function(e){ return ((e.platform||"").trim().toLowerCase())!==gk; }); save(); renderSubEmails(); } };
-    const lrow=document.createElement("div"); lrow.className="se-l-actions"; lrow.appendChild(gDel); lrow.appendChild(gPin);
+    /* v38.84：结算周期按钮（置顶右边）—— 点开选 日结/周结/月结，选完文字跟着变并高亮 */
+    const settleVal=(g.items.filter(function(e){ return e.settle; })[0]||{}).settle||"";
+    const gSet=document.createElement("button"); gSet.className="se-act"+(settleVal?" on":""); gSet.type="button"; gSet.textContent=settleVal||"结算"; gSet.title="标记该平台的结算周期：点选 日结 / 周结 / 月结";
+    gSet.onclick=function(ev){ ev.stopPropagation(); seSettleOpen(gSet, g.items); };
+    const lrow=document.createElement("div"); lrow.className="se-l-actions"; lrow.appendChild(gDel); lrow.appendChild(gPin); lrow.appendChild(gSet);
     left.appendChild(gname); left.appendChild(lrow);
     /* 加编辑小按钮（v38.81：原「+ 编辑」挪到这里） */
     function seAddBtn(){ const b=document.createElement("button"); b.className="se-act se-add"; b.type="button"; b.textContent="+ 加编辑"; b.title="给该平台新增一位编辑"; b.onclick=function(){ state.subEmails.push({id:uid(),platform:(g.name==="(未命名平台)"?"":g.name),editor:"",email:"",note:"",fav:false,pinned:false}); save(); renderSubEmails(); }; return b; }
