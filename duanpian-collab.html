@@ -885,6 +885,9 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   .anl-lib{margin-top:20px}
   /* ===== v38.79 投稿邮箱（独立 tab：左列平台 + 右列置顶编辑 + ▾展开 + 收藏） ===== */
   .se-wrap{display:flex;flex-direction:column;gap:12px}
+  .se-import{background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:12px}
+  .se-import textarea{width:100%;min-height:120px;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-soft);color:var(--ink);resize:vertical;font-family:inherit;font-size:13px;line-height:1.6}
+  .se-import-actions{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
   .se-fav{background:var(--panel);border:1px solid var(--brand);border-radius:12px;padding:10px 12px;box-shadow:var(--shadow)}
   .se-fav-head{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:8px}
   .se-fav-list{display:flex;flex-wrap:wrap;gap:8px}
@@ -1200,7 +1203,16 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
         <h2>投稿邮箱</h2>
         <span class="hint">左列是平台，右列直接显示你置顶的那位编辑；点「▾」展开同平台其他编辑</span>
         <span class="spacer"></span>
+        <button class="btn sm" id="btnSeImport" type="button">⬇ 批量导入</button>
         <button class="btn primary sm" id="btnAddSubEmail" type="button">+ 添加平台</button>
+      </div>
+      <div class="se-import" id="seImportPanel" style="display:none">
+        <textarea id="seImportText" rows="6" placeholder="每行一条：平台 | 编辑 | 邮箱 | 备注 | 分部&#10;后两项可省略；纯数字邮箱自动补 @qq.com；自动跳过重复记录"></textarea>
+        <div class="se-import-actions">
+          <button class="btn primary sm" id="btnSeImportGo" type="button">开始导入</button>
+          <button class="btn sm" id="btnSeImportCancel" type="button">收起</button>
+          <span class="hint">一行一条，用竖线「|」分隔：平台 | 编辑 | 邮箱 | 备注 | 分部（备注、分部可省略）</span>
+        </div>
       </div>
       <div class="se-wrap">
         <div class="se-fav" id="seFavWrap" style="display:none"></div>
@@ -4709,7 +4721,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.79";
+  var APP_VERSION = "v38.80";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
@@ -5201,6 +5213,59 @@ function seEditorRow(e, list, isTop){
   row.appendChild(ed); row.appendChild(em); row.appendChild(note); row.appendChild(copy); row.appendChild(fav); row.appendChild(pin); row.appendChild(del);
   return row;
 }
+/* v38.80：编辑自动排序 —— 置顶永远第一；其余「无分部在前、各分部按拼音首字母」，分部内编辑也按拼音 */
+function sePyCmp(a,b){
+  try{ return String(a||"").localeCompare(String(b||""),"zh-Hans-CN"); }
+  catch(e){ return String(a||"").localeCompare(String(b||"")); }
+}
+function seBranchOf(e, branches){
+  const b=(e.branch||"").trim(); if(b) return b;
+  const nm=(e.editor||"").trim();
+  for(let i=0;i<branches.length;i++){ if(nm.indexOf(branches[i])===0) return branches[i]; }
+  return "";
+}
+function seSortItems(items){
+  const branches=[];
+  items.forEach(function(e){ const b=(e.branch||"").trim(); if(b && branches.indexOf(b)<0) branches.push(b); });
+  const pin=items.filter(function(e){ return e.pinned; });
+  const rest=items.filter(function(e){ return !e.pinned; });
+  rest.sort(function(a,b){
+    const ka=seBranchOf(a,branches), kb=seBranchOf(b,branches);
+    if(ka!==kb){ if(!ka) return -1; if(!kb) return 1; return sePyCmp(ka,kb); }
+    const na=a.editor||"", nb=b.editor||"";
+    if(na!==nb) return sePyCmp(na,nb);
+    return (a.email||"")<(b.email||"")?-1:1;
+  });
+  return pin.concat(rest);
+}
+/* v38.80：批量导入 —— 每行一条「平台 | 编辑 | 邮箱 | 备注 | 分部」，备注/分部可省略；纯数字邮箱自动补 @qq.com；与已有记录完全相同的自动跳过 */
+function seImportGo(){
+  const ta=$("#seImportText"); if(!ta) return;
+  const lines=ta.value.split(/\r?\n/);
+  if(!Array.isArray(state.subEmails)) state.subEmails=[];
+  let add=0, skip=0, bad=0;
+  lines.forEach(function(line){
+    line=line.trim(); if(!line) return;
+    const parts=line.split(/\s*[｜|]\s*/);
+    if(parts.length<3){ bad++; return; }
+    let platform=(parts[0]||"").trim(), editor=(parts[1]||"").trim(), email=(parts[2]||"").trim(), note=(parts[3]||"").trim(), branch=(parts[4]||"").trim();
+    if(/^-+$|^官方$|^平台$/.test(editor)){ editor=""; if(!note) note="官方收稿"; }
+    if(/^[0-9]{5,12}$/.test(email)) email=email+"@qq.com";
+    if(!platform || !email || email.indexOf("@")<0){ bad++; return; }
+    const dup=state.subEmails.some(function(e){ return (e.platform||"").trim()===platform && (e.editor||"").trim()===editor && (e.email||"").trim()===email; });
+    if(dup){ skip++; return; }
+    state.subEmails.push({id:uid(),platform:platform,editor:editor,email:email,note:note,branch:branch,fav:false,pinned:false});
+    add++;
+  });
+  if(add>0) save();
+  renderSubEmails();
+  ta.value="";
+  const panel=$("#seImportPanel"); if(panel) panel.style.display="none";
+  toast("导入完成：新增 "+add+" 条，重复跳过 "+skip+" 条"+(bad?("，无法识别 "+bad+" 条"):""));
+}
+if($("#btnSeImport")) $("#btnSeImport").onclick=function(){ const p=$("#seImportPanel"); if(p) p.style.display=(p.style.display==="none"?"":"none"); };
+if($("#btnSeImportCancel")) $("#btnSeImportCancel").onclick=function(){ const p=$("#seImportPanel"); if(p) p.style.display="none"; };
+if($("#btnSeImportGo")) $("#btnSeImportGo").onclick=seImportGo;
 /* 顶部「收藏的编辑」：跨平台汇总所有 ⭐，一键复制 */
 function renderSeFav(list, box){
   if(!box) return;
@@ -5239,6 +5304,7 @@ function renderSubEmails(){
   });
   order.forEach(function(gk){
     const g=groups[gk];
+    g.items=seSortItems(g.items); /* v38.80：置顶第一 → 无分部按拼音 → 各分部按拼音，分部内也按拼音 */
     const box=document.createElement("div"); box.className="se-plat";
     /* 左列：平台名 + 加编辑 / 删平台 */
     const left=document.createElement("div"); left.className="se-plat-l";
