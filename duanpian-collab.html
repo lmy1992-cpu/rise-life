@@ -247,7 +247,11 @@
   .mi-row .mi{flex:1; min-width:0; text-align:left}
   .mi-row .iconbtn.sort{width:24px; height:24px; padding:0; font-size:12px; flex:0 0 auto}
   .misc-body{margin-top:10px; display:flex; flex-direction:column; gap:8px}
-  .kw-group-h{font-size:12px; font-weight:700; color:var(--brand); background:var(--soft); border-radius:8px; padding:5px 10px; margin-top:4px}
+  .kw-tagwall{flex-direction:row; flex-wrap:wrap; align-items:flex-start; align-content:flex-start; gap:10px}
+  .kw-tag{position:relative; display:inline-flex; align-items:center; background:var(--panel,#fff); border:1px solid var(--line,#e3e6ea); border-radius:999px; padding:6px 14px; font-size:14px; line-height:1.4; cursor:default}
+  .kw-tag .kw-tag-x{display:none; margin-left:7px; font-style:normal; font-size:12px; opacity:.5; cursor:pointer}
+  .kw-tag:hover .kw-tag-x{display:inline-block}
+  .kw-tag .kw-tag-x:hover{opacity:1; color:#d33}
   .misc-row{display:flex; align-items:center; gap:8px; background:var(--soft); border-radius:10px; padding:6px 8px}
   .misc-row input{border:0; background:transparent; flex:1; font-size:14px; color:var(--ink); padding:4px 6px}
   .misc-row input:focus{outline:none}
@@ -1329,12 +1333,13 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
     <section class="sec" id="sec-misc">
       <div class="sec-head">
         <h2>四、杂项分类</h2>
-        <span class="hint">手工输入与 AI 自动归类分开管理</span>
+        <span class="hint">手工输入、AI 自动归类、AI 关键词分开管理</span>
         <button class="btn sm" id="btnAiSettings" style="margin-left:auto">🤖 AI 设置</button>
       </div>
       <div class="misc-tabs">
         <button class="mtab on" id="miscTabManual">📝 手工输入</button>
         <button class="mtab" id="miscTabAi">🤖 AI 自动归类</button>
+        <button class="mtab" id="miscTabKw">🏷️ AI关键词</button>
       </div>
       <div class="misc-gen" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 12px">
         <button class="btn sm primary" id="btnGenName">✨ 一键起名</button>
@@ -1789,7 +1794,8 @@ let filterSel = [];
 let filterMode = "any";
 let pendingUpload = null;
 let miscActive = null;
-let miscZone = "manual";   // "manual" 手工输入 / "ai" AI 自动归类
+let miscZone = "manual";   // "manual" 手工输入 / "ai" AI 自动归类 / "kw" AI关键词
+let miscKwGroup = "男女主关系";   /* v38.89：AI关键词标签墙当前选中的组 */
 let exPage = 1; const EX_PAGE_SIZE = 24;   // 例文列表分页，避免几百篇时一次性渲染卡顿
 let miscAiActive = null;
 let matTags = [];
@@ -3746,20 +3752,22 @@ function autoGrow(el){ if(!el) return; el.style.height='auto'; el.style.height=(
 function renderMisc(){
   const box=$("#miscList"); if(!box) return;
   if(miscZone==="ai"){ renderMiscAi(); return; }
+  if(miscZone==="kw"){ renderMiscKw(box); return; }
   box.innerHTML="";
-  if(!state.misc.length){ box.innerHTML='<div class="empty">还没有大项，点击左下「+ 新增大项」</div>'; return; }
-  if(!miscActive || !state.misc.find(m=>m.id===miscActive)) miscActive=state.misc[0].id;
+  const cats=state.misc.filter(c=>c.name!=="🤖 AI关键词");   /* v38.89：AI关键词改为独立 tab，不再出现在左侧大项 */
+  if(!cats.length){ box.innerHTML='<div class="empty">还没有大项，点击左下「+ 新增大项」</div>'; return; }
+  if(!miscActive || !cats.find(m=>m.id===miscActive)) miscActive=cats[0].id;
   const wrap=document.createElement("div"); wrap.className="misc-wrap";
   const nav=document.createElement("div"); nav.className="misc-nav";
-  state.misc.forEach((cat,ci)=>{
+  cats.forEach((cat,ci)=>{
     const row=document.createElement("div"); row.className="mi-row";
     const b=document.createElement("button"); b.className="mi"+(cat.id===miscActive?" on":""); b.textContent=cat.name; b.title="点击切换，双击改名";
     b.onclick=()=>{ miscActive=cat.id; renderMisc(); };
     b.ondblclick=(e)=>{ e.stopPropagation(); const n=prompt("修改大项名称",cat.name); if(n!==null){ const v=n.trim(); if(v){ cat.name=v; save(); renderMisc(); } } };
     const up=document.createElement("button"); up.className="iconbtn sort"; up.textContent="↑"; up.title="上移";
-    up.onclick=(e)=>{ e.stopPropagation(); if(ci>0){ [state.misc[ci-1],state.misc[ci]]=[state.misc[ci],state.misc[ci-1]]; save(); renderMisc(); } };
+    up.onclick=(e)=>{ e.stopPropagation(); if(ci>0){ const ri=state.misc.indexOf(cat),rj=state.misc.indexOf(cats[ci-1]); [state.misc[ri],state.misc[rj]]=[state.misc[rj],state.misc[ri]]; save(); renderMisc(); } };
     const down=document.createElement("button"); down.className="iconbtn sort"; down.textContent="↓"; down.title="下移";
-    down.onclick=(e)=>{ e.stopPropagation(); if(ci<state.misc.length-1){ [state.misc[ci+1],state.misc[ci]]=[state.misc[ci],state.misc[ci+1]]; save(); renderMisc(); } };
+    down.onclick=(e)=>{ e.stopPropagation(); if(ci<cats.length-1){ const ri=state.misc.indexOf(cat),rj=state.misc.indexOf(cats[ci+1]); [state.misc[ri],state.misc[rj]]=[state.misc[rj],state.misc[ri]]; save(); renderMisc(); } };
     row.appendChild(b); row.appendChild(up); row.appendChild(down);
     nav.appendChild(row);
   });
@@ -3767,7 +3775,7 @@ function renderMisc(){
   addNav.onclick=()=>{ const c={id:uid(),name:"新大项",items:[]}; state.misc.push(c); miscActive=c.id; save(); renderMisc(); };
   nav.appendChild(addNav);
   const panel=document.createElement("div"); panel.className="misc-panel";
-  const ci=state.misc.findIndex(m=>m.id===miscActive); const cat=state.misc[ci];
+  const ci=cats.findIndex(m=>m.id===miscActive); const cat=state.misc.find(m=>m.id===miscActive);
   if(cat){
     const head=document.createElement("div"); head.className="misc-head";
     const name=document.createElement("input"); name.className="name"; name.value=cat.name; name.title="点击编辑大项名称";
@@ -3775,14 +3783,13 @@ function renderMisc(){
     const addBtn=document.createElement("button"); addBtn.className="btn sm"; addBtn.textContent="+ 内容";
     addBtn.onclick=()=>{ cat.items.push({id:uid(),text:"新内容"}); save(); renderMisc(); };
     const up=document.createElement("button"); up.className="iconbtn"; up.textContent="↑"; up.title="上移大项";
-    up.onclick=()=>{ if(ci>0){ [state.misc[ci-1],state.misc[ci]]=[state.misc[ci],state.misc[ci-1]]; save(); renderMisc(); } };
+    up.onclick=()=>{ if(ci>0){ const ri=state.misc.indexOf(cat),rj=state.misc.indexOf(cats[ci-1]); [state.misc[ri],state.misc[rj]]=[state.misc[rj],state.misc[ri]]; save(); renderMisc(); } };
     const down=document.createElement("button"); down.className="iconbtn"; down.textContent="↓"; down.title="下移大项";
-    down.onclick=()=>{ if(ci<state.misc.length-1){ [state.misc[ci+1],state.misc[ci]]=[state.misc[ci],state.misc[ci+1]]; save(); renderMisc(); } };
+    down.onclick=()=>{ if(ci<cats.length-1){ const ri=state.misc.indexOf(cat),rj=state.misc.indexOf(cats[ci+1]); [state.misc[ri],state.misc[rj]]=[state.misc[rj],state.misc[ri]]; save(); renderMisc(); } };
     const del=document.createElement("button"); del.className="iconbtn del"; del.textContent="✕"; del.title="删除大项";
     del.onclick=()=>armDelete(del, ()=>{ state.misc.splice(ci,1); save(); renderMisc(); });
     head.append(name,addBtn,up,down,del);
     const body=document.createElement("div"); body.className="misc-body";
-    const isKwCat=(cat.name==="🤖 AI关键词");   /* v38.88：AI关键词大项按 4 组分区显示 */
     function kwRow(it){
       const ii=cat.items.indexOf(it);
       const row=document.createElement("div"); row.className="misc-row";
@@ -3796,28 +3803,68 @@ function renderMisc(){
       const x=document.createElement("button"); x.className="iconbtn del"; x.textContent="✕"; x.onclick=()=>{ cat.items.splice(ii,1); save(); renderMisc(); };
       row.append(inp,intro,u,d,x); body.appendChild(row);
     }
-    function kwHead(t){ const h=document.createElement("div"); h.className="kw-group-h"; h.textContent=t; body.appendChild(h); }
-    if(isKwCat && !cat.items.length){
-      const tip=document.createElement("div"); tip.className="empty";
-      tip.textContent="还没有关键词。AI 拆文 / 例文 AI 分析后会自动提取到这里，分 4 组：男女主关系、男女主职业、女配身份、其他关键词。";
-      body.appendChild(tip);
-    } else if(isKwCat){
-      KW_GROUPS.forEach(g=>{
-        const items=cat.items.filter(it=>(it.intro||"").indexOf(g[1])===0);
-        if(!items.length) return;
-        kwHead(g[1]); items.forEach(kwRow);
-      });
-      const loose=cat.items.filter(it=>!KW_GROUPS.some(g=>(it.intro||"").indexOf(g[1])===0));
-      if(loose.length){ kwHead("其他"); loose.forEach(kwRow); }
-    } else cat.items.forEach(kwRow);
+    cat.items.forEach(kwRow);
     panel.append(head,body);
   }
   wrap.append(nav,panel); box.appendChild(wrap);
   setTimeout(function(){ wrap.querySelectorAll('textarea.mi-intro').forEach(autoGrow); },0);
 }
+/* ---------- 杂项分类 · AI关键词标签墙（v38.89：左 4 组 tab，右标签并排） ---------- */
+function kwCatGet(){ return state.misc.find(c=>c.name==="🤖 AI关键词"); }
+function renderMiscKw(box){
+  if(!KW_GROUPS.some(g=>g[1]===miscKwGroup)) miscKwGroup=KW_GROUPS[0][1];
+  const cat=kwCatGet();
+  const items=(cat&&Array.isArray(cat.items))?cat.items:[];
+  const loose=items.filter(it=>!KW_GROUPS.some(g=>(it.intro||"").indexOf(g[1])===0));
+  const groups=KW_GROUPS.map(g=>g[1]); if(loose.length) groups.push("其他");
+  const wrap=document.createElement("div"); wrap.className="misc-wrap";
+  const nav=document.createElement("div"); nav.className="misc-nav";
+  groups.forEach(gn=>{
+    const cnt=(gn==="其他")?loose.length:items.filter(it=>(it.intro||"").indexOf(gn)===0).length;
+    const b=document.createElement("button"); b.className="mi"+(gn===miscKwGroup?" on":"");
+    b.textContent=gn+" "+cnt;
+    b.onclick=()=>{ miscKwGroup=gn; renderMisc(); };
+    nav.appendChild(b);
+  });
+  const panel=document.createElement("div"); panel.className="misc-panel";
+  const head=document.createElement("div"); head.className="misc-head";
+  const name=document.createElement("input"); name.className="name"; name.value="🏷️ "+miscKwGroup; name.readOnly=true;
+  head.appendChild(name);
+  const addBtn=document.createElement("button"); addBtn.className="btn sm"; addBtn.textContent="+ 添加";
+  addBtn.onclick=()=>{
+    const v=prompt("输入关键词，可一次输多个（用空格、逗号或顿号隔开）","");
+    if(v===null) return;
+    let c=kwCatGet(); if(!c){ c={id:uid(),name:"🤖 AI关键词",items:[]}; state.misc.push(c); }
+    if(!Array.isArray(c.items)) c.items=[];
+    let n=0;
+    v.split(/[\s,，、;；]+/).forEach(w=>{
+      w=w.trim(); if(!w) return;
+      if(c.items.some(it=>it.text===w)) return;
+      c.items.push({id:uid(),text:w,intro:miscKwGroup+" · 手动添加"}); n++;
+    });
+    if(n){ save(); renderMisc(); toast("已添加 "+n+" 个关键词"); }
+  };
+  head.appendChild(addBtn);
+  const body=document.createElement("div"); body.className="misc-body kw-tagwall";
+  const list=(miscKwGroup==="其他")?loose:items.filter(it=>(it.intro||"").indexOf(miscKwGroup)===0);
+  if(!list.length){
+    const tip=document.createElement("div"); tip.className="empty";
+    tip.textContent="这一组还没有关键词。AI 拆文 / 例文 AI 分析后会自动提取到这里，也可以点「+ 添加」手动加。";
+    body.appendChild(tip);
+  } else list.forEach(it=>{
+    const tag=document.createElement("span"); tag.className="kw-tag"; tag.textContent=it.text;
+    const x=document.createElement("i"); x.className="kw-tag-x"; x.textContent="✕"; x.title="删除这个词";
+    x.onclick=()=>{ const c=kwCatGet(); if(!c) return; const ii=c.items.indexOf(it); if(ii>=0){ c.items.splice(ii,1); save(); renderMisc(); } };
+    tag.appendChild(x);
+    body.appendChild(tag);
+  });
+  panel.append(head,body); wrap.append(nav,panel); box.appendChild(wrap);
+}
 /* ---------- 杂项分类 · AI 自动归类（按字段汇总所有例文的分析内容） ---------- */
-$("#miscTabManual").onclick=()=>{ miscZone="manual"; $("#miscTabManual").classList.add("on"); $("#miscTabAi").classList.remove("on"); renderMisc(); };
-$("#miscTabAi").onclick=()=>{ miscZone="ai"; $("#miscTabAi").classList.add("on"); $("#miscTabManual").classList.remove("on"); renderMisc(); };
+function miscTabOn(id){ ["miscTabManual","miscTabAi","miscTabKw"].forEach(t=>$( "#"+t ).classList.toggle("on",t===id)); }
+$("#miscTabManual").onclick=()=>{ miscZone="manual"; miscTabOn("miscTabManual"); renderMisc(); };
+$("#miscTabAi").onclick=()=>{ miscZone="ai"; miscTabOn("miscTabAi"); renderMisc(); };
+$("#miscTabKw").onclick=()=>{ miscZone="kw"; miscTabOn("miscTabKw"); renderMisc(); };
 /* ===== 杂项·一键起名 / 一键心死名场面（本地离线生成，无需联网/密钥） ===== */
 const DP_NAME_POOL={
   "男主":{s:["薄","厉","陆","顾","沈","傅","霍","司","战","裴","靳","贺","祁"],g:["景行","庭深","宴辞","斯年","寒州","妄之","承胤","惊蛰","疏野","砚辞","聿珩","清晏","执"],hint:"前期冷漠/自私，把她的好当理所当然；后期追妻火葬场"},
@@ -4807,7 +4854,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.88";
+  var APP_VERSION = "v38.89";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
