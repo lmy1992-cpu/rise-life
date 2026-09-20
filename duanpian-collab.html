@@ -2873,10 +2873,27 @@ async function runAiAnalysis(ex){
   try{
     const r=await callAiForExample(ex, note, function(d){ if(rep) anlRenderTo(rep, d); });
     if(!r) return;
-    ex.ai=ex.ai||{}; ex.ai.report=r.report; ex.ai.done=true;
-    if(rep) anlRenderTo(rep, r.report);
+    const kr=anlExtractKeywords(r.report);   /* v38.87：抠出关键词标记 */
+    const cleanReport=kr.clean;
+    ex.ai=ex.ai||{}; ex.ai.report=cleanReport; ex.ai.done=true;
+    if(rep) anlRenderTo(rep, cleanReport);
+    const kwN=anlKwMergeMisc(kr.kw, ex.title||"未命名例文");   /* v38.87：关键词自动进杂项「AI关键词」 */
     save(); renderReadingView(); renderExamples(); renderMisc();
-    toast("AI 分析完成");
+    /* v38.87：分析完自动问要不要存进拆文库（已有这篇就更新，没有就新增） */
+    const old=ex.id?(state.analyses||[]).find(a=>a.srcId===ex.id):null;
+    const kwMsg=kwN?("，已提取 "+kwN+" 个关键词到杂项·AI关键词"):"";
+    if(old){
+      if(confirm("AI 分析完成"+kwMsg+"。\n拆文库里已经有这篇的分析了，要更新成最新这份吗？")){
+        old.report=cleanReport; old.createdAt=Date.now(); old.title=ex.title||old.title; old.srcTitle=ex.title||old.srcTitle||"";
+        (async()=>{ try{ await save(); }catch(e){} try{ anlRenderLib(); }catch(e){} })();
+        toast("拆文库已更新");
+      }
+    } else if(confirm("AI 分析完成"+kwMsg+"。\n要把这份报告存进拆文库吗？")){
+      (state.analyses=state.analyses||[]).unshift({id:("anl"+Date.now()+Math.random().toString(36).slice(2,6)),
+        title:ex.title||"未命名",srcId:ex.id||"",srcTitle:ex.title||"",genre:"",words:(ex.content||"").replace(/\s/g,"").length,report:cleanReport,createdAt:Date.now()});
+      (async()=>{ try{ await save(); }catch(e){} try{ anlRenderLib(); }catch(e){} })();
+      toast("已存进拆文库");
+    }
   }catch(err){
     toast("AI 分析失败："+err.message);
   }finally{
@@ -4772,7 +4789,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.86";
+  var APP_VERSION = "v38.87";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
@@ -5022,7 +5039,12 @@ function anlMessages(text, genre){
     +"- 7. **金句摘录**：有序列表摘 3-5 句值得学的原句，每条下面用 `- 效果：……` 和 `- 技巧：……` 两点说明好在哪、用了什么技巧。\n"
     +"- 8. **节奏诊断**：`#### 优点` 列做得好的；`#### 不足` 有序列表写拖沓/过快处；`#### 优化建议` 给可改的具体操作。\n"
     +"- 9. **优缺点总结**：`#### 核心优点` 有序列表写最值得学的 2-3 点；`#### 可提升之处` 有序列表写最容易翻车的 2-3 点。\n"
-    +"- 10. **可复用仿写模板**：`#### 核心写作框架` 把本篇抽象成有序列表的「可抄步骤」，每步用 `- 仿写技巧：……` 说明怎么套；`#### 可复用技巧` 列几条通用技法。\n";
+    +"- 10. **可复用仿写模板**：`#### 核心写作框架` 把本篇抽象成有序列表的「可抄步骤」，每步用 `- 仿写技巧：……` 说明怎么套；`#### 可复用技巧` 列几条通用技法。\n"
+    +"\n【额外任务：关键词提取（不影响上面报告正文）】\n"
+    +"报告的 10 个维度全部写完后，另起一行，在整份输出的最后单独输出这一行标记：\n"
+    +"<!--AIKEYWORDS:{\"relation\":[\"夫妻\"],\"job\":[\"霸总\"],\"female\":[\"闺蜜\",\"妹妹\"],\"other\":[\"怀孕\"]}-->\n"
+    +"标记内必须是合法 JSON（双引号）：relation=男女主关系（如：夫妻、男女朋友、未婚夫妻）；job=男女主职业（如：霸总、设计师）；female=女配身份（如：闺蜜、青梅、妹妹、继妹、庶妹、姐姐、继姐）；other=其他关键词（如：怀孕、流产、高速、远嫁）。\n"
+    +"只提炼文中实际出现的通用词，禁止带「男主的/女主的/女配的」等归属前缀；每类最多 5 个；文中没有的类可省略该键；除这一行标记外，报告正文任何位置不得出现该标记。\n";
   var tpl=ANL_TPL[genre];
   if(tpl) sys+="\n本片题材「"+genre+"」的典型节奏模板，供你参照比对：\n"+tpl+"\n";
   var mem=(state.aiCfg&&state.aiCfg.aiMemory)||"";
@@ -5077,6 +5099,45 @@ async function anlStream(messages, onDelta){
 }
 
 /* ---------- 主流程 ---------- */
+/* ===== v38.87：AI 拆文自动提取关键词 → 杂项「AI关键词」大项 ===== */
+const KW_GROUPS=[["relation","男女主关系"],["job","男女主职业"],["female","女配身份"],["other","其他关键词"]];
+function anlExtractKeywords(md){
+  md=md||"";
+  var m=md.match(/<!--AIKEYWORDS:([\s\S]*?)-->/);
+  var kw={};
+  if(m){ try{ var o=JSON.parse(m[1].trim()); KW_GROUPS.forEach(function(p){ if(Array.isArray(o[p[0]])) kw[p[0]]=o[p[0]]; }); }catch(e){} }
+  var clean=md.replace(/<!--AIKEYWORDS:[\s\S]*?-->\s*/g,"").replace(/\s+$/,"");
+  return {kw:kw,clean:clean};
+}
+function anlKwMergeMisc(kw,srcName){
+  try{
+    srcName=String(srcName||"").trim()||"未命名";
+    var words=[];
+    KW_GROUPS.forEach(function(p){ (kw[p[0]]||[]).forEach(function(w){
+      w=String(w||"").trim().replace(/^(男主|女主|女配)的?/,"").trim();
+      if(w) words.push({g:p[1],w:w});
+    }); });
+    words=words.filter(function(x,i,arr){ return arr.findIndex(function(y){return y.w===x.w;})===i; });
+    if(!words.length) return 0;
+    if(!Array.isArray(state.misc)) state.misc=[];
+    var cat=state.misc.find(function(mm){ return mm.name==="🤖 AI关键词"; });
+    if(!cat){ cat={id:uid(),name:"🤖 AI关键词",items:[]}; state.misc.push(cat); }
+    if(!Array.isArray(cat.items)) cat.items=[];
+    var changed=0;
+    words.forEach(function(x){
+      var it=cat.items.find(function(i){ return i.text===x.w; });
+      if(it){
+        var intro=it.intro||"";
+        if(intro.indexOf("来自：")>=0){ if(intro.indexOf(srcName)<0){ it.intro=intro+"、"+srcName; changed++; } }
+        else { it.intro=x.g+" · 来自："+srcName; changed++; }
+      } else { cat.items.push({id:uid(),text:x.w,intro:x.g+" · 来自："+srcName}); changed++; }
+    });
+    function gi(t){ for(var i=0;i<KW_GROUPS.length;i++){ if((t.intro||"").indexOf(KW_GROUPS[i][1])===0) return i; } return 99; }
+    cat.items.sort(function(a,b){ return gi(a)-gi(b); });
+    if(changed){ save(); if(typeof renderMisc==="function"){ try{ renderMisc(); }catch(e){} } }
+    return changed;
+  }catch(e){ return 0; }
+}
 async function anlStart(){
   if(ANL.running){ toast("正在拆文中…"); return; }
   var ta=anlE("anlText"); if(!ta) return;
@@ -5098,13 +5159,16 @@ async function anlStart(){
   try{
     var md=await anlStream(anlMessages(text, ANL.genre), function(d){ ANL.report+=d; schedule(); });
     ANL.report=md||ANL.report;
+    var kr=anlExtractKeywords(ANL.report);   /* v38.87：抠出关键词标记，报告保持干净 */
+    ANL.report=kr.clean;
     ANL.sections=anlParseReport(ANL.report);
     var m=(ANL.report.match(/^#\s+(.+)$/m)||[])[1];
-    ANL.title=(m||ANL.srcTitle||"未命名").replace(/[《》*]/g,"").trim();
+    ANL.title=((m&&m!=="拆文报告")?m:(ANL.srcTitle||"未命名")).replace(/[《》*]/g,"").trim();
     if(!ANL.srcTitle){ ANL.srcTitle=ANL.title; }
     anlRender();
+    var kwN=anlKwMergeMisc(kr.kw, ANL.srcTitle||ANL.title||"手动拆文");   /* v38.87：关键词自动进杂项「AI关键词」 */
     anlE("anlProg").textContent="已完成 · 共 "+ANL.sections.length+" 个维度"+(cut?"（原文过长，已取前 4 万字）":"");
-    toast("拆文完成");
+    toast("拆文完成"+(kwN?("，已提取 "+kwN+" 个关键词到杂项·AI关键词"):""));
   }catch(err){
     anlE("anlErr").textContent="拆文失败："+((err&&err.message)||err);
     if(!ANL.report.trim()) anlE("anlReport").innerHTML='<div class="empty">没跑起来。多半是 AI 密钥 / 模型名不对，去「🤖 AI 设置」检查一下</div>';
@@ -5148,7 +5212,7 @@ function anlFromExample(id){
 
 /* ---------- 拆文库 ---------- */
 function anlExport(rec){
-  var name=(rec&&rec.title)||ANL.title||"拆文报告";
+  var name=(rec&&((rec.title==="拆文报告"&&rec.srcTitle)?rec.srcTitle:rec.title))||ANL.title||"拆文报告";
   var txt=(rec&&rec.report)||ANL.report||"";
   if(!txt.trim()){ toast("还没有内容可以导出"); return; }
   var blob=new Blob([txt],{type:"text/markdown;charset=utf-8"});
@@ -5175,7 +5239,7 @@ function anlCopyFallback(txt){
 async function anlSaveLib(){
   if(!ANL.report.trim()){ toast("还没有报告可以保存"); return; }
   anlList().unshift({id:("anl"+Date.now()+Math.random().toString(36).slice(2,6)),
-    title:ANL.title||"未命名",srcId:ANL.srcId||"",srcTitle:ANL.srcTitle||"",genre:ANL.genre,words:ANL.words||0,report:ANL.report,createdAt:Date.now()});
+    title:ANL.srcTitle||ANL.title||"未命名",srcId:ANL.srcId||"",srcTitle:ANL.srcTitle||"",genre:ANL.genre,words:ANL.words||0,report:ANL.report,createdAt:Date.now()});
   try{ await save(); }catch(e){}
   anlRenderLib(); toast("已保存到拆文库");
 }
@@ -5189,7 +5253,8 @@ function anlRenderLib(){
   grid.innerHTML=list.map(function(r){
     var d=new Date(r.createdAt||Date.now()); var ds=(d.getMonth()+1)+"月"+d.getDate()+"日 "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
     var snip=(r.report||"").replace(/[#>*`|\-]/g," ").replace(/\s+/g," ").slice(0,70);
-    return '<div class="card"><h4>📖 '+anlEsc(r.title||"未命名")+'</h4>'+
+    var tShow=(r.title==="拆文报告"&&r.srcTitle)?r.srcTitle:(r.title||"未命名");   /* v38.87：旧记录标题兜底显示例文名 */
+    return '<div class="card"><h4>📖 '+anlEsc(tShow)+'</h4>'+
       '<div class="meta">'+ds+' ｜ '+anlEsc(r.genre||"—")+' ｜ '+(r.words||0)+' 字'+(r.srcTitle?(' ｜ 来自：'+anlEsc(r.srcTitle)):"")+'</div>'+
       '<p class="snip">'+anlEsc(snip)+'…</p>'+
       '<div class="acts">'+
