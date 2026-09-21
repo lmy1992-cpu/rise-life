@@ -3811,6 +3811,30 @@ function renderMisc(){
 }
 /* ---------- 杂项分类 · AI关键词标签墙（v38.89：左 4 组 tab，右标签并排） ---------- */
 function kwCatGet(){ return state.misc.find(c=>c.name==="🤖 AI关键词"); }
+function kwReqOpen(){   /* v38.91：编辑「提取要求」，拼进 AI 拆文提示词补漏 */
+  const mask=document.createElement("div"); mask.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:9998;";
+  const pop=document.createElement("div"); pop.style.cssText="position:fixed;z-index:9999;left:50%;top:16%;transform:translateX(-50%);width:min(500px,92vw);background:var(--panel,#fff);border:1px solid var(--line,#e3e6ea);border-radius:14px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.15);display:flex;flex-direction:column;gap:10px;";
+  const h=document.createElement("div"); h.style.cssText="font-weight:700;font-size:15px;"; h.textContent="📝 关键词提取要求";
+  const tip=document.createElement("div"); tip.style.cssText="font-size:12px;opacity:.75;line-height:1.7;";
+  tip.textContent="写上你希望 AI 重点提取的关键词或情节元素（用逗号或换行隔开，写多少条都行）。保存后，之后的每次 AI 拆文、例文 AI 分析都会照着提取；已有的报告不受影响，重新分析一次就能补上。留空=不额外要求。";
+  const ta=document.createElement("textarea"); ta.rows=6; ta.value=(function(){ const c=kwCatGet(); return (c&&c.req)?c.req:""; })();
+  ta.style.cssText="width:100%;box-sizing:border-box;resize:vertical;font:inherit;line-height:1.7;";
+  ta.placeholder="例如：\n净身出户，假死，替嫁\n白月光回归，带球跑，五年后带娃归来";
+  const row=document.createElement("div"); row.style.cssText="display:flex;gap:8px;justify-content:flex-end;";
+  const cancel=document.createElement("button"); cancel.className="btn sm"; cancel.textContent="取消";
+  const okBtn=document.createElement("button"); okBtn.className="btn sm primary"; okBtn.textContent="保存";
+  function close(){ mask.remove(); pop.remove(); }
+  cancel.onclick=close;
+  okBtn.onclick=()=>{
+    const v=ta.value.trim();
+    let c=kwCatGet(); if(!c){ c={id:uid(),name:"🤖 AI关键词",items:[]}; state.misc.push(c); }
+    c.req=v; save(); close();
+    toast(v?"已保存提取要求，之后的 AI 拆文/例文分析会照着提取":"已清空提取要求");
+  };
+  mask.onclick=close;
+  pop.append(h,tip,ta,row); row.append(cancel,okBtn);
+  document.body.append(mask,pop); ta.focus();
+}
 function renderMiscKw(box){
   box.innerHTML="";   /* v38.90 修复：切 tab 先清空旧内容，否则标签墙追加在底下看似没反应 */
   if(!KW_GROUPS.some(g=>g[1]===miscKwGroup)) miscKwGroup=KW_GROUPS[0][1];
@@ -3846,6 +3870,9 @@ function renderMiscKw(box){
     if(n){ save(); renderMisc(); toast("已添加 "+n+" 个关键词"); }
   };
   head.appendChild(addBtn);
+  const reqBtn=document.createElement("button"); reqBtn.className="btn sm"; reqBtn.textContent="📝 提取要求"; reqBtn.title="告诉 AI 还要重点提取哪些关键词";
+  reqBtn.onclick=()=>kwReqOpen();
+  head.appendChild(reqBtn);
   const body=document.createElement("div"); body.className="misc-body kw-tagwall";
   const list=(miscKwGroup==="其他")?loose:items.filter(it=>(it.intro||"").indexOf(miscKwGroup)===0);
   if(!list.length){
@@ -4855,7 +4882,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.90";
+  var APP_VERSION = "v38.91";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
@@ -5111,6 +5138,11 @@ function anlMessages(text, genre){
     +"<!--AIKEYWORDS:{\"relation\":[\"夫妻\"],\"job\":[\"霸总\"],\"female\":[\"闺蜜\",\"妹妹\"],\"other\":[\"怀孕\"]}-->\n"
     +"标记内必须是合法 JSON（双引号）：relation=男女主关系（如：夫妻、男女朋友、未婚夫妻）；job=男女主职业（如：霸总、设计师）；female=女配身份（如：闺蜜、青梅、妹妹、继妹、庶妹、姐姐、继姐）；other=其他关键词（如：怀孕、流产、高速、远嫁）。\n"
     +"只提炼文中实际出现的通用词，禁止带「男主的/女主的/女配的」等归属前缀；每类最多 5 个；文中没有的类可省略该键；除这一行标记外，报告正文任何位置不得出现该标记。\n";
+  try{   /* v38.91：用户自定义「提取要求」拼进提示词，AI 拆文时照着补漏 */
+    var kwReq="";
+    if(typeof state!=="undefined" && Array.isArray(state.misc)){ var kwCat0=state.misc.find(function(mm){return mm.name==="🤖 AI关键词";}); if(kwCat0 && kwCat0.req) kwReq=String(kwCat0.req).trim(); }
+    if(kwReq) sys+="\n【用户重点提取要求（必须照办）】\n用户特别要求：以下关键词/情节元素若在文中出现，务必提取到对应类别（不受上面示例词限制，每类最多 5 个的上限对用户要求的词除外）：\n"+kwReq+"\n";
+  }catch(e){}
   var tpl=ANL_TPL[genre];
   if(tpl) sys+="\n本片题材「"+genre+"」的典型节奏模板，供你参照比对：\n"+tpl+"\n";
   var mem=(state.aiCfg&&state.aiCfg.aiMemory)||"";
