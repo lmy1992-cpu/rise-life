@@ -3812,6 +3812,7 @@ function renderMisc(){
 /* ---------- 杂项分类 · AI关键词标签墙（v38.89：左 4 组 tab，右标签并排） ---------- */
 function kwCatGet(){ return state.misc.find(c=>c.name==="🤖 AI关键词"); }
 function renderMiscKw(box){
+  box.innerHTML="";   /* v38.90 修复：切 tab 先清空旧内容，否则标签墙追加在底下看似没反应 */
   if(!KW_GROUPS.some(g=>g[1]===miscKwGroup)) miscKwGroup=KW_GROUPS[0][1];
   const cat=kwCatGet();
   const items=(cat&&Array.isArray(cat.items))?cat.items:[];
@@ -4854,7 +4855,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.89";
+  var APP_VERSION = "v38.90";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
