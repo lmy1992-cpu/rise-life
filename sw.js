@@ -7,7 +7,8 @@
 // v38.88：杂项预建「AI关键词」空大项 + 大项内按 4 组分区显示
 // v38.89：AI关键词改顶部独立 tab + 左4组tab右标签墙（不再占左侧大项）
 // v38.90：修复切到 AI关键词 tab 内容不切换（renderMiscKw 没清空旧内容，标签墙被追加到底部）
-const CACHE = 'dp-pwa-v38.90';
+// v38.91：AI关键词 tab 加「📝 提取要求」——用户自定义重点提取词，拼进拆文提示词补漏
+const CACHE = 'dp-pwa-v38.91';
 const ASSETS = [
   './',
   './index.html',
