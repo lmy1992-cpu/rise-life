@@ -390,6 +390,9 @@
   /* ---- AI 已分析徽标 ---- */
   .ai-badge{display:inline-block;background:#eaf3ff;color:#2b6cb0;border:1px solid #cfe3ff;
     border-radius:999px;padding:1px 9px;font-size:12px;margin-left:6px}
+  /* ---- 已拆文徽标（v38.93：报告存拆文库的例文也有标识） ---- */
+  .anl-badge{display:inline-block;background:#e8f7ef;color:#1e7a46;border:1px solid #c6ecd6;
+    border-radius:999px;padding:1px 9px;font-size:12px;margin-left:6px}
   /* ---- AI 面板只读输入 ---- */
   .misc-row input[readonly]{cursor:default;color:var(--ink,#222);cursor:pointer}
 
@@ -2677,7 +2680,7 @@ function renderExamples(){
     const snipSrc=(e.content||"").split("\n").slice(0,4).join("\n");
     card.innerHTML='<div class="chead"><span class="cno">#'+no+'</span><h3>'+esc(e.title)+'</h3></div>'+
       '<p class="snip">'+(esc(snipSrc||"")||"（暂无正文）")+'</p>'+
-      '<div class="meta">'+tags+(aiHasContent(e.ai)?'<span class="ai-badge">🤖 已分析</span>':"")+'<span>'+esc(e.fileName||"")+'</span><span class="ctime">添加 '+fmtDate(e.createdAt)+'</span></div>';
+      '<div class="meta">'+tags+(aiHasContent(e.ai)?'<span class="ai-badge">🤖 已分析</span>':"")+(((state.analyses)||[]).some(a=>a.srcId===e.id)?'<span class="anl-badge">✂️ 已拆文</span>':"")+'<span>'+esc(e.fileName||"")+'</span><span class="ctime">添加 '+fmtDate(e.createdAt)+'</span></div>';
     card.onclick=()=>openEditor(e.id);
     const pinBtn=document.createElement("button"); pinBtn.className="pin-btn"+(e.pinned?" on":""); pinBtn.textContent=e.pinned?"📌 取消置顶":"📌 置顶"; pinBtn.title="置顶到例文列表最前"; pinBtn.onclick=(ev)=>{ ev.stopPropagation(); e.pinned=!e.pinned; save(); renderExamples(); };
     const _metaEl=card.querySelector(".meta"); if(_metaEl){ const _ct=card.querySelector(".ctime"); if(_ct) _metaEl.insertBefore(pinBtn,_ct); else _metaEl.appendChild(pinBtn); } else { card.appendChild(pinBtn); }
@@ -2719,7 +2722,7 @@ function renderReadingView(){
   const wc=(ex.content||"").replace(/\s/g,"").length;
   $("#rdMeta").innerHTML=tags;
   $("#rdTime").textContent=time?"添加 "+time:"";
-  $("#rdWc").innerHTML='<span class="wc">字数 '+wc+'</span>'+(aiHasContent(ex.ai)?'<span class="ai-badge">🤖 已分析</span>':"");
+  $("#rdWc").innerHTML='<span class="wc">字数 '+wc+'</span>'+(aiHasContent(ex.ai)?'<span class="ai-badge">🤖 已分析</span>':"")+(((state.analyses)||[]).some(a=>a.srcId===ex.id)?'<span class="anl-badge">✂️ 已拆文</span>':"");
   const body=(ex.content||"").trim();
   const ce=$("#rdContent");
   if(body){ ce.textContent=body; ce.classList.remove("empty"); }
@@ -4882,7 +4885,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.92";
+  var APP_VERSION = "v38.93";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
@@ -5348,6 +5351,18 @@ function anlCopyFallback(txt){
 }
 async function anlSaveLib(){
   if(!ANL.report.trim()){ toast("还没有报告可以保存"); return; }
+  var oldRec=(ANL.srcId&&anlList().find(function(a){return a.srcId===ANL.srcId;}))||null;   /* v38.93：同源例文已存过→先问更新还是另存，防重复 */
+  if(oldRec){
+    if(confirm("拆文库里已经有这篇的分析（《"+(oldRec.srcTitle||oldRec.title||"未命名")+"》）。\n点「确定」更新成最新这份，点「取消」另存一份。")){
+      oldRec.report=ANL.report;
+      oldRec.title=ANL.srcTitle||ANL.title||oldRec.title;
+      if(ANL.genre) oldRec.genre=ANL.genre;
+      if(ANL.words) oldRec.words=ANL.words;
+      oldRec.createdAt=Date.now();
+      try{ await save(); }catch(e){}
+      anlRenderLib(); toast("已更新拆文库里的这份报告"); return;
+    }
+  }
   anlList().unshift({id:("anl"+Date.now()+Math.random().toString(36).slice(2,6)),
     title:ANL.srcTitle||ANL.title||"未命名",srcId:ANL.srcId||"",srcTitle:ANL.srcTitle||"",genre:ANL.genre,words:ANL.words||0,report:ANL.report,createdAt:Date.now()});
   try{ await save(); }catch(e){}
