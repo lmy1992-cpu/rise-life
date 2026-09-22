@@ -1215,6 +1215,7 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
             <button class="btn sm" id="btnAnlDemo" type="button">填入示例</button>
             <button class="btn sm" id="btnAnlClear" type="button">清空</button>
             <button class="btn sm" id="btnAnlUpload" type="button">上传文档</button>
+            <button class="btn sm" id="btnAnlChat" type="button">💬 聊这篇</button>
             <input type="file" id="anlFile" class="hidden-file" accept=".txt,.md,.docx" />
           </div>
           <textarea id="anlText" class="anl-ta" placeholder="在此粘贴短篇小说全文，或直接把 .txt / .md / .docx 文件拖进来...支持知乎短篇、网文短篇、故事文案等。AI 将从 10 个维度为你深度拆解这篇小说"></textarea>
@@ -1551,7 +1552,6 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
         <button class="btn soft" id="btnRdEditContent">✎ 编辑原文</button>
         <button class="btn soft" id="btnRdEditMeta">✎ 编辑元素</button>
         <button class="btn soft" id="btnRdDownload">⬇️ 下载原文</button>
-        <button class="btn soft" id="btnRdEditAi">🤖 AI 分析</button>
         <button class="btn soft" id="btnRdAiTags">🏷️ AI 分析元素</button>
         <button class="btn soft" id="btnRdAnalyse">✂️ AI 拆文</button>
         <button class="btn danger" id="btnRdDelete">删除</button>
@@ -1585,33 +1585,16 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
           <button class="btn primary" id="btnRdMetaSave">保存</button>
         </div>
       </div>
-      <!-- AI 分析：与「拆文」同一套引擎，结构风格一致 -->
-      <div id="rdEditAi" style="display:none">
-        <div class="sub">例文分析和「拆文」用同一套引擎，生成的 10 维深度报告排版完全一致。下面这份报告就是 AI 的分析结果。</div>
-        <button class="btn sm ghost" id="btnRdAiOpenSettings" style="margin:6px 0 10px">⚙️ 改 AI 设置（模型名 / API Key）</button>
-        <div id="aiReport" class="anl-report"><div class="empty">还没有分析。点「🤖 AI 自动分析」生成报告。</div></div>
-        <details class="anl-manual" style="margin:10px 0">
-          <summary style="cursor:pointer;color:var(--brand);font-size:13px">手动标注（可选 · 自定义维度，不覆盖上方报告）</summary>
-          <div id="aiFields" style="margin-top:8px"></div>
-        </details>
-        <div class="field" style="margin-top:8px"><label>本次补充指令（可选，只影响这一篇）</label><textarea id="aiRunNote" style="min-height:60px" placeholder="例如：这篇重点是男主的白月光，仔细看她出场的方式"></textarea></div>
-        <div id="aiRunPreview" style="display:none;margin:8px 0;padding:10px;border:1px dashed var(--line);border-radius:10px;background:var(--soft);font-size:13px;white-space:pre-wrap;max-height:240px;overflow:auto"></div>
-        <button class="btn" id="btnRdAiChat" style="width:100%;margin:2px 0 8px">💬 跟 AI 聊这篇（多轮问答）</button>
-        <div class="modal-actions">
-          <button class="btn" id="btnRdAiTrial">试跑看效果</button>
-          <button class="btn primary" id="btnRdAiRun">🤖 AI 自动分析</button>
-          <button class="btn ghost" id="btnRdAiCancel">取消</button>
-        </div>
-      </div>
+      <!-- v38.94：「AI 分析」入口与面板已删（与「AI 拆文」同一套逻辑，只留拆文）；聊天搬去拆文页 -->
     </div>
   </div>
 </div>
 
-<!-- AI 分析设置（待接入） -->
+<!-- AI 设置（拆文 / 归纳共用） -->
 <div class="mask" id="maskAiSettings">
   <div class="modal">
-    <h3>🤖 AI 分析设置</h3>
-    <div class="sub">密钥仅存本机浏览器，不会上传到任何服务器（只会发给下面填的 AI 服务商）。配置好后，在例文里点「🤖 AI 自动分析」即可一键归纳，且你随时能手动改。</div>
+    <h3>🤖 AI 设置（拆文 / 归纳共用）</h3>
+    <div class="sub">密钥仅存本机浏览器，不会上传到任何服务器（只会发给下面填的 AI 服务商）。配置好后，在「拆文」页点「开始拆文」即可一键拆解归纳，且你随时能手动改。</div>
     <!-- 归纳维度（用户自定义） -->
     <div class="field" style="margin-top:6px">
       <label>归纳维度（你来决定 AI 总结哪些项）</label>
@@ -1856,22 +1839,8 @@ function aiChat(messages, useJson, temperature){
     body:JSON.stringify(body)
   });
 }
-// 例文分析：与「拆文」共用同一套引擎（anlMessages + anlStream），保证两处结构、风格、排版完全一致
-async function callAiForExample(ex, extraNote, onDelta){
-  const cfg=await ensureAiCfg();
-  if(!cfg || !cfg.key){ toast("本机还没存过 API Key，填一次保存即可（之后永久记住）"); if($("#btnAiSettings") && typeof $("#btnAiSettings").onclick==="function") $("#btnAiSettings").onclick(); return null; }
-  const text=(ex.content||"").trim();
-  if(text.length<200){ toast("原文太短了，至少 200 字才能分析"); return null; }
-  const genre=(typeof ANL!=="undefined" && ANL.genre) || (typeof ANL_GENRES!=="undefined"?ANL_GENRES[3]:"");
-  const messages=anlMessages(text, genre);
-  if(extraNote) messages[messages.length-1].content += "\n\n【本次补充要求（只影响这一篇）】：\n"+extraNote;
-  let full="";
-  const md=await anlStream(messages, function(d){ full+=d; if(onDelta) onDelta(full); });
-  if(!md) throw new Error("AI 返回为空（可能密钥失效或额度不足）");
-  return {raw:md, report:md};
-}
-
 // ===== 多轮对话：跟 AI 聊这一篇例文（自由问答，你来教 AI 怎么归纳）=====
+// v38.94：入口从例文「AI 分析」面板搬到「拆文」页（按选中例文聊）
 function buildChatSys(ex){
   const fields=aiFields().map(f=>f.label).join("、");
   const instr=(state.aiCfg.instruction||"").trim();
@@ -1884,15 +1853,18 @@ function buildChatSys(ex){
   sys+="例文标题："+(ex.title||"未命名")+"\n例文正文：\n"+(ex.content||"（正文为空）");
   return {role:"system",content:sys};
 }
-function openAiChat(){
-  const ex=curEx(); if(!ex){ toast("请先打开一篇例文"); return; }
+var aiChatExId="";   /* v38.94：聊天锁定的例文 id（从拆文页进来按选中例文聊） */
+function aiChatCur(){ return (state.examples||[]).find(function(e){return e.id===aiChatExId;}) || curEx(); }
+function openAiChat(exArg){
+  const ex=exArg||curEx(); if(!ex){ toast("请先打开一篇例文"); return; }
+  aiChatExId=ex.id;
   ex.ai=ex.ai||{}; ex.ai.chat=ex.ai.chat||[];
   const title=$("#aiChatTitle"); if(title) title.textContent="当前例文："+(ex.title||"未命名");
   renderAiChat(); $("#maskAiChat").classList.add("on");
   setTimeout(()=>{ const i=$("#aiChatInput"); if(i) i.focus(); },60);
 }
 function renderAiChat(){
-  const ex=curEx(); const box=$("#aiChatBox"); if(!box) return;
+  const ex=aiChatCur(); const box=$("#aiChatBox"); if(!box) return;
   const chat=(ex&&ex.ai&&ex.ai.chat)||[];
   if(!chat.length){ box.innerHTML='<div style="margin:auto;color:var(--muted);font-size:13px">还没有对话。直接问 AI 关于这篇例文的问题吧，比如「男主的白月光是怎么出场的？」</div>'; return; }
   box.innerHTML=chat.map(m=>{
@@ -1905,7 +1877,7 @@ function renderAiChat(){
   box.scrollTop=box.scrollHeight;
 }
 async function sendAiChat(){
-  const ex=curEx(); if(!ex) return;
+  const ex=aiChatCur(); if(!ex) return;
   const cfg=await ensureAiCfg();
   if(!cfg||!cfg.key){ toast("本机还没存过 API Key，填一次保存即可（之后永久记住，不再弹窗）"); return; }
   const input=$("#aiChatInput"); const msg=(input.value||"").trim(); if(!msg) return;
@@ -1925,7 +1897,7 @@ async function sendAiChat(){
   renderAiChat();
 }
 function saveChatToMemory(){
-  const ex=curEx(); if(!ex) return;
+  const ex=aiChatCur(); if(!ex) return;
   const chat=(ex.ai&&ex.ai.chat)||[];
   const lastUser=chat.filter(m=>m.role==="user").pop();
   if(!lastUser){ toast("先和 AI 聊一句，再把这条变成长期偏好"); return; }
@@ -1935,7 +1907,7 @@ function saveChatToMemory(){
   toast("已存为长期偏好，以后每篇分析都会带上这条");
 }
 function clearAiChat(){
-  const ex=curEx(); if(!ex) return;
+  const ex=aiChatCur(); if(!ex) return;
   if(ex.ai) ex.ai.chat=[]; save(); renderAiChat();
 }
 
@@ -2729,11 +2701,10 @@ function renderReadingView(){
   else { ce.textContent="（无正文预览）"; ce.classList.add("empty"); }
   renderRelated();
 }
-function showReaderView(which){
+function showReaderView(which){   /* v38.94：AI 分析面板已删，只留 read/content/meta */
   $("#rdView").style.display = which==="read" ? "" : "none";
   $("#rdEditContent").style.display = which==="content" ? "" : "none";
   $("#rdEditMeta").style.display = which==="meta" ? "" : "none";
-  $("#rdEditAi").style.display = which==="ai" ? "" : "none";
 }
 $("#btnRdClose").onclick=()=>$("#maskEdit").classList.remove("on");
 /* v38.54 例文：选中正文显示字数 + 关联文档 */
@@ -2852,80 +2823,14 @@ function downloadOriginal(){
   toast("已开始下载："+name);
 }
 /* ---------- AI 分析面板 ---------- */
-function renderAiFields(){
-  const ex=curEx(); if(!ex) return;
-  const box=$("#aiFields"); if(!box) return; box.innerHTML="";
-  aiFields().forEach(f=>{
-    const wrap=document.createElement("div"); wrap.className="field";
-    const lab=document.createElement("label"); lab.textContent=f.label;
-    const ta=document.createElement("textarea"); ta.id="ai_"+f.key; ta.style.minHeight="70px";
-    ta.value=(ex.ai&&ex.ai[f.key])||""; ta.placeholder="（可手动填写，或配置 AI 后自动生成）";
-    wrap.append(lab,ta); box.appendChild(wrap);
-  });
-}
-$("#btnRdEditAi").onclick=()=>{ const ex=curEx(); renderAiFields(); if(ex&&ex.ai&&ex.ai.report) anlRenderTo($("#aiReport"), ex.ai.report); showReaderView("ai"); };
-$("#btnRdAiOpenSettings").onclick=()=>{ if($("#btnAiSettings").onclick) $("#btnAiSettings").onclick(); };
-$("#btnRdAiCancel").onclick=()=>showReaderView("read");
-$("#btnRdAiRun").onclick=()=>runAiAnalysis(curEx());
-$("#btnRdAiTrial").onclick=()=>trialAiAnalysis(curEx());
-$("#btnRdAiChat").onclick=()=>openAiChat();
+/* v38.94：renderAiFields / AI 分析面板绑定已随「AI 分析」入口删除（归纳维度管理保留在「AI 设置」里） */
 $("#btnAiChatSend").onclick=()=>sendAiChat();
 $("#btnAiChatMemory").onclick=()=>saveChatToMemory();
 $("#btnAiChatClose").onclick=()=>$("#maskAiChat").classList.remove("on");
 $("#btnAiChatClear").onclick=()=>clearAiChat();
 const _ci=$("#aiChatInput"); if(_ci) _ci.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); sendAiChat(); } });
 // 手动标注的保存：在「编辑例文」里逐条 onchange 即存；阅读器 AI 视图报告为自动保存，无需单独保存按钮
-// 例文 AI 分析：生成与「拆文」一致的 10 维报告，渲染进阅读器并保存
-async function runAiAnalysis(ex){
-  if(!ex) return;
-  const note=$("#aiRunNote") ? $("#aiRunNote").value.trim() : "";
-  const btn=$("#btnRdAiRun"); if(btn){ btn.disabled=true; btn.textContent="分析中…"; }
-  const rep=$("#aiReport");
-  try{
-    const r=await callAiForExample(ex, note, function(d){ if(rep) anlRenderTo(rep, d); });
-    if(!r) return;
-    const kr=anlExtractKeywords(r.report);   /* v38.87：抠出关键词标记 */
-    const cleanReport=kr.clean;
-    ex.ai=ex.ai||{}; ex.ai.report=cleanReport; ex.ai.done=true;
-    if(rep) anlRenderTo(rep, cleanReport);
-    const kwN=anlKwMergeMisc(kr.kw, ex.title||"未命名例文");   /* v38.87：关键词自动进杂项「AI关键词」 */
-    save(); renderReadingView(); renderExamples(); renderMisc();
-    /* v38.87：分析完自动问要不要存进拆文库（已有这篇就更新，没有就新增） */
-    const old=ex.id?(state.analyses||[]).find(a=>a.srcId===ex.id):null;
-    const kwMsg=kwN?("，已提取 "+kwN+" 个关键词到杂项·AI关键词"):"";
-    if(old){
-      if(confirm("AI 分析完成"+kwMsg+"。\n拆文库里已经有这篇的分析了，要更新成最新这份吗？")){
-        old.report=cleanReport; old.createdAt=Date.now(); old.title=ex.title||old.title; old.srcTitle=ex.title||old.srcTitle||"";
-        (async()=>{ try{ await save(); }catch(e){} try{ anlRenderLib(); }catch(e){} })();
-        toast("拆文库已更新");
-      }
-    } else if(confirm("AI 分析完成"+kwMsg+"。\n要把这份报告存进拆文库吗？")){
-      (state.analyses=state.analyses||[]).unshift({id:("anl"+Date.now()+Math.random().toString(36).slice(2,6)),
-        title:ex.title||"未命名",srcId:ex.id||"",srcTitle:ex.title||"",genre:"",words:(ex.content||"").replace(/\s/g,"").length,report:cleanReport,createdAt:Date.now()});
-      (async()=>{ try{ await save(); }catch(e){} try{ anlRenderLib(); }catch(e){} })();
-      toast("已存进拆文库");
-    }
-  }catch(err){
-    toast("AI 分析失败："+err.message);
-  }finally{
-    if(btn){ btn.disabled=false; btn.textContent="🤖 AI 自动分析"; }
-  }
-}
-// 试跑：只显示 AI 原始返回，不写入，方便你调「归纳指令」
-async function trialAiAnalysis(ex){
-  if(!ex) return;
-  const note=$("#aiRunNote") ? $("#aiRunNote").value.trim() : "";
-  const prev=$("#aiRunPreview");
-  if(prev){ prev.style.display="block"; prev.textContent="试跑中…"; }
-  try{
-    const r=await callAiForExample(ex, note);
-    if(!r) return;
-    if(prev){ prev.innerHTML="<b>AI 原始返回（就是会写入的报告，确认风格 OK 后点「🤖 AI 自动分析」）：</b>\n<pre style='white-space:pre-wrap;margin:6px 0 0;font-family:inherit'>"+esc(r.raw)+"</pre>"; }
-    toast("试跑完成");
-  }catch(err){
-    if(prev){ prev.style.display="block"; prev.textContent="试跑失败："+err.message; }
-  }
-}
+// v38.94：runAiAnalysis / trialAiAnalysis 已删——例文「AI 分析」与「AI 拆文」同一套逻辑，统一走「拆文」页；拆文顺带归纳维度（见 anlExtractDims / anlMergeDims）
 
 /* ---------- AI 自动分析元素：AI 建议，用户逐条增/删/改后再写入 ---------- */
 let aiTagSug=[];
@@ -3941,7 +3846,7 @@ $("#btnGenDeath").onclick=()=>{ const s=genDeathScene(); const c=dpEnsureCat("�
 function renderMiscAi(){
   const box=$("#miscList"); box.innerHTML="";
   const hasAny=state.examples.some(e=>aiHasContent(e.ai));
-  if(!hasAny){ box.innerHTML='<div class="empty">还没有任何例文做过 AI 分析。打开例文 → 🤖 AI 分析，填写后会出现在这里（也可手动填写）。</div>'; return; }
+  if(!hasAny){ box.innerHTML='<div class="empty">还没有任何归纳内容。去「拆文」页拆一篇例文，AI 会顺带把各维度归纳到这里（也可手动填写）。</div>'; return; }
   const fields=aiFields();
   if(!miscAiActive || !fields.some(f=>f.key===miscAiActive && state.examples.some(e=>(e.ai&&(e.ai[f.key]||"").trim())))){
     const first=fields.find(f=>state.examples.some(e=>(e.ai&&(e.ai[f.key]||"").trim())));
@@ -3968,7 +3873,7 @@ function renderMiscAi(){
       const ch=document.createElement("div"); ch.className="misc-head";
       const nm=document.createElement("span"); nm.className="name"; nm.textContent=ex.title||"未命名";
       const editBtn=document.createElement("button"); editBtn.className="btn sm"; editBtn.textContent="✎ 在例文中改";
-      editBtn.onclick=(ev)=>{ ev.stopPropagation(); openEditor(ex.id); renderAiFields(); showReaderView("ai"); };
+      editBtn.onclick=(ev)=>{ ev.stopPropagation(); openEditor(ex.id); };
       ch.append(nm,editBtn);
       const row=document.createElement("div"); row.className="misc-row";
       const ta=document.createElement("textarea"); ta.style.minHeight="56px"; ta.style.width="100%"; ta.value=ex.ai[f.key]||"";
@@ -4885,7 +4790,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.93";
+  var APP_VERSION = "v38.94";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
@@ -5137,7 +5042,7 @@ function anlMessages(text, genre){
     +"- 9. **优缺点总结**：`#### 核心优点` 有序列表写最值得学的 2-3 点；`#### 可提升之处` 有序列表写最容易翻车的 2-3 点。\n"
     +"- 10. **可复用仿写模板**：`#### 核心写作框架` 把本篇抽象成有序列表的「可抄步骤」，每步用 `- 仿写技巧：……` 说明怎么套；`#### 可复用技巧` 列几条通用技法。\n"
     +"\n【额外任务：关键词提取（不影响上面报告正文）】\n"
-    +"报告的 10 个维度全部写完后，另起一行，在整份输出的最后单独输出这一行标记：\n"
+    +"报告的 10 个维度全部写完后，另起一行，在整份输出的最后先输出这一行关键词标记（后面还紧跟一个维度归纳标记，见下）：\n"
     +"<!--AIKEYWORDS:{\"relation\":[\"夫妻\"],\"job\":[\"霸总\"],\"female\":[\"闺蜜\",\"妹妹\"],\"other\":[\"怀孕\"]}-->\n"
     +"标记内必须是合法 JSON（双引号）：relation=男女主关系（如：夫妻、男女朋友、未婚夫妻）；job=男女主职业（如：霸总、设计师）；female=女配身份（如：闺蜜、青梅、妹妹、继妹、庶妹、姐姐、继姐）；other=其他关键词（如：怀孕、流产、高速、远嫁）。\n"
     +"只提炼文中实际出现的通用词，禁止带「男主的/女主的/女配的」等归属前缀；每类数量不限，能提尽提、宁多勿漏（只要文中实际出现且有价值就提）；文中没有的类可省略该键；除这一行标记外，报告正文任何位置不得出现该标记。\n";
@@ -5156,6 +5061,15 @@ function anlMessages(text, genre){
       if(looseWs.length) parts.push("其他："+looseWs.slice(0,60).join("、"));
       var ref=parts.join("\n"); if(ref.length>2000) ref=ref.slice(0,2000)+"…";
       if(ref) sys+="\n【积累词库参考（自我总结）】\n以下是你此前从各篇例文积累下来的关键词，请保持同样的提取方向与颗粒度，并主动发现同类型的新词、同义的新表达：\n"+ref+"\n";
+    }
+    /* v38.94：维度归纳标记——AI 拆文顺带产出归纳维度（喂给杂项「AI 自动归类」），键名随用户自定义维度 */
+    var flds=(typeof aiFields==="function")?aiFields():[];
+    if(flds.length){
+      var dimEx={};
+      flds.forEach(function(f){ dimEx[f.key]="（"+f.label+"：用 1-3 句话简明归纳本篇该维度）"; });
+      sys+="\n【额外任务：维度归纳（不影响报告正文，紧接在关键词标记的下一行）】\n"
+        +"输出完整行如：<!--AIDIMS:"+JSON.stringify(dimEx)+"-->\n"
+        +"标记内必须是合法 JSON（双引号），键名必须与上面完全一致、一个不多一个不少；每个值用 1-3 句话简明归纳本篇该维度，不要写「文中未提及」——文中确实没有信息的维度直接省略该键；除这一行标记外，报告正文任何位置不得出现该标记。\n";
     }
   }catch(e){}
   var tpl=ANL_TPL[genre];
@@ -5222,6 +5136,24 @@ function anlExtractKeywords(md){
   var clean=md.replace(/<!--AIKEYWORDS:[\s\S]*?-->\s*/g,"").replace(/\s+$/,"");
   return {kw:kw,clean:clean};
 }
+/* ===== v38.94：AI 拆文顺带归纳维度 → 写进来源例文 ex.ai（喂给杂项「AI 自动归类」） ===== */
+function anlExtractDims(md){
+  md=md||"";
+  var m=md.match(/<!--AIDIMS:([\s\S]*?)-->/);
+  var dims={};
+  if(m){ try{ var o=JSON.parse(m[1].trim()); if(o&&typeof o==="object"){ aiFields().forEach(function(f){ var v=String(o[f.key]==null?"":o[f.key]).trim(); if(v && v.indexOf("未提及")<0) dims[f.key]=v; }); } }catch(e){} }
+  var clean=md.replace(/<!--AIKEYWORDS:[\s\S]*?-->\s*/g,"").replace(/<!--AIDIMS:[\s\S]*?-->\s*/g,"").replace(/\s+$/,"");   /* v38.94：兜底两种标记都清 */
+  return {dims:dims,clean:clean};
+}
+function anlMergeDims(srcId,dims){   /* 只补空维度，不覆盖已有内容（用户手动改过的不动） */
+  if(!srcId||!dims) return 0;
+  var ex=(state.examples||[]).find(function(e){return e.id===srcId;}); if(!ex) return 0;
+  ex.ai=ex.ai||{};
+  var n=0;
+  aiFields().forEach(function(f){ var v=dims[f.key]; if(!v) return; if(!String(ex.ai[f.key]||"").trim()){ ex.ai[f.key]=v; n++; } });
+  if(n){ ex.ai.done=aiHasContent(ex.ai); save(); renderExamples(); renderMisc(); }
+  return n;
+}
 function anlKwMergeMisc(kw,srcName){
   try{
     srcName=String(srcName||"").trim()||"未命名";
@@ -5274,14 +5206,17 @@ async function anlStart(){
     ANL.report=md||ANL.report;
     var kr=anlExtractKeywords(ANL.report);   /* v38.87：抠出关键词标记，报告保持干净 */
     ANL.report=kr.clean;
+    var kd=anlExtractDims(ANL.report);   /* v38.94：抠出维度归纳标记 */
+    ANL.report=kd.clean;
     ANL.sections=anlParseReport(ANL.report);
     var m=(ANL.report.match(/^#\s+(.+)$/m)||[])[1];
     ANL.title=((m&&m!=="拆文报告")?m:(ANL.srcTitle||"未命名")).replace(/[《》*]/g,"").trim();
     if(!ANL.srcTitle){ ANL.srcTitle=ANL.title; }
     anlRender();
     var kwN=anlKwMergeMisc(kr.kw, ANL.srcTitle||ANL.title||"手动拆文");   /* v38.87：关键词自动进杂项「AI关键词」 */
+    var dimN=(ANL.srcId&&Object.keys(kd.dims).length)?anlMergeDims(ANL.srcId,kd.dims):0;   /* v38.94：维度归纳进来源例文 */
     anlE("anlProg").textContent="已完成 · 共 "+ANL.sections.length+" 个维度"+(cut?"（原文过长，已取前 4 万字）":"");
-    toast("拆文完成"+(kwN?("，已提取 "+kwN+" 个关键词到杂项·AI关键词"):""));
+    toast("拆文完成"+(kwN?("，已提取 "+kwN+" 个关键词到杂项·AI关键词"):"")+(dimN?("，已归纳 "+dimN+" 个维度到杂项·AI自动归类"):""));
   }catch(err){
     anlE("anlErr").textContent="拆文失败："+((err&&err.message)||err);
     if(!ANL.report.trim()) anlE("anlReport").innerHTML='<div class="empty">没跑起来。多半是 AI 密钥 / 模型名不对，去「🤖 AI 设置」检查一下</div>';
@@ -5873,6 +5808,13 @@ function anlInit(){
   };
   var demo=anlE("btnAnlDemo"); if(demo) demo.onclick=function(){ anlFill(ANL_DEMO,"","示例：最后一班地铁"); toast("已填入示例，直接点「开始拆文」试试"); };
   var start=anlE("btnAnlStart"); if(start) start.onclick=anlStart;
+  var chatBtn=anlE("btnAnlChat");   /* v38.94：聊天从例文「AI 分析」搬进拆文页，按选中的例文聊 */
+  if(chatBtn) chatBtn.onclick=function(){
+    var sel=anlE("anlSrc"); var id=sel?(sel.value||""):"";
+    var ex=(state.examples||[]).find(function(e){return e.id===id;});
+    if(!ex){ toast("先在左上「从例文选择」里挑一篇例文，才能跟 AI 聊这一篇"); return; }
+    openAiChat(ex);
+  };
   var copy=anlE("btnAnlCopy"); if(copy) copy.onclick=function(){ anlCopyText(ANL.report); };
   var exp=anlE("btnAnlExport"); if(exp) exp.onclick=function(){ anlExport(null); };
   var saveLib=anlE("btnAnlSaveLib"); if(saveLib) saveLib.onclick=anlSaveLib;
