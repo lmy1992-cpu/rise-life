@@ -746,6 +746,21 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   </div>
 </div>
 
+<!-- 阅读打卡弹层（v38.98：输入今天读了多少页+用时，打卡自动更新书进度） -->
+<div class="mask" id="rdlogMask">
+  <div class="sheet">
+    <span class="closex" onclick="closeMask('rdlogMask')">×</span>
+    <h2 id="rdlogTitle">📖 阅读打卡</h2>
+    <p class="hint" id="rdlogInfo" style="color:var(--sub);font-size:12px;margin:0 0 12px"></p>
+    <div class="field" style="margin-bottom:10px"><label>今天读了多少页</label><input id="rdlogPages" type="number" min="0" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;font-family:inherit"></div>
+    <div class="field" style="margin-bottom:10px"><label>用了多长时间（分钟，可不填）</label><input id="rdlogMin" type="number" min="0" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;font-family:inherit"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px">
+      <button class="btn" onclick="closeMask('rdlogMask')">取消</button>
+      <button class="btn primary" onclick="rdCheckin()">打卡 ✓</button>
+    </div>
+  </div>
+</div>
+
 <!-- 灵感速记弹层 -->
 <div class="mask" id="inspMask">
   <div class="sheet">
@@ -896,7 +911,7 @@ navCfg = navCfg.filter(function(x){ return ["inbox","timeline","mood","recycle"]
   }
 })();
 
-const APP_VERSION = "v38.97";
+const APP_VERSION = "v38.98";
 // ===== 健壮存储层：localStorage 不可用时自动回退 IndexedDB（防止刷新丢数据）=====
 // 内部状态挂在 window 上，避免跨 <script> 块时 let 的暂时性死区（TDZ）报错
 // —— 存储层 v2：每条记录带写入时间戳，读取/合并时"取最新"，杜绝旧空值覆盖新数据 ——
@@ -1823,6 +1838,16 @@ function renderTodo(){
       '<button class="btn danger" onclick="clearAllTodo()">🗑 一键清空</button>'+
       (store.todoIgnore.length?'<button class="btn" onclick="hiddenOpen=!hiddenOpen;renderTodo()" title="查看已隐藏的任务，可单独恢复">↩ 已隐藏 '+store.todoIgnore.length+' 条</button>':'')+
     '</div>'+
+    (function(){ /* v38.98 阅读打卡统计条 / 开计划引导条 */
+      const ws=rdWeekStats();
+      if(ws.has) return '<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;background:linear-gradient(135deg,#fff7f3,#fff0e8);border:1px solid #f5d5c3;border-radius:12px;padding:9px 14px;margin-bottom:14px;font-size:13px;color:#8a5a3b">'+
+        '<span>📖 今日阅读 <b>'+ws.tPages+'</b> 页'+(ws.tMin?(' · <b>'+ws.tMin+'</b> 分钟'):'')+'</span>'+
+        '<span style="opacity:.75">本周 '+ws.wPages+' 页'+(ws.wMin?(' · '+ws.wMin+' 分钟'):'')+'</span></div>';
+      const st=readModuleLS("yuedu");
+      if(st && Array.isArray(st.books) && st.books.some(x=>x&&x.status==="reading"))
+        return '<div style="background:#fff7f3;border:1px dashed #f0c4ad;border-radius:12px;padding:9px 14px;margin-bottom:14px;font-size:13px;color:#8a5a3b">💡 想让「📖 今天读多少页」每天自动出现在待办里？去 <b>阅读手帐</b> → 点书的「编辑」→ 勾选「每日阅读计划」</div>';
+      return '';
+    })()+
     '<h3 style="margin:0 0 8px;font-size:14px;color:var(--sub)">待完成（'+undone.length+'）</h3><div id="todoUndone"></div>'+
     // 时间轴(左) + 近14天完成率(右) 并排；时间轴可点击进入完整时间轴界面
     '<div class="todo-duo">'+
@@ -1875,10 +1900,23 @@ function todoRow(t, done){
   const odTag=overdue?'<span class="tag" style="background:#fdecea;color:#d9534f">⚠ 已过期</span>':'';
   const coin=(t.projectName)?'<span class="tag" style="background:#fff8e6;color:#caa024">🪙 +'+taskPoints(t)+'</span>':'';
   const pri = overdue? "var(--danger)" : ((t.recurring||t.subTotal)?"var(--warn)":"transparent");
+  /* v38.98 阅读计划任务：显示进度条+今日目标，可打卡（打卡自动更新书进度） */
+  let rdSub='', rdLog='', rdBtn='';
+  if(typeof t.id==="string" && t.id.indexOf("rdplan_")===0){
+    const b=rdBookOf(t), plan=parseRdText(t.text);
+    if(b && b.totalPages){
+      const cur=b.currentPage||0, pct=Math.min(100,Math.round(cur/b.totalPages*100));
+      rdSub='<div style="height:6px;background:var(--chip);border-radius:99px;overflow:hidden;margin-top:5px"><i style="display:block;height:100%;width:'+pct+'%;background:var(--brand);border-radius:99px"></i></div>'+
+        '<div style="color:var(--sub);font-size:12px;margin-top:3px">已读 '+cur+' / '+b.totalPages+' 页 ('+pct+'%) · 今天该读 <b style="color:#c05621">'+plan.read+'</b> 页</div>';
+    }
+    rdLog=t.rdlog?'<span class="tag" style="background:#e8f7ee;color:#1f9d57">✅ 已读 '+t.rdlog.pages+' 页'+(t.rdlog.minutes?(' · 用时 '+t.rdlog.minutes+' 分钟'):'')+'</span>':'';
+    rdBtn='<button class="btn sm" style="background:#fff1ec;color:#c05621;border-color:#f5c9b8" onclick="openRdlog(\''+t.id+'\')" title="输入今天读了多少页+用时，打卡后书的进度自动更新">📖 打卡</button>';
+  }
   d.innerHTML='<div class="td-pri" style="background:'+pri+'"></div>'+
     '<div class="td-ck '+(done?"on":"")+'" onclick="toggleTodo(\''+t.id+'\')">✓</div>'+
-    '<div class="mf"><div class="t">'+esc(t.text)+'</div>'+(t.date?'<div class="m">'+t.date+' '+odTag+tag+coin+rtag+stag+ntag+rg+'</div>':'')+'</div>'+
+    '<div class="mf"><div class="t">'+esc(t.text)+'</div>'+rdSub+(t.date?'<div class="m">'+t.date+' '+odTag+tag+coin+rtag+stag+ntag+rg+rdLog+'</div>':'')+'</div>'+
     '<button class="btn sm pin'+(t.pinned?' on':'')+'" onclick="togglePin(\''+t.id+'\')" title="钉为今日主任务（首页置顶显示）">📌</button>'+
+    rdBtn+
     '<button class="btn sm" onclick="hideTask(\''+t.id+'\')" title="忽略此任务：不再从滴答同步进来（可恢复）">隐藏</button>'+
     '<button class="btn sm danger" onclick="delTodo(\''+t.id+'\')">删</button>';
   return d;
@@ -1913,6 +1951,62 @@ function gameAward(t){
 function gameRevoke(t){
   const key=t.didaId||t.id; if(!key) return;
   try{ const f=$("gameCommFrame"); if(f&&f.contentWindow) f.contentWindow.postMessage({type:"revokeTask", taskId:key}, "*"); }catch(e){}
+}
+/* ---- v38.98 阅读打卡：rdplan 任务直接输入今天读了多少页+用时，
+       打卡后任务完成、书进度自动写回阅读手帐（三端同步）、用时进统计 ---- */
+function parseRdText(text){
+  const m=/读到第\s*(\d+)\s*页（读\s*(\d+)\s*页）/.exec(text||"");
+  return m?{target:+m[1], read:+m[2]}:{target:0, read:0};
+}
+function rdBookOf(t){
+  const bid=(t&&t.bookId)||(typeof (t&&t.id)==="string"&&t.id.indexOf("rdplan_")===0?t.id.slice(7,t.id.length-11):null);
+  if(!bid) return null;
+  const st=readModuleLS("yuedu");
+  const books=(st&&Array.isArray(st.books))?st.books:[];
+  return books.find(x=>x&&x.id===bid)||null;
+}
+function openRdlog(taskId){
+  const t=store.todo.find(x=>x.id===taskId); if(!t) return;
+  const b=rdBookOf(t), plan=parseRdText(t.text);
+  $("rdlogTitle").textContent="📖 打卡 · "+(b?b.title:"阅读");
+  $("rdlogInfo").innerHTML=b?("已读 "+(b.currentPage||0)+" / "+b.totalPages+" 页 · 按计划今天读到第 "+plan.target+" 页（"+plan.read+" 页）"):esc(t.text);
+  $("rdlogPages").value=(t.rdlog&&t.rdlog.pages)||plan.read||"";
+  $("rdlogMin").value=(t.rdlog&&t.rdlog.minutes)||"";
+  $("rdlogPages").dataset.tid=taskId;
+  openMask("rdlogMask");
+  setTimeout(function(){ const i=$("rdlogPages"); if(i){ i.focus(); i.select(); } },40);
+}
+function rdCheckin(){
+  const tid=$("rdlogPages").dataset.tid;
+  const t=store.todo.find(x=>x.id===tid); if(!t) return;
+  const pages=Math.max(0, parseInt($("rdlogPages").value,10)||0);
+  const minutes=Math.max(0, parseInt($("rdlogMin").value,10)||0);
+  const b=rdBookOf(t);
+  let newCur=null;
+  if(b && b.totalPages) newCur=Math.min(b.totalPages,(b.currentPage||0)+pages);
+  t.done=true; t.rdlog={pages:pages, minutes:minutes, at:Date.now()}; t._mod=Date.now();
+  persist(TODO_KEY, store.todo);
+  if(b){
+    try{
+      const st=readModuleLS("yuedu");
+      const bb=(st.books||[]).find(x=>x.id===b.id);
+      if(bb){ bb.currentPage=newCur; bb._mod=Date.now(); writeModuleLS("yuedu", st); notifyModuleImport("yuedu", st, true); }
+    }catch(e){}
+  }
+  try{ gameAward(t); }catch(e){}
+  try{ ensureReadingPlans(); }catch(e){}
+  closeMask("rdlogMask");
+  renderTodo(); renderNav();
+  toast("打卡完成 ✓"+(pages?(" 读了 "+pages+" 页"):"")+(minutes?(" · 用时 "+minutes+" 分钟"):"")+(newCur!=null?("，进度已更新到第 "+newCur+" 页"):""));
+}
+function rdWeekStats(){
+  const today=todayStr();
+  const d=new Date(); d.setDate(d.getDate()-((d.getDay()+6)%7));
+  const monday=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  const logs=store.todo.filter(t=>t.rdlog&&t.date);
+  const td=logs.filter(t=>t.date===today), wk=logs.filter(t=>t.date>=monday&&t.date<=today);
+  const sum=(a,f)=>a.reduce((s,t)=>s+((t.rdlog&&t.rdlog[f])||0),0);
+  return {has:logs.length>0, tMin:sum(td,"minutes"), tPages:sum(td,"pages"), wMin:sum(wk,"minutes"), wPages:sum(wk,"pages")};
 }
 function togglePin(id){
   const t=store.todo.find(x=>x.id===id); if(!t) return;
