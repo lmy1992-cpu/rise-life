@@ -240,19 +240,6 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 <div class="layout">
   <nav class="side" id="sideNav"></nav>
   <main>
-    <!-- 正在看 -->
-    <section class="sec" id="sec-watching">
-      <div class="sec-head">
-        <h2 id="h-watching">正在看</h2>
-        <span class="hint" id="hint-watching"></span>
-        <div class="spacer"></div>
-        <button class="btn sm" id="btnSortWatching">↓ 最新</button>
-        <button class="btn sm" id="btnFilterWatching">⚲ 筛选</button>
-        <button class="btn sm primary" data-add="">+ 添加影片</button>
-      </div>
-      <div class="grid" id="gridWatching"></div>
-    </section>
-
     <!-- 已看 -->
     <section class="sec" id="sec-done">
       <div class="sec-head">
@@ -374,7 +361,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
           <input type="number" id="fTotal" placeholder="如：142">
         </div>
         <div class="field">
-          <label>当前进度（分钟，正在看填）</label>
+          <label>当前进度（分钟）</label>
           <input type="number" id="fCurrent" placeholder="如：60">
         </div>
       </div>
@@ -435,7 +422,6 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
           <label>状态</label>
           <select id="fStatus">
             <option value="">未设定</option>
-            <option value="watching">正在看</option>
             <option value="wish">待看</option>
             <option value="done">已看</option>
           </select>
@@ -535,7 +521,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
       if(MOD==="yuedu"||MOD==="dianying"){
         var arr=(MOD==="yuedu"?state.books:state.movies)||[];
         out.total=arr.length;
-        out.reading=arr.filter(function(x){return x.status===(MOD==="yuedu"?"reading":"watching");}).length;
+        if(MOD==="yuedu") out.reading=arr.filter(function(x){return x.status==="reading";}).length;
         out.done=arr.filter(function(x){return x.status==="done";}).length;
         out.wish=arr.filter(function(x){return x.status==="wish";}).length;
         out.todayAdded=arr.filter(function(x){return x.addedAt && tsToDate(x.addedAt)===today;}).length;
@@ -608,13 +594,12 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 
   var STORE_KEY = "dianying_shouzhang_v1";
   var NAV = [
-    {sec:"watching", name:"正在看", sub:"在看的片"},
     {sec:"done", name:"已看", sub:"看完的"},
     {sec:"wish", name:"待看", sub:"想看未看"},
     {sec:"stats", name:"统计", sub:"观影数据"},
     {sec:"settings", name:"设置", sub:"筛选项"}
   ];
-  var state = { movies:[], genres:[], countries:[], filter:{}, sortDir:{watching:"desc",done:"desc",wish:"desc"}, current:"watching" };
+  var state = { movies:[], genres:[], countries:[], filter:{}, sortDir:{done:"desc",wish:"desc"}, current:"done" };
 
   function uid(){ return "m"+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
   function $(id){ return document.getElementById(id); }
@@ -656,15 +641,17 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
       var b=document.createElement("button");
       b.className="navitem"+(state.current===n.sec?" on":"");
       var cnt="";
-      if(n.sec==="watching") cnt=countByStatus("watching");
-      else if(n.sec==="done") cnt=countByStatus("done");
+      if(n.sec==="done") cnt=countByStatus("done");
       else if(n.sec==="wish") cnt=countByStatus("wish");
       b.innerHTML="<b>"+esc(n.name)+(cnt!==""?' <span class="nav-count">'+cnt+'</span>':"")+"</b>"+(n.sub?'<span>'+esc(n.sub)+'</span>':"");
       b.onclick=function(){ switchSec(n.sec); };
       box.appendChild(b);
     });
   }
-  function countByStatus(s){ return state.movies.filter(function(x){return (x.status===s)||(s==="watching"&&!x.status);}).length; }
+  /* 旧数据兜底：v38.97 删掉「正在看」——原来标 watching 或没标状态的影片，
+     显示时一律归入「已看」分区（数据字段不动，编辑保存时自然落成 done） */
+  function effStatus(x){ var s=x&&x.status; return (s==="watching"||!s)?"done":s; }
+  function countByStatus(s){ return state.movies.filter(function(x){return effStatus(x)===s;}).length; }
 
   function switchSec(sec){
     state.current=sec;
@@ -705,8 +692,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   /* ---------- 列表渲染 ---------- */
   function renderList(sec){
     var wrap, all;
-    if(sec==="watching"){ wrap=$("gridWatching"); all=state.movies.filter(function(b){return b.status==="watching"||!b.status;}); }
-    else if(sec==="done"){ wrap=$("gridDone"); all=state.movies.filter(function(b){return b.status==="done";}); }
+    if(sec==="done"){ wrap=$("gridDone"); all=state.movies.filter(function(b){return effStatus(b)==="done";}); }
     else if(sec==="wish"){ wrap=$("gridWish"); all=state.movies.filter(function(b){return b.status==="wish";}); }
     if(!wrap) return;
     var filtered = applyFilter(all);
@@ -735,8 +721,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     c.className="card";
     var pct = (b.totalMin&&b.currentMin!=null) ? Math.min(100, Math.round(b.currentMin/b.totalMin*100)) : null;
     var statusBadge = "";
-    if(b.status==="watching") statusBadge='<span class="badge-status badge-reading">在看</span>';
-    else if(b.status==="done") statusBadge='<span class="badge-status badge-done">已看</span>';
+    if(effStatus(b)==="done") statusBadge='<span class="badge-status badge-done">已看</span>';
     else if(b.status==="wish") statusBadge='<span class="badge-status badge-wish">想看</span>';
 
     var info = '<div class="binfo">';
@@ -749,7 +734,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
       var at = b.watchAt ? b.watchAt.replace("T"," ") : "";
       info += '<div class="l2" style="color:var(--sub);font-size:12px">'+esc(at)+(wp?(" · "+wp):"")+'</div>';
     }
-    if(sec==="watching" && pct!=null){
+    if(pct!=null){
       info += '<div class="progress"><i style="width:'+pct+'%"></i></div>';
       info += '<div class="pct">进度 '+b.currentMin+' / '+b.totalMin+' 分钟 ('+pct+'%)</div>';
     } else if(b.totalMin){
@@ -758,8 +743,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     info += '</div>';
 
     var acts = '<div class="acts">';
-    if(b.status!=="watching") acts+='<button class="btn sm" data-act="watching">在看</button>';
-    if(b.status!=="done") acts+='<button class="btn sm" data-act="done">看完</button>';
+    if(effStatus(b)!=="done") acts+='<button class="btn sm" data-act="done">看完</button>';
     if(b.status!=="wish") acts+='<button class="btn sm" data-act="wish">想看</button>';
     acts+='<button class="btn sm" data-act="edit">编辑</button>';
     acts+='</div>';
@@ -785,8 +769,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   /* ---------- 互通：改变状态 ---------- */
   function changeStatus(id, act){
     var b=findMovie(id); if(!b) return;
-    if(act==="watching"){ b.status="watching"; b.addedAt=b.addedAt||Date.now(); toast("已加入「正在看」"); }
-    else if(act==="wish"){ b.status="wish"; toast("已加入「待看」"); }
+    if(act==="wish"){ b.status="wish"; toast("已加入「待看」"); }
     else if(act==="done"){ b.status="done"; b.finishedAt=Date.now(); toast("已加入「已看」"); }
     b._mod=Date.now();
     save(); renderNav(); renderList(state.current);
@@ -815,8 +798,8 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     $("fWatchPlace").value = b?(b.watchPlace||""):"";
     $("fWatchPlatform").value = (b&&b.watchPlatform && b.watchPlatform!=="其他") ? b.watchPlatform : "";
     $("fWatchPlatformCustom").value = (b&&b.watchPlatform && b.watchPlatform!=="其他" && !["爱奇艺","腾讯视频","优酷","哔哩哔哩","芒果TV","Netflix","YouTube"].includes(b.watchPlatform)) ? b.watchPlatform : "";
-    var _def=(state.current==="watching"||state.current==="done"||state.current==="wish")?state.current:"watching";
-    $("fStatus").value = b?b.status:_def;
+    var _def=(state.current==="done"||state.current==="wish")?state.current:"done";
+    $("fStatus").value = b?effStatus(b):_def;
     $("btnMovieDelete").style.display = b?"block":"none";
     $("matchList").innerHTML="";
     refreshDatalists();
@@ -861,7 +844,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     } else {
       b.watchPlatform="";
     }
-    var st=$("fStatus").value||"watching"; b.status = st;
+    var st=$("fStatus").value||"done"; b.status = st;
     if(st==="done" && !b.finishedAt) b.finishedAt=Date.now();
     b._mod=Date.now();
     if(b.genre && state.genres.indexOf(b.genre)<0) state.genres.push(b.genre);
@@ -997,8 +980,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     detailId=id;
     var cover = b.cover ? '<img class="detail-cover" src="'+esc(b.cover)+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><div class="detail-cover-ph" style="display:none">'+esc((b.title||"?").slice(0,1))+'</div>' : '<div class="detail-cover-ph">'+esc((b.title||"?").slice(0,1))+'</div>';
     var statusBadge="";
-    if(b.status==="watching") statusBadge='<span class="badge-status badge-reading">在看</span>';
-    else if(b.status==="done") statusBadge='<span class="badge-status badge-done">已看</span>';
+    if(effStatus(b)==="done") statusBadge='<span class="badge-status badge-done">已看</span>';
     else if(b.status==="wish") statusBadge='<span class="badge-status badge-wish">想看</span>';
     var meta='<div class="detail-meta">'+statusBadge+(b.director?'<span>导演：'+esc(b.director)+'</span>':'')+(b.genre?'<span>题材：'+esc(b.genre)+'</span>':'')+(b.country?'<span>'+esc(b.country)+'</span>':'')+'</div>';
     var period="";
@@ -1012,7 +994,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
       watchInfo='<div class="detail-meta" style="margin-top:4px">🕓 观看时间：'+esc(wat)+(wlabel?(" · "+wlabel):"")+'</div>';
     }
     var prog="";
-    if(b.status==="watching" && b.totalMin && b.currentMin!=null){
+    if(b.totalMin && b.currentMin!=null){
       var pct=Math.min(100,Math.round(b.currentMin/b.totalMin*100));
       prog='<div class="detail-prog"><i style="width:'+pct+'%"></i></div><div class="detail-meta">进度 '+b.currentMin+' / '+b.totalMin+' 分钟 ('+pct+'%)</div>';
     } else if(b.totalMin){
@@ -1046,13 +1028,12 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     var year=new Date().getFullYear();
     var done=state.movies.filter(function(b){return b.status==="done";});
     var doneY=done.filter(function(b){return b.finishedAt && new Date(b.finishedAt).getFullYear()===year;});
-    var watching=countByStatus("watching");
     var wish=countByStatus("wish");
     var minutesY=doneY.reduce(function(s,b){return s+(b.totalMin||0);},0);
     var cards=[
       {n:doneY.length, l:"今年看完(部)"},
       {n:minutesY, l:"今年观看(分钟)"},
-      {n:watching, l:"正在看"},
+      {n:countByStatus("done"), l:"已看"},
       {n:wish, l:"待看"},
       {n:state.movies.length, l:"片单总数"}
     ];
@@ -1177,7 +1158,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   /* ---------- 事件绑定 ---------- */
   function bind(){
     document.querySelectorAll("[data-add]").forEach(function(b){ b.onclick=function(){ openMovie(null); }; });
-    [["btnSortWatching","watching"],["btnSortDone","done"],["btnSortWish","wish"]].forEach(function(p){
+    [["btnSortDone","done"],["btnSortWish","wish"]].forEach(function(p){
       $(p[0]).onclick=function(){
         var cur=state.sortDir[p[1]]||"desc";
         state.sortDir[p[1]]=cur==="desc"?"asc":"desc";
@@ -1185,7 +1166,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
         save(); renderList(p[1]);
       };
     });
-    [["btnFilterWatching","watching"],["btnFilterDone","done"],["btnFilterWish","wish"]].forEach(function(p){
+    [["btnFilterDone","done"],["btnFilterWish","wish"]].forEach(function(p){
       $(p[0]).onclick=function(){ openFilter(); };
     });
     $("btnMatch").onclick=function(){ var q=$("matchInput").value.trim(); if(q) doMatch(q); };
@@ -1239,22 +1220,22 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   /* ---------- 初始化 ---------- */
   load();
   bind();
-  ["watching","done","wish"].forEach(function(s){
+  ["done","wish"].forEach(function(s){
     var btn=$("btnSort"+s.charAt(0).toUpperCase()+s.slice(1));
     if(btn) btn.textContent=(state.sortDir[s]==="desc"?"↓ 最新":"↑ 最早");
   });
   renderNav();
-  switchSec("watching");
+  switchSec("done");
   /* 演示种子：首次打开无数据时填充，方便预览（可在模块内清空） */
   try{
     if(!localStorage.getItem("dy_seed_v1") && state.movies.length===0){
       state.movies.push(
-        {id:uid(),title:"肖申克的救赎",director:"弗兰克·德拉邦特",cover:"",genre:"剧情",country:"美国",totalMin:142,curMin:90,status:"watching",quotes:["希望是好事，也许是人间至善。"],feel:"越看越觉得自由的可贵。",period:["2026-07-25",""],addedAt:Date.now()},
-        {id:uid(),title:"霸王别姬",director:"陈凯歌",cover:"",genre:"剧情",country:"中国",totalMin:171,curMin:171,status:"watched",quotes:["不疯魔不成活。"],feel:"华语巅峰，每次看都哭。",period:["2026-06-15","2026-06-15"],addedAt:Date.now()-86400000},
-        {id:uid(),title:"星际穿越",director:"诺兰",cover:"",genre:"科幻",country:"美国",totalMin:169,curMin:0,status:"want",quotes:[],feel:"",period:["",""],addedAt:Date.now()-172800000}
+        {id:uid(),title:"肖申克的救赎",director:"弗兰克·德拉邦特",cover:"",genre:"剧情",country:"美国",totalMin:142,curMin:142,status:"done",quotes:["希望是好事，也许是人间至善。"],feel:"越看越觉得自由的可贵。",period:["2026-07-25",""],addedAt:Date.now()},
+        {id:uid(),title:"霸王别姬",director:"陈凯歌",cover:"",genre:"剧情",country:"中国",totalMin:171,curMin:171,status:"done",quotes:["不疯魔不成活。"],feel:"华语巅峰，每次看都哭。",period:["2026-06-15","2026-06-15"],addedAt:Date.now()-86400000},
+        {id:uid(),title:"星际穿越",director:"诺兰",cover:"",genre:"科幻",country:"美国",totalMin:169,curMin:0,status:"wish",quotes:[],feel:"",period:["",""],addedAt:Date.now()-172800000}
       );
       save(); localStorage.setItem("dy_seed_v1","1");
-      renderNav(); switchSec("watching");
+      renderNav(); switchSec("done");
     }
   }catch(e){ console.warn("seed fail",e); }
 
