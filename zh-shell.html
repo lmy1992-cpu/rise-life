@@ -896,7 +896,7 @@ navCfg = navCfg.filter(function(x){ return ["inbox","timeline","mood","recycle"]
   }
 })();
 
-const APP_VERSION = "v38.95";
+const APP_VERSION = "v38.96";
 // ===== 健壮存储层：localStorage 不可用时自动回退 IndexedDB（防止刷新丢数据）=====
 // 内部状态挂在 window 上，避免跨 <script> 块时 let 的暂时性死区（TDZ）报错
 // —— 存储层 v2：每条记录带写入时间戳，读取/合并时"取最新"，杜绝旧空值覆盖新数据 ——
@@ -3048,6 +3048,58 @@ function openCheckinAdd(){ openMask("checkinAddMask"); setTimeout(function(){ co
 document.querySelectorAll(".mask").forEach(function(m){ m.addEventListener("click",function(e){ if(e.target===m) m.classList.remove("show"); }); });
 
 /* ============ 接收子模块消息 ============ */
+/* ---- v38.96 每日阅读计划：阅读手帐里开了计划的书，自动把当天任务写进待办 ---- */
+/* 口径与 reading.html 的 planCalc 完全一致：base=原计划每天页数；
+   顺延重算(carry)=今天永远只读 base 页，过去未完成的计划任务删掉（只动 rdplan_ 前缀自动任务，不碰手动任务）；
+   保留累积(keep)=从锚点累计：max(当前页+base, 锚点+base*第几天)，没读的天数越积越多 */
+const RDPLAN_LSKEY = "yuedu_shouzhang_v1";
+function rdDiffDays(a,b){ const pa=a.split("-").map(Number),pb=b.split("-").map(Number); return Math.round((Date.UTC(pb[0],pb[1]-1,pb[2])-Date.UTC(pa[0],pa[1]-1,pa[2]))/86400000); }
+function ensureReadingPlans(){
+  let books=null;
+  try{ const raw=localStorage.getItem(RDPLAN_LSKEY); if(raw){ const st=JSON.parse(raw); books=(st&&Array.isArray(st.books))?st.books:null; } }catch(e){ return; }
+  if(!books||!books.length) return;
+  const today=todayStr();
+  let changed=false;
+  books.forEach(function(b){
+    if(!b||!b.id||!b.title) return;
+    const p=b.plan;
+    const active = b.status==="reading" && p && p.on && p.start && p.end && b.totalPages && p.end>=p.start;
+    if(!active) return;                    // 没开计划/没在读/数据不全：不动
+    const cur=b.currentPage||0;
+    if(cur>=b.totalPages) return;          // 已读完
+    if(today<p.start) return;              // 还没到计划开始日
+    const totalDays=Math.max(rdDiffDays(p.start,p.end)+1,1);
+    const base=Math.ceil(b.totalPages/totalDays);
+    if(base<=0) return;
+    const keep=(p.mode||"carry")==="keep";
+    const tid="rdplan_"+b.id+"_"+today;
+    if(!keep){                             // 顺延重算：删过去未完成的计划任务（幂等，已完成的不动）
+      const before=store.todo.length;
+      store.todo=store.todo.filter(function(x){
+        if(!x||typeof x.id!=="string"||x.id.indexOf("rdplan_"+b.id+"_")!==0) return true;
+        if(x.id===tid) return true;
+        return !!x.done;
+      });
+      if(store.todo.length!==before) changed=true;
+    }
+    let target;
+    if(keep){
+      const ad=(p.anchorDate&&p.anchorDate>p.start)?p.anchorDate:p.start;
+      const kA=Math.max(rdDiffDays(ad,today)+1,1);
+      const anchor=(p.anchor!=null)?p.anchor:cur;
+      target=Math.min(b.totalPages, Math.max(cur+base, anchor+base*kA));
+    }else{
+      target=Math.min(b.totalPages, cur+base);
+    }
+    const read=target-cur;
+    if(read<=0) return;
+    if(!store.todo.some(function(x){return x&&x.id===tid;})){   // 确定性 id，天然幂等
+      store.todo.push({id:tid, text:"📖 《"+b.title+"》读到第 "+target+" 页（读 "+read+" 页）", done:false, date:today, projectId:null, projectName:"阅读计划"});
+      changed=true;
+    }
+  });
+  if(changed){ try{ persist(TODO_KEY, store.todo); renderTodo(); renderNav(); }catch(e){} }
+}
 window.addEventListener("message", function(e){
   const d=e.data||{};
   if(d.type==="summary"){ summaries[d.mod]=d.payload; fillSummary(d.mod, d.payload); if(d.mod===probeExpected) probeAdvance(); }
@@ -3073,6 +3125,7 @@ window.addEventListener("message", function(e){
     if(distState && distState.cloudTs && pendingMig.mk) setModuleTs(pendingMig.mk, distState.cloudTs);
     pendingMig=null; if(distState){ distState.i++; distStep(); }
   }
+  else if(d.type==="readingPlanChanged"){ try{ ensureReadingPlans(); }catch(err){} }
 });
 // 启动后向游戏人生通信帧拉一次摘要，让浮动陪伴宠物全局可见
 window.addEventListener("load", function(){
@@ -4193,6 +4246,7 @@ function purgeRecycle(id){
 hydrateKV().then(function(){
   try{ rehydrateGlobals(); }catch(e){}
   try{ loadStore(); }catch(e){}
+  try{ ensureReadingPlans(); }catch(e){}   // v38.96 启动即生成今天的阅读计划任务
   try{ renderNav(); }catch(e){}
   function boot(){ try{ if(typeof go==='function') go("overview"); return true; }catch(e){ return false; } }
   if(!boot()){ setTimeout(boot, 300); setTimeout(boot, 700); }
