@@ -19,7 +19,8 @@
 // v39.01：协作版「没反应」第二弹——记住口令的设备静默自动登录失败时，登录弹窗（报错+🩺自检入口）必须打开；手动同步失败不再静默，toast 真实原因+自动开自检面板
 // v39.02：自检面板被登录窗盖住（maskLogin z-index=999 > .mask 60）——showDiag 强制 zIndex 1200；「Load failed」错误附人话解释（网络请求没发出去，切换 Wi-Fi/蜂窝+等自动重试）
 // v39.03：Load failed 真凶=环境 ID 拼错也会报同样的错（环境 ID 直接拼进请求网址，错一个字母=网址不存在=DNS 失败）——自检结论+登录窗提示都改成「先核对环境 ID 逐字拼写，再查网络」
-const CACHE = 'dp-pwa-v39.03';
+// v39.04：游戏人生·商城加「🧹 清理重复」按钮（奖励商城 S.shop / 宠物商城 S.petCatalog 各一个）——dedupeShopList 按「同名+同价+同图标」判重复，保留首份删其余，删前确认+toast 报告条数
+const CACHE = 'dp-pwa-v39.04';
 const ASSETS = [
   './',
   './index.html',
