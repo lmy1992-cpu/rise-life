@@ -4546,9 +4546,11 @@ async function doCollabLogin(silent){
         const _isChunk=(_em.indexOf("分块")>=0 || _em.indexOf("不完整")>=0);
         // v38.70：不再只给一句笼统提示——把真实原因写出来，并给出自检入口（原来只能靠猜）
         const _safe=_em.replace(/[<>]/g,"").slice(0,160);
+        const _netFail=/Load failed|Failed to fetch|NetworkError|aborted|network/i.test(_em);
         if(msg) msg.innerHTML = (_isChunk
           ? "云端这包数据暂时不完整（缺块）。原因："+_safe
-          : "无法读取协作空间："+_safe) +
+          : "无法读取协作空间："+_safe+
+            (_netFail ? "<br><span style=\"color:#8a5a3b\">💡 「Load failed」=网络请求没发出去（不是口令/配置错）。试试：①Wi-Fi 和蜂窝网络互相切换一下再点同步 ②它每 10 秒自动重试，连上会自动进入</span>" : "")) +
           "<br><a href=\"javascript:void(0)\" onclick=\"showDiag()\" style=\"color:#1a6fd4;text-decoration:underline\">🩺 点这里自检，看具体卡在哪一步</a>";
         toast(_isChunk ? "云端数据正在修复中，请先在电脑端打开一次协作版" : "首次进入需要联网读取协作空间，请检查网络后重试");
         try{ $("#maskLogin").classList.add("on"); }catch(e){} // v39.01：报错详情和🩺自检链接都写在登录弹窗里，弹窗不开=用户永远看不见（静默自动登录失败时尤其如此）
@@ -4584,6 +4586,7 @@ function showDiag(){
         toast(done?"已复制，发给对方即可":"复制失败，请长按选中后手动复制");
       };
     }
+    m.style.zIndex="1200"; // v39.02：登录窗(maskLogin) z-index=999，自检面板默认 60 会被盖住——从登录窗里的「🩺 点这里自检」打开时必须压在登录窗之上
     var st=(typeof state!=='undefined'&&state)?state:{};
     var errs=(window.__ERRS||[]).slice(-15);
     var ver="";
@@ -4812,7 +4815,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v39.01";
+  var APP_VERSION = "v39.02";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
