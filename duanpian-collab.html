@@ -4550,7 +4550,7 @@ async function doCollabLogin(silent){
         if(msg) msg.innerHTML = (_isChunk
           ? "云端这包数据暂时不完整（缺块）。原因："+_safe
           : "无法读取协作空间："+_safe+
-            (_netFail ? "<br><span style=\"color:#8a5a3b\">💡 「Load failed」=网络请求没发出去（不是口令/配置错）。试试：①Wi-Fi 和蜂窝网络互相切换一下再点同步 ②它每 10 秒自动重试，连上会自动进入</span>" : "")) +
+            (_netFail ? "<br><span style=\"color:#8a5a3b\">💡 这个错=请求没发出去。两大可能：① <b>环境 ID 打错字</b>（它是网址的一部分，错一个字母网址就不存在——对照能同步的那台设备逐字核对） ② 网络不通（切换 Wi-Fi/蜂窝试试）</span>" : "")) +
           "<br><a href=\"javascript:void(0)\" onclick=\"showDiag()\" style=\"color:#1a6fd4;text-decoration:underline\">🩺 点这里自检，看具体卡在哪一步</a>";
         toast(_isChunk ? "云端数据正在修复中，请先在电脑端打开一次协作版" : "首次进入需要联网读取协作空间，请检查网络后重试");
         try{ $("#maskLogin").classList.add("on"); }catch(e){} // v39.01：报错详情和🩺自检链接都写在登录弹窗里，弹窗不开=用户永远看不见（静默自动登录失败时尤其如此）
@@ -4670,7 +4670,18 @@ async function runCloudSelfCheck(){
       }
     }catch(e){
       P("  ❌ 请求异常："+((e&&e.message)||e));
-      P(""); P("  👉 结论：网络不通或跨域被拦。请确认这台设备能正常上网。");
+      const _em2=(e&&e.message)?String(e.message):"";
+      P("");
+      if(/Load failed|Failed to fetch|NetworkError/i.test(_em2)){
+        // v39.03：环境 ID 直接拼进请求网址（https://环境ID.api.tcloudbasegateway.com）——拼错一个字母=网址不存在=DNS 解析失败=Load failed，与网络不通是同一个报错
+        P("  ⚠️ 这个报错有两种常见原因，按可能性排序：");
+        P("  ① 环境 ID 打错字（最常见！）——环境 ID 是网址的一部分，错一个字母网址就不存在，报的就是这个错。");
+        P("     当前环境 ID：开头「"+envId.slice(0,9)+"」结尾「"+envId.slice(-4)+"」共 "+envId.length+" 位。请对照能正常同步的那台设备逐字核对，特别是第一个字母和总位数。");
+        P("  ② 这台设备网络不通/被拦——先用浏览器随便开个网页确认能上网。");
+        P("  👉 结论：先核对环境 ID 有没有少打/打错字母，再查网络。");
+      } else {
+        P("  👉 结论：网络不通或跨域被拦。请确认这台设备能正常上网。");
+      }
       return L.join("\n");
     }
 
@@ -4815,7 +4826,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v39.02";
+  var APP_VERSION = "v39.03";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
