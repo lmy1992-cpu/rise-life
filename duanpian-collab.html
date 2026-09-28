@@ -2441,6 +2441,7 @@ function migrate(){
     }
   }
   state.tutorials.forEach(t=>{ if(!t.category) t.category="其他"; if(!t.createdAt) t.createdAt=Date.now(); if(typeof t.content!=="string") t.content=""; });
+  kwBackfillEra();   /* v39.06：存量关键词补时代标记（state 已就绪，时序可靠） */
   mergeXlsx();
 }
 const DEFAULT_NAV=[
@@ -3678,6 +3679,42 @@ function renderBrainstorms(){
 
 /* ---------- 五、杂项分类（左导览） ---------- */
 function autoGrow(el){ if(!el) return; el.style.height='auto'; el.style.height=(el.scrollHeight)+'px'; }
+/* ===== v39.06：起名库按角色分组（男主/女主/女配/男配），新起的名字排最前 ===== */
+function nameLibRoleOf(it){
+  const ROLES=["男主","女主","女配","男配"];
+  if(it && ROLES.indexOf(it.role)>=0) return it.role;
+  const m=/（(男主|女主|女配|男配|白月光|深情男二)）/.exec((it&&it.text)||"");
+  if(m) return m[1]==="白月光"?"女配":(m[1]==="深情男二"?"男配":m[1]);
+  return "";
+}
+function renderNameLib(cat, body){
+  const ROLES=["男主","女主","女配","男配"];
+  const ICONS={"男主":"👑","女主":"🌸","女配":"🌙","男配":"🤵"};
+  const groups=ROLES.map(r=>({r:r,items:cat.items.filter(it=>nameLibRoleOf(it)===r)}));
+  const others=cat.items.filter(it=>!nameLibRoleOf(it));
+  function nameRow(it){
+    const row=document.createElement("div"); row.className="misc-row";
+    const inp=document.createElement("input"); inp.value=it.text;
+    inp.onchange=()=>{ it.text=inp.value; save(); };
+    const intro=document.createElement("textarea"); intro.className="mi-intro"; intro.value=it.intro||""; intro.placeholder="人设简介（可选）"; intro.rows=1;
+    intro.oninput=()=>{ it.intro=intro.value; autoGrow(intro); };
+    intro.onchange=()=>{ it.intro=intro.value; save(); };
+    const x=document.createElement("button"); x.className="iconbtn del"; x.textContent="✕"; x.title="删除这个名字";
+    x.onclick=()=>{ const i2=cat.items.indexOf(it); if(i2>=0){ cat.items.splice(i2,1); save(); renderMisc(); } };
+    row.append(inp,intro,x); body.appendChild(row);
+  }
+  function seg(title,ic,arr){
+    const h=document.createElement("div");
+    h.style.cssText="font-weight:700;font-size:13px;margin:12px 0 6px;color:var(--sub,#8a7d6d);";
+    h.textContent=ic+" "+title+" ×"+arr.length;
+    body.appendChild(h);
+    if(!arr.length){ const e=document.createElement("div"); e.style.cssText="font-size:12px;opacity:.55;margin:0 0 4px;"; e.textContent="还没有"+title+"的名字（点「✨ 一键起名」，名字会出现在对应分组最前面）"; body.appendChild(e); return; }
+    arr.forEach(nameRow);
+  }
+  groups.forEach(g=>seg(g.r,ICONS[g.r],g.items));
+  if(others.length) seg("未分类","❔",others);
+}
+
 function renderMisc(){
   const box=$("#miscList"); if(!box) return;
   if(miscZone==="ai"){ renderMiscAi(); return; }
@@ -3732,7 +3769,7 @@ function renderMisc(){
       const x=document.createElement("button"); x.className="iconbtn del"; x.textContent="✕"; x.onclick=()=>{ cat.items.splice(ii,1); save(); renderMisc(); };
       row.append(inp,intro,u,d,x); body.appendChild(row);
     }
-    cat.items.forEach(kwRow);
+    if(cat.name==="💡 起名库"){ renderNameLib(cat, body); } else { cat.items.forEach(kwRow); }   /* v39.06：起名库按角色分组 */
     panel.append(head,body);
   }
   wrap.append(nav,panel); box.appendChild(wrap);
@@ -3804,17 +3841,47 @@ function renderMiscKw(box){
   head.appendChild(reqBtn);
   const body=document.createElement("div"); body.className="misc-body kw-tagwall";
   const list=(miscKwGroup==="其他")?loose:items.filter(it=>(it.intro||"").indexOf(miscKwGroup)===0);
+  /* v39.06：组内分「现代 / 古代」两段——点词切换时代，也可直接拖到另一边；AI 判不出的默认归现代 */
+  const eraSeg=(era,label,ic)=>{
+    const segWrap=document.createElement("div");
+    segWrap.style.cssText="margin:0 0 12px;padding:10px;border:1px dashed var(--line,#d8cfc0);border-radius:12px;min-height:60px;transition:background .15s;";
+    const h=document.createElement("div"); h.style.cssText="font-size:12px;font-weight:700;margin-bottom:8px;opacity:.85;";
+    h.textContent=ic+" "+label+" ×"+list.filter(it=>(it.era||"m")===era).length+"　（点词切换时代 · 也可拖到另一边）";
+    segWrap.appendChild(h);
+    segWrap.ondragover=(e)=>{ e.preventDefault(); segWrap.style.background="rgba(240,124,86,.08)"; };
+    segWrap.ondragleave=()=>{ segWrap.style.background=""; };
+    segWrap.ondrop=(e)=>{
+      e.preventDefault(); segWrap.style.background="";
+      const id=(e.dataTransfer&&e.dataTransfer.getData("text/plain"))||"";
+      const t=cat.items.find(x=>x.id===id);
+      if(t && (t.era||"m")!==era){ t.era=era; save(); renderMisc(); toast(era==="a"?("「"+t.text+"」已移到古代"):("「"+t.text+"」已移到现代")); }
+    };
+    const arr=list.filter(it=>(it.era||"m")===era);
+    if(!arr.length){
+      const tip=document.createElement("div"); tip.style.cssText="font-size:12px;opacity:.55;";
+      tip.textContent=era==="m"?"AI 判断不出的词会先归到这里":"还没有古代词；把词拖进来，或点一下词切过来";
+      segWrap.appendChild(tip);
+    }
+    arr.forEach(it=>{
+      const tag=document.createElement("span"); tag.className="kw-tag"; tag.textContent=it.text;
+      tag.draggable=true; tag.title="点一下切到"+(era==="m"?"古代":"现代")+"；也可拖到另一边";
+      tag.onclick=()=>{ it.era=(era==="m")?"a":"m"; save(); renderMisc(); toast((era==="m")?("「"+it.text+"」已移到古代"):("「"+it.text+"」已移到现代")); };
+      tag.ondragstart=(e)=>{ try{ e.dataTransfer.setData("text/plain",it.id); e.dataTransfer.effectAllowed="move"; }catch(_){} };
+      const x=document.createElement("i"); x.className="kw-tag-x"; x.textContent="✕"; x.title="删除这个词";
+      x.onclick=(e)=>{ e.stopPropagation(); const c=kwCatGet(); if(!c) return; const ii=c.items.indexOf(it); if(ii>=0){ c.items.splice(ii,1); save(); renderMisc(); } };
+      tag.appendChild(x);
+      segWrap.appendChild(tag);
+    });
+    return segWrap;
+  };
   if(!list.length){
     const tip=document.createElement("div"); tip.className="empty";
     tip.textContent="这一组还没有关键词。AI 拆文 / 例文 AI 分析后会自动提取到这里，也可以点「+ 添加」手动加。";
     body.appendChild(tip);
-  } else list.forEach(it=>{
-    const tag=document.createElement("span"); tag.className="kw-tag"; tag.textContent=it.text;
-    const x=document.createElement("i"); x.className="kw-tag-x"; x.textContent="✕"; x.title="删除这个词";
-    x.onclick=()=>{ const c=kwCatGet(); if(!c) return; const ii=c.items.indexOf(it); if(ii>=0){ c.items.splice(ii,1); save(); renderMisc(); } };
-    tag.appendChild(x);
-    body.appendChild(tag);
-  });
+  } else {
+    body.appendChild(eraSeg("m","现代","🏙"));
+    body.appendChild(eraSeg("a","古代","🏯"));
+  }
   panel.append(head,body); wrap.append(nav,panel); box.appendChild(wrap);
 }
 /* ---------- 杂项分类 · AI 自动归类（按字段汇总所有例文的分析内容） ---------- */
@@ -3826,8 +3893,8 @@ $("#miscTabKw").onclick=()=>{ miscZone="kw"; miscTabOn("miscTabKw"); renderMisc(
 const DP_NAME_POOL={
   "男主":{s:["薄","厉","陆","顾","沈","傅","霍","司","战","裴","靳","贺","祁"],g:["景行","庭深","宴辞","斯年","寒州","妄之","承胤","惊蛰","疏野","砚辞","聿珩","清晏","执"],hint:"前期冷漠/自私，把她的好当理所当然；后期追妻火葬场"},
   "女主":{s:["沈","林","温","姜","乔","许","阮","叶","苏","纪","池"],g:["晚星","知意","清欢","以沫","念纾","昭","宁","未晞","听澜","挽","疏桐","宛","可"],hint:"一次次失望后彻底心死，温柔但有骨气，离开得干脆"},
-  "白月光":{s:["白","苏","陈","宋","江"],g:["皎","鹭","棠","微","苒","乔","夕"],hint:"他心头的一抹白月光，未必多好，只是他没得到"},
-  "深情男二":{s:["陆","江","程","宋","谢","卫","晏"],g:["照","怀瑾","渡","时砚","听舟","斯远","行止","屿"],hint:"一直默默守着她，在她最狼狈时接住她"}
+  "女配":{s:["白","苏","陈","宋","江"],g:["皎","鹭","棠","微","苒","乔","夕"],hint:"他心头的一抹白月光，未必多好，只是他没得到；常是女主身边的姐妹/妹妹/闺蜜"},
+  "男配":{s:["陆","江","程","宋","谢","卫","晏"],g:["照","怀瑾","渡","时砚","听舟","斯远","行止","屿"],hint:"一直默默守着她，在她最狼狈时接住她"}
 };
 function dpPick(a){ return a[Math.floor(Math.random()*a.length)]; }
 function genName(){
@@ -3862,7 +3929,7 @@ function genDeathScene(){
   return {title:dpPick(titles), body, hook:dpPick(DP_HOOK)};
 }
 function dpEnsureCat(name){ let c=state.misc.find(m=>m.name===name); if(!c){ c={id:uid(),name,items:[]}; state.misc.push(c);} miscActive=c.id; return c; }
-$("#btnGenName").onclick=()=>{ const n=genName(); const c=dpEnsureCat("💡 起名库"); c.items.push({id:uid(),text:n.name+"（"+n.roleLabel+"）",intro:n.persona}); save(); renderMisc(); toast("已生成起名："+n.name); };
+$("#btnGenName").onclick=()=>{ const n=genName(); const c=dpEnsureCat("💡 起名库"); c.items.unshift({id:uid(),text:n.name+"（"+n.roleLabel+"）",intro:n.persona,role:n.roleLabel});   /* v39.06：新名字插最前 + 记角色分类 */ save(); renderMisc(); toast("已生成起名："+n.name+"（"+n.roleLabel+"）"); };
 $("#btnGenDeath").onclick=()=>{ const s=genDeathScene(); const c=dpEnsureCat("💔 心死名场面"); c.items.push({id:uid(),text:s.title,intro:s.body+"\n\n🔁 追妻反差："+s.hook}); save(); renderMisc(); toast("已生成心死名场面"); };
 function renderMiscAi(){
   const box=$("#miscList"); box.innerHTML="";
@@ -4826,7 +4893,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v39.05";
+  var APP_VERSION = "v39.06";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
@@ -5079,8 +5146,8 @@ function anlMessages(text, genre){
     +"- 10. **可复用仿写模板**：`#### 核心写作框架` 把本篇抽象成有序列表的「可抄步骤」，每步用 `- 仿写技巧：……` 说明怎么套；`#### 可复用技巧` 列几条通用技法。\n"
     +"\n【额外任务：关键词提取（不影响上面报告正文）】\n"
     +"报告的 10 个维度全部写完后，另起一行，在整份输出的最后先输出这一行关键词标记（后面还紧跟一个维度归纳标记，见下）：\n"
-    +"<!--AIKEYWORDS:{\"relation\":[\"夫妻\"],\"job\":[\"霸总\"],\"female\":[\"闺蜜\",\"妹妹\"],\"other\":[\"怀孕\"]}-->\n"
-    +"标记内必须是合法 JSON（双引号）：relation=男女主关系（如：夫妻、男女朋友、未婚夫妻）；job=男女主职业（如：霸总、设计师）；female=女配身份（如：闺蜜、青梅、妹妹、继妹、庶妹、姐姐、继姐）；other=其他关键词（如：怀孕、流产、高速、远嫁）。\n"
+    +"<!--AIKEYWORDS:{\"era\":\"modern\",\"relation\":[\"夫妻\"],\"job\":[\"霸总\"],\"female\":[\"闺蜜\",\"妹妹\"],\"other\":[\"怀孕\"]}-->\n"
+    +"标记内必须是合法 JSON（双引号）：era=这篇故事的时代背景，必须先判断再填（现代都市/校园/职场/娱乐圈等填 \"modern\"；古代宫廷/宅门/江湖/仙侠等填 \"ancient\"）；relation=男女主关系（如：夫妻、男女朋友、未婚夫妻）；job=男女主职业（如：霸总、设计师）；female=女配身份（如：闺蜜、青梅、妹妹、继妹、庶妹、姐姐、继姐）；other=其他关键词（如：怀孕、流产、高速、远嫁）。\n"
     +"只提炼文中实际出现的通用词，禁止带「男主的/女主的/女配的」等归属前缀；每类数量不限，能提尽提、宁多勿漏（只要文中实际出现且有价值就提）；文中没有的类可省略该键；除这一行标记外，报告正文任何位置不得出现该标记。\n";
   try{   /* v38.92：用户「提取方向」偏好 + 积累词库回喂（AI 自我总结的落地方式） */
     var kwReq="";
@@ -5164,11 +5231,28 @@ async function anlStream(messages, onDelta){
 /* ---------- 主流程 ---------- */
 /* ===== v38.87：AI 拆文自动提取关键词 → 杂项「AI关键词」大项 ===== */
 const KW_GROUPS=[["relation","男女主关系"],["job","男女主职业"],["female","女配身份"],["other","其他关键词"]];
+/* ===== v39.06：关键词时代判断（现代 m / 古代 a）===== AI 整篇判断的 era 优先；没给就按词库启发式；判不出=现代（用户可点/拖改） */
+var KW_ANC_RE=new RegExp("皇后|皇帝|太后|太妃|太子妃|太子|公主|世子|郡主|王爷|王妃|侯爷|侯府|伯府|驸马|丞相|宰相|首辅|尚书|太傅|太医|太监|宦官|宫女|嬷嬷|丫鬟|侍妾|姨娘|正室|侧妃|侧室|通房|填房|续弦|纳妾|冲喜|冥婚|童养媳|圣旨|懿旨|赐婚|指婚|赐死|鸩酒|白绫|冷宫|抄家|流放|灭族|状元|榜眼|探花|科举|私塾|书院|夫子|青楼|花魁|绣楼|花轿|盖头|聘礼|嫁妆|休书|和离|三书六礼|婚书|庚帖|祠堂|族谱|宗族|嫡女|嫡子|庶女|庶子|嫡庶|赘婿|入赘|轿子|马车|客栈|茶楼|镖局|江湖|武林|门派|掌门|师尊|师娘|师兄|师姐|师妹|武功|内力|玉佩|香囊|朝堂|上朝|早朝|金銮殿|御书房|军师|沙场|边关|戍边|攻城|贝勒|格格|福晋|阿哥|侍寝|龙椅|龙袍|登基|凤冠|凤位|大婚|拜堂|洞房|娘子|相公|夫君|夫婿|老奴|奴婢|银两|银子|铜板|钱庄|当铺|和亲|质子|夺嫡|逼宫|废后|继后|表小姐|少将军|将军府|请安|掌家|对牌|月例|田契|地契|婆子|十里红妆|凤冠霞帔");
+var KW_MOD_RE=new RegExp("霸总|总裁|董事长|CEO|公司|集团|企业|上班|加班|辞职|跳槽|面试|简历|助理|秘书|合同|项目|客户|手机|电话|微信|朋友圈|微博|热搜|直播|网红|粉丝|短视频|网购|快递|外卖|咖啡|奶茶|酒吧|夜店|公寓|出租屋|房贷|车贷|信用卡|银行卡|转账|股票|基金|理财|地铁|高铁|飞机|出租车|网约车|驾校|幼儿园|小学|初中|高中|大学|研究生|留学|高考|考研|医院|医生|护士|产检|剖腹产|试管婴儿|亲子鉴定|车祸|救护车|报警|警察|法院|律师|官司|起诉|离婚|民政局|结婚证|酒店|宾馆|电梯|写字楼|娱乐圈|顶流|塌房|官宣|绯闻|狗仔|记者|发布会|红毯|影帝|影后|剧组|拍戏|综艺|选秀|经纪人|保姆|月嫂|心理咨询|抑郁症|健身|瑜伽|咖啡店|咖啡厅|图书馆|学区房|房产证|电动车|摩托车|创业|融资|破产|白月光|宝马|豪车|别墅");
+function kwEraOf(w){
+  w=String(w||"");
+  if(KW_ANC_RE.test(w)) return "a";
+  if(KW_MOD_RE.test(w)) return "m";
+  return "m";   /* 判不出 → 现代（可点词或拖拽改到古代） */
+}
+function kwBackfillEra(){   /* v39.06：存量关键词补 era（只补缺失的，绝不覆盖用户手动改过的）；挂在 migrate 里保证任何加载路径都执行 */
+  try{
+    if(!state || !Array.isArray(state.misc)) return;
+    var c=state.misc.find(function(mm){ return mm.name==="🤖 AI关键词"; });
+    if(!c || !Array.isArray(c.items)) return;
+    c.items.forEach(function(it){ if(it && !it.era) it.era=kwEraOf(it.text); });
+  }catch(e){}
+}
 function anlExtractKeywords(md){
   md=md||"";
   var m=md.match(/<!--AIKEYWORDS:([\s\S]*?)-->/);
   var kw={};
-  if(m){ try{ var o=JSON.parse(m[1].trim()); KW_GROUPS.forEach(function(p){ if(Array.isArray(o[p[0]])) kw[p[0]]=o[p[0]]; }); }catch(e){} }
+  if(m){ try{ var o=JSON.parse(m[1].trim()); if(o.era==="ancient"||o.era==="modern") kw.era=o.era;   /* v39.06：AI 整篇判断的时代背景 */ KW_GROUPS.forEach(function(p){ if(Array.isArray(o[p[0]])) kw[p[0]]=o[p[0]]; }); }catch(e){} }
   var clean=md.replace(/<!--AIKEYWORDS:[\s\S]*?-->\s*/g,"").replace(/\s+$/,"");
   return {kw:kw,clean:clean};
 }
@@ -5211,7 +5295,7 @@ function anlKwMergeMisc(kw,srcName){
         var intro=it.intro||"";
         if(intro.indexOf("来自：")>=0){ if(intro.indexOf(srcName)<0){ it.intro=intro+"、"+srcName; changed++; } }
         else { it.intro=x.g+" · 来自："+srcName; changed++; }
-      } else { cat.items.push({id:uid(),text:x.w,intro:x.g+" · 来自："+srcName}); changed++; }
+      } else { var _era=(kw.era==="ancient")?"a":((kw.era==="modern")?"m":kwEraOf(x.w)); cat.items.push({id:uid(),text:x.w,intro:x.g+" · 来自："+srcName,era:_era}); changed++; }   /* v39.06：入库带时代 */
     });
     function gi(t){ for(var i=0;i<KW_GROUPS.length;i++){ if((t.intro||"").indexOf(KW_GROUPS[i][1])===0) return i; } return 99; }
     cat.items.sort(function(a,b){ return gi(a)-gi(b); });
