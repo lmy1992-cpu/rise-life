@@ -408,6 +408,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
       <div data-page-node-id="X4pYLhtEf8aasAeelyf23s" class="pet-actions">
         <button data-page-node-id="MAuXj1I0vrCYrnCELBld5d" class="btn green sm" id="pet-feed"><!--pnid:RNb5dBIW9H0qOPdEJ7Bxac-->🍖 喂食</button>
         <button data-page-node-id="QiDNMnIjmWP05HH2FhAxNS" class="btn sm" id="pet-pet"><!--pnid:Jp69r17xKio7BN2hbgH72b-->✋ 摸摸</button>
+        <button class="btn sm" id="pet-play">🧸 玩玩具</button>
         <button data-page-node-id="rgAJ3uwnCGYpcypYVXZb4x" class="btn ghost sm" id="pet-rename"><!--pnid:8e2HhiPzckbLagF1pyiiVN-->✏️ 改名</button>
       </div>
       <div class="pet-actions" style="margin-top:6px">
@@ -552,7 +553,7 @@ const defaults=()=>({
     {id:uid(),name:'小玩具',cost:100,em:'🧸',ds:'收集物，10个合成大玩具',type:'toy'},
   ],
   inventory:[],
-  food:0, glove:0,
+  food:0, glove:0, toy:0, toyUsed:0,   /* 宠物玩具：可玩库存 + 已玩次数 */
   foodUsed:0, gloveUsed:0,   /* 仓库统计：累计用掉的食物/手套次数 */
   pet:{name:'毛球',kind:'chick',emoji:'🐣',mood:70,intimacy:0,exp:0,level:1,fed:null,lastInteract:null,nextFoodAt:null,nextPetAt:null},
   petCatalog:[  /* 宠物商城商品（4 类） */
@@ -977,7 +978,7 @@ function renderPetShop(){
   const listInCat=S.petCatalog.map((x,i)=>({x,i})).filter(o=>o.x.cat===curPetCat);
   listInCat.forEach(function(o){
     const it=o.x, idx=o.i;
-    const isConsumable = (it.cat==='food'||it.cat==='glove');
+    const isConsumable = (it.cat==='food'||it.cat==='glove'||it.cat==='toy');
     const owned = (!isConsumable) && (S.petInventory.find(p=>p.id===it.id+':owned')||(S.equipped.outfit===it.em||S.equipped.accessory===it.em));
     const cur = it.cur==='exp' ? (S.pet.exp||0) : S.coins;
     const enough = cur >= it.cost;
@@ -998,12 +999,13 @@ function renderPetShop(){
       else { if(S.coins<it.cost){toast('金币不够，先去完成任务赚金币吧');return;} addCoins(-it.cost,'购买：'+it.name); }
       if(it.cat==='food'){ S.food=(S.food||0)+1; }
       else if(it.cat==='glove'){ S.glove=(S.glove||0)+1; }
+      else if(it.cat==='toy'){ S.toy=(S.toy||0)+1; }
       else if(it.cat==='outfit') S.equipped.outfit = it.em;
       else if(it.cat==='accessory') S.equipped.accessory = it.em;
-      else if(it.cat==='toy'){ S.pet.intimacy+=it.em==='🧶'?5:8; S.pet.mood=Math.min(100,S.pet.mood+(it.em==='🧶'?3:5)); }
       if(!isConsumable) S.petInventory.push({id:it.id+':owned',name:it.name,em:it.em,cat:it.cat});
       save(); renderPet(); renderPetShop(); renderPetBag();
-      toast(isConsumable ? ('已购买 '+it.name+'（去宠物页'+(it.cat==='food'?'喂食':'摸摸')+'）') : ('已购买 '+it.name+(it.cat==='outfit'||it.cat==='accessory'?' 并已自动穿上！':'')));
+      const actWord = it.cat==='food'?'喂食':(it.cat==='glove'?'摸摸':'玩耍');
+      toast(isConsumable ? ('已购买 '+it.name+'（去宠物页'+actWord+'）') : ('已购买 '+it.name+(it.cat==='outfit'||it.cat==='accessory'?' 并已自动穿上！':'')));
     };
     div.querySelectorAll('.opts button').forEach(btn=>{
       btn.onclick=()=>{
@@ -1122,6 +1124,8 @@ function renderBag(){
   const ms=document.getElementById('bag-misc');
   const pets=S.petInventory.filter(function(p){ return p && p.kind; });
   let mHtml='';
+  if(bagPass(false)) mHtml+=bagCard('🧸','宠物玩具 ×'+(S.toy||0),'剩余可玩次数',bagTag(false),'');
+  if(bagPass(true))  mHtml+=bagCard('🎈','已玩 '+(S.toyUsed||0)+' 次','累计陪宠物玩的玩具',bagTag(true),'');
   if(bagPass(false)) mHtml+=bagCard('🧸','小玩具 ×'+(S.smallToys||0),'集满 10 个可合成大玩具',bagTag(false),'');
   if(bagPass(true))  mHtml+=bagCard('🎁','大玩具 ×'+(S.bigToys||0),'由 10 个小玩具合成而来',bagTag(true),'');
   pets.forEach(function(p){
@@ -1137,7 +1141,7 @@ function renderBag(){
     const unusedN=S.inventory.filter(function(i){return !i.used;}).length;
     const usedN=S.inventory.length-unusedN;
     st.innerHTML='奖励券：<b>未使用 '+unusedN+'</b> 张 · 已使用 '+usedN+' 张　|　'+
-      '🍖 食物 '+food+'　🧤 手套 '+glove+'　👕 装备 '+gears.length+' 件　🐾 宠物 '+(pets.length+1)+' 只';
+      '🍖 食物 '+food+'　🧤 手套 '+glove+'　🧸 玩具 '+(S.toy||0)+'（已玩'+(S.toyUsed||0)+'）　👕 装备 '+gears.length+' 件　🐾 宠物 '+(pets.length+1)+' 只';
   }
 }
 function bagUse(id){
@@ -1277,6 +1281,11 @@ function migrateOld(){
   if(S.pet && typeof S.pet.grow!=='undefined'){ S.pet.exp=S.pet.grow; delete S.pet.grow; }
   if(S.pet && !S.pet.kind){ S.pet.kind='chick'; S.pet.emoji=PET_FB.chick; }
   if(S.pet && S.pet.level>10){ S.pet.level=10; }
+  /* 旧版宠物玩具：购买即生效且记进 petInventory，仓库/宠物界面都看不到。迁移为统一消耗品：旧 toy 条目转成 S.toy 库存并从 petInventory 移除（已加属性保留，不删除用户数据） */
+  if(Array.isArray(S.petInventory)){
+    const oldToys=S.petInventory.filter(function(p){return p&&p.cat==='toy';});
+    if(oldToys.length){ S.toy=(S.toy||0)+oldToys.length; S.petInventory=S.petInventory.filter(function(p){return !(p&&p.cat==='toy');}); }
+  }
   save();
 }
 migrateOld();
@@ -1372,12 +1381,13 @@ function renderPet(){
   document.getElementById('m-grow').textContent = p.level>=petLevelMax() ? 'MAX 成年 🎉' : (curExp+' / '+need);
   document.getElementById('b-grow').style.width = pct+'%';
   /* 提示：显示剩余食物/手套，缺了就催去做任务赚金币买 */
-  const food=S.food||0, glove=S.glove||0;
-  const tip = '🍖 食物 ×'+food+'　🧤 手套 ×'+glove+( (food<=0||glove<=0) ? '　— 没了去「宠物商城」买，做了任务才有金币' : '　— 喂它 / 摸它都能加亲密');
+  const food=S.food||0, glove=S.glove||0, toy=S.toy||0;
+  const tip = '🍖 食物 ×'+food+'　🧤 手套 ×'+glove+'　🧸 玩具 ×'+toy+( (food<=0&&glove<=0&&toy<=0) ? '　— 没了去「宠物商城」买，做了任务才有金币' : '　— 喂它 / 摸它 / 陪它玩都能加亲密');
   const tipEl=document.getElementById('pet-tip'); if(tipEl) tipEl.textContent = tip;
-  /* 按钮：无限次，只要有食物/手套 */
+  /* 按钮：无限次，只要有食物/手套/玩具 */
   const feedBtn=document.getElementById('pet-feed'); if(feedBtn){ feedBtn.disabled=false; feedBtn.textContent='🍖 喂食 ('+food+')'; }
   const petBtn=document.getElementById('pet-pet');   if(petBtn){ petBtn.disabled=false; petBtn.textContent='✋ 摸摸 ('+glove+')'; }
+  const playBtn=document.getElementById('pet-play'); if(playBtn){ playBtn.disabled=false; playBtn.textContent='🧸 玩玩具 ('+toy+')'; }
   /* 展示主宠物装备 */
   const eqEl=document.getElementById('pet-equip'); if(eqEl){
     const o=S.equipped.outfit?'外型：'+S.equipped.outfit+'  ':'';
@@ -1396,6 +1406,11 @@ document.getElementById('pet-pet').onclick=()=>{
   if((S.glove||0)<=0){ toast('没有手套啦，去「宠物商城」买 🧤（先做任务赚金币）'); return; }
   S.glove--; S.gloveUsed=(S.gloveUsed||0)+1; S.pet.intimacy+=5; S.pet.mood=Math.min(100,S.pet.mood+5); gainPetExp(1);
   toast('摸摸头 ✋ +5 亲密'); save(); renderPet(); renderPetShop(); renderPetBag(); renderBag();
+};
+document.getElementById('pet-play').onclick=()=>{
+  if((S.toy||0)<=0){ toast('没有玩具啦，去「宠物商城」买 🧸（先做任务赚金币）'); return; }
+  S.toy--; S.toyUsed=(S.toyUsed||0)+1; S.pet.intimacy+=6; S.pet.mood=Math.min(100,S.pet.mood+4); gainPetExp(2);
+  toast('陪 '+S.pet.name+' 玩了会儿 🧸 亲密 +6 · 心情 +4'); save(); renderPet(); renderPetShop(); renderPetBag(); renderBag();
 };
 document.getElementById('pet-rename').onclick=()=>{
   const n=prompt('给宠物起个名字：',S.pet.name);if(n){S.pet.name=n;save();renderPet();}
