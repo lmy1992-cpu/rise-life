@@ -2168,6 +2168,18 @@ async function save(force=false){
 }
 // 手动强制同步：用户点右上角「☁️ 同步」触发，无视卡死标志立即再试
 function forceSyncNow(){
+  // v39.00：未登录（口令为空）不再静默失败——直接重新弹入口登录窗（回填已存 CloudBase 配置）
+  if(!collabSharedPwd){
+    try{
+      const cbEnv=localStorage.getItem("dp_sync_cb_env")||"";
+      const cbPk=localStorage.getItem("dp_sync_cb_pkey")||"";
+      if($("#collabEnvId")) $("#collabEnvId").value=cbEnv;
+      if($("#collabPkey")) $("#collabPkey").value=cbPk;
+    }catch(e){}
+    const m=$("#maskLogin"); if(m) m.classList.add("on");
+    toast("请先填写协作口令进入协作空间");
+    return;
+  }
   const btn=document.getElementById('btnSyncNow');
   if(btn){ btn.disabled=true; btn.textContent='同步中…'; }
   setSyncStatus('正在同步…', null, '手动触发中');
@@ -4108,7 +4120,7 @@ $("#aiProvider").onchange=()=>{
 $("#btnAiInstrDefault").onclick=()=>{ $("#aiInstruction").value=defaultAiInstruction(); toast("已填入默认指令模板，可继续改成你的话"); };
 
 /* 弹窗关闭（点遮罩） */
-$$(".mask").forEach(m=>m.addEventListener("click",e=>{ if(e.target===m) m.classList.remove("on"); }));
+$$(".mask").forEach(m=>{ if(m.id==="maskLogin") return; m.addEventListener("click",e=>{ if(e.target===m) m.classList.remove("on"); }); });   // v39.00：登录弹窗不参加「点空白关闭」——误点遮罩会关掉登录窗且再无入口，卡进未登录死角
 
 /* ---------- 渲染总入口 ---------- */
 function renderAll(){ renderExamples(); renderTutorials(); renderMaterials(); renderBrainstorms(); renderSubEmails(); }
@@ -4790,7 +4802,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v38.99";
+  var APP_VERSION = "v39.00";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
