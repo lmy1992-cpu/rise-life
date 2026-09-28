@@ -321,6 +321,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
         <input data-page-node-id="qzeVd5xn7sMLR03DTv2RUr" id="r-name" placeholder="自定义奖励，如：按摩1次">
         <input data-page-node-id="l0PJ5NNhJ6NKFL4JcJg3kr" id="r-cost" placeholder="金币价" type="number" style="max-width:90px">
         <button data-page-node-id="lmMUjBV6ZM1SLhS9FmcPHJ" class="btn sm" id="r-add"><!--pnid:Pao7oDzBW2dQb1NAuX2Q2E-->上架</button>
+        <button class="btn sm" id="r-clean" style="background:#eef7f0;color:#1f9d57;border-color:#bfe6cd">🧹 清理重复</button>
       </div>
     </div>
     <div class="card" style="background:#fff8f0">
@@ -334,6 +335,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
         <button class="btn sm" data-cat="outfit">👕 衣服</button>
         <button class="btn sm" data-cat="accessory">🎀 配饰</button>
       </div>
+      <div style="margin:2px 0 10px"><button class="btn sm" id="pet-clean" style="background:#eef7f0;color:#1f9d57;border-color:#bfe6cd">🧹 清理重复</button></div>
       <div id="petShop-grid" class="grid"></div>
     </div>
 
@@ -1173,6 +1175,34 @@ document.getElementById('r-add').onclick=()=>{
   S.shop.push({id:uid(),name:n,cost:c,em:'🎀',ds:'自定义奖励',type:'normal'});
   document.getElementById('r-name').value='';document.getElementById('r-cost').value='';
   save();renderShop();toast('已上架 🛍️');
+};
+/* 清理重复项：同名同价（含图标）只保留 1 份，删其余拷贝 */
+function dedupeShopList(arr){
+  const seen={}; let removed=0; const out=[];
+  for(const it of (arr||[])){
+    const key=((it.name||'').trim()+'|'+(it.cost!=null?it.cost:'')+'|'+(it.em||''));
+    if(seen[key]){ removed++; continue; }
+    seen[key]=true; out.push(it);
+  }
+  return {out,removed};
+}
+function cleanupShopDupes(which){
+  const isPet = which==='pet';
+  const arr = isPet ? (S.petCatalog||[]) : (S.shop||[]);
+  const a=dedupeShopList(arr);
+  if(isPet) S.petCatalog=a.out; else S.shop=a.out;
+  if(!a.removed){ toast('这一栏没有重复项 👍'); return; }
+  save();
+  if(isPet) renderPetShop(); else renderShop();
+  toast('已清理 '+a.removed+' 个重复项（每个只保留 1 份）');
+}
+document.getElementById('r-clean').onclick=function(){
+  if(!confirm('清理奖励商城的重复项？\n同名同价的商品只保留 1 份，其余删除（删除后想恢复可重新上架）。')) return;
+  cleanupShopDupes('shop');
+};
+document.getElementById('pet-clean').onclick=function(){
+  if(!confirm('清理宠物商城的重复项？\n同名同价的商品只保留 1 份，其余删除（删除后想恢复可重新上架）。')) return;
+  cleanupShopDupes('pet');
 };
 /* petShop 类别切换 */
 document.getElementById('petShop-seg').onclick = function(e){
