@@ -2811,6 +2811,42 @@ function renderBrainstorms(){
 
 /* ---------- 五、杂项分类（左导览） ---------- */
 function autoGrow(el){ if(!el) return; el.style.height='auto'; el.style.height=(el.scrollHeight)+'px'; }
+/* ===== v39.06：起名库按角色分组（男主/女主/女配/男配），新起的名字排最前 ===== */
+function nameLibRoleOf(it){
+  const ROLES=["男主","女主","女配","男配"];
+  if(it && ROLES.indexOf(it.role)>=0) return it.role;
+  const m=/（(男主|女主|女配|男配|白月光|深情男二)）/.exec((it&&it.text)||"");
+  if(m) return m[1]==="白月光"?"女配":(m[1]==="深情男二"?"男配":m[1]);
+  return "";
+}
+function renderNameLib(cat, body){
+  const ROLES=["男主","女主","女配","男配"];
+  const ICONS={"男主":"👑","女主":"🌸","女配":"🌙","男配":"🤵"};
+  const groups=ROLES.map(r=>({r:r,items:cat.items.filter(it=>nameLibRoleOf(it)===r)}));
+  const others=cat.items.filter(it=>!nameLibRoleOf(it));
+  function nameRow(it){
+    const row=document.createElement("div"); row.className="misc-row";
+    const inp=document.createElement("input"); inp.value=it.text;
+    inp.onchange=()=>{ it.text=inp.value; save(); };
+    const intro=document.createElement("textarea"); intro.className="mi-intro"; intro.value=it.intro||""; intro.placeholder="人设简介（可选）"; intro.rows=1;
+    intro.oninput=()=>{ it.intro=intro.value; autoGrow(intro); };
+    intro.onchange=()=>{ it.intro=intro.value; save(); };
+    const x=document.createElement("button"); x.className="iconbtn del"; x.textContent="✕"; x.title="删除这个名字";
+    x.onclick=()=>{ const i2=cat.items.indexOf(it); if(i2>=0){ cat.items.splice(i2,1); save(); renderMisc(); } };
+    row.append(inp,intro,x); body.appendChild(row);
+  }
+  function seg(title,ic,arr){
+    const h=document.createElement("div");
+    h.style.cssText="font-weight:700;font-size:13px;margin:12px 0 6px;color:var(--sub,#8a7d6d);";
+    h.textContent=ic+" "+title+" ×"+arr.length;
+    body.appendChild(h);
+    if(!arr.length){ const e=document.createElement("div"); e.style.cssText="font-size:12px;opacity:.55;margin:0 0 4px;"; e.textContent="还没有"+title+"的名字（点「✨ 一键起名」，名字会出现在对应分组最前面）"; body.appendChild(e); return; }
+    arr.forEach(nameRow);
+  }
+  groups.forEach(g=>seg(g.r,ICONS[g.r],g.items));
+  if(others.length) seg("未分类","❔",others);
+}
+
 function renderMisc(){
   const box=$("#miscList"); if(!box) return;
   if(miscZone==="ai"){ renderMiscAi(); return; }
@@ -2850,7 +2886,8 @@ function renderMisc(){
     del.onclick=()=>armDelete(del, ()=>{ state.misc.splice(ci,1); save(); renderMisc(); });
     head.append(name,addBtn,up,down,del);
     const body=document.createElement("div"); body.className="misc-body";
-    cat.items.forEach((it,ii)=>{
+    if(cat.name==="💡 起名库"){ renderNameLib(cat, body); }
+    else cat.items.forEach((it,ii)=>{   /* v39.06：起名库按角色分组 */
       const row=document.createElement("div"); row.className="misc-row";
       const inp=document.createElement("input"); inp.value=it.text;
       inp.onchange=()=>{ it.text=inp.value; save(); };
@@ -2874,8 +2911,8 @@ $("#miscTabAi").onclick=()=>{ miscZone="ai"; $("#miscTabAi").classList.add("on")
 const DP_NAME_POOL={
   "男主":{s:["薄","厉","陆","顾","沈","傅","霍","司","战","裴","靳","贺","祁"],g:["景行","庭深","宴辞","斯年","寒州","妄之","承胤","惊蛰","疏野","砚辞","聿珩","清晏","执"],hint:"前期冷漠/自私，把她的好当理所当然；后期追妻火葬场"},
   "女主":{s:["沈","林","温","姜","乔","许","阮","叶","苏","纪","池"],g:["晚星","知意","清欢","以沫","念纾","昭","宁","未晞","听澜","挽","疏桐","宛","可"],hint:"一次次失望后彻底心死，温柔但有骨气，离开得干脆"},
-  "白月光":{s:["白","苏","陈","宋","江"],g:["皎","鹭","棠","微","苒","乔","夕"],hint:"他心头的一抹白月光，未必多好，只是他没得到"},
-  "深情男二":{s:["陆","江","程","宋","谢","卫","晏"],g:["照","怀瑾","渡","时砚","听舟","斯远","行止","屿"],hint:"一直默默守着她，在她最狼狈时接住她"}
+  "女配":{s:["白","苏","陈","宋","江"],g:["皎","鹭","棠","微","苒","乔","夕"],hint:"他心头的一抹白月光，未必多好，只是他没得到；常是女主身边的姐妹/妹妹/闺蜜"},
+  "男配":{s:["陆","江","程","宋","谢","卫","晏"],g:["照","怀瑾","渡","时砚","听舟","斯远","行止","屿"],hint:"一直默默守着她，在她最狼狈时接住她"}
 };
 function dpPick(a){ return a[Math.floor(Math.random()*a.length)]; }
 function genName(){
@@ -2910,7 +2947,7 @@ function genDeathScene(){
   return {title:dpPick(titles), body, hook:dpPick(DP_HOOK)};
 }
 function dpEnsureCat(name){ let c=state.misc.find(m=>m.name===name); if(!c){ c={id:uid(),name,items:[]}; state.misc.push(c);} miscActive=c.id; return c; }
-$("#btnGenName").onclick=()=>{ const n=genName(); const c=dpEnsureCat("💡 起名库"); c.items.push({id:uid(),text:n.name+"（"+n.roleLabel+"）",intro:n.persona}); save(); renderMisc(); toast("已生成起名："+n.name); };
+$("#btnGenName").onclick=()=>{ const n=genName(); const c=dpEnsureCat("💡 起名库"); c.items.unshift({id:uid(),text:n.name+"（"+n.roleLabel+"）",intro:n.persona,role:n.roleLabel});   /* v39.06：新名字插最前 + 记角色分类 */ save(); renderMisc(); toast("已生成起名："+n.name+"（"+n.roleLabel+"）"); };
 $("#btnGenDeath").onclick=()=>{ const s=genDeathScene(); const c=dpEnsureCat("💔 心死名场面"); c.items.push({id:uid(),text:s.title,intro:s.body+"\n\n🔁 追妻反差："+s.hook}); save(); renderMisc(); toast("已生成心死名场面"); };
 /* 供主页「灵感速记」跨 iframe 调用：直接写入当前内存并保存（与三端同步一致） */
 window.__dpQuickAddMaterial=function(title,idea){
@@ -3502,7 +3539,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v39.05";
+  var APP_VERSION = "v39.06";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
