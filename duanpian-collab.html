@@ -2191,10 +2191,19 @@ function forceSyncNow(){
       if(ok===false){
         done();
         setSyncStatus("云端未连接，未上传（避免旧数据覆盖云端）", false, "请检查网络后点「☁️ 同步」重试");
+        // v39.01：失败要出声——状态条可能被藏住（未进过主界面），必须 toast 真实原因并打开自检
+        toast("云端连不上，未上传。原因："+(_lastSyncError||"网络不可达"));
+        startLoadRetry();
         return;
       }
       doSave();
-    }).catch(done);
+    }).catch(function(e){
+      // v39.01：联网读取抛错（如环境 ID 未配置/接口不通）此前只静默复位按钮，用户看到的就是「没反应」
+      done();
+      var em=(e&&e.message)?String(e.message):String(e);
+      toast("同步失败："+em.slice(0,120));
+      try{ showDiag(); }catch(_){}
+    });
   } else {
     doSave();
   }
@@ -4542,6 +4551,7 @@ async function doCollabLogin(silent){
           : "无法读取协作空间："+_safe) +
           "<br><a href=\"javascript:void(0)\" onclick=\"showDiag()\" style=\"color:#1a6fd4;text-decoration:underline\">🩺 点这里自检，看具体卡在哪一步</a>";
         toast(_isChunk ? "云端数据正在修复中，请先在电脑端打开一次协作版" : "首次进入需要联网读取协作空间，请检查网络后重试");
+        try{ $("#maskLogin").classList.add("on"); }catch(e){} // v39.01：报错详情和🩺自检链接都写在登录弹窗里，弹窗不开=用户永远看不见（静默自动登录失败时尤其如此）
         setSyncStatus("云端数据不完整，等待其它设备修复…", false, _em);
         startLoadRetry(); // 电脑端修好后本机自动进入，不用反复手动试
       } else {
@@ -4802,7 +4812,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v39.00";
+  var APP_VERSION = "v39.01";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
