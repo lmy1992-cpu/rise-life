@@ -20,7 +20,8 @@
 // v39.02：自检面板被登录窗盖住（maskLogin z-index=999 > .mask 60）——showDiag 强制 zIndex 1200；「Load failed」错误附人话解释（网络请求没发出去，切换 Wi-Fi/蜂窝+等自动重试）
 // v39.03：Load failed 真凶=环境 ID 拼错也会报同样的错（环境 ID 直接拼进请求网址，错一个字母=网址不存在=DNS 失败）——自检结论+登录窗提示都改成「先核对环境 ID 逐字拼写，再查网络」
 // v39.04：游戏人生·商城加「🧹 清理重复」按钮（奖励商城 S.shop / 宠物商城 S.petCatalog 各一个）——dedupeShopList 按「同名+同价+同图标」判重复，保留首份删其余，删前确认+toast 报告条数
-const CACHE = 'dp-pwa-v39.04';
+// v39.05：游戏人生·宠物玩具改成标准消耗品（跟食物/手套平行）——商店购买只入库 S.toy，不再「买即生效」；新增宠物界面「🧸 玩玩具」互动按钮（消耗玩具+亲密+心情+经验）；仓库「玩具&宠物」区新增「宠物玩具 ×N / 已玩 N 次」；migrateOld 把旧版记进 petInventory 的 toy 项移到 S.toy 库存（已加属性保留，不删数据）
+const CACHE = 'dp-pwa-v39.05';
 const ASSETS = [
   './',
   './index.html',
