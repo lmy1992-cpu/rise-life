@@ -911,7 +911,7 @@ navCfg = navCfg.filter(function(x){ return ["inbox","timeline","mood","recycle"]
   }
 })();
 
-const APP_VERSION = "v39.05";
+const APP_VERSION = "v39.06";
 // ===== 健壮存储层：localStorage 不可用时自动回退 IndexedDB（防止刷新丢数据）=====
 // 内部状态挂在 window 上，避免跨 <script> 块时 let 的暂时性死区（TDZ）报错
 // —— 存储层 v2：每条记录带写入时间戳，读取/合并时"取最新"，杜绝旧空值覆盖新数据 ——
@@ -2251,8 +2251,16 @@ function delApp(id){
 function delAppFromEdit(){ const id=editAppId; closeMask("appEditMask"); if(id) delApp(id); }
 
 /* ============ 游戏人生 ============ */
-function gameLevel(){ return Math.floor(Math.sqrt(store.game.xp/50))+1; }
-function xpForNext(){ const lv=gameLevel(); return lv*lv*50 - store.game.xp; }
+/* v39.06：升级规则可配置——mode:"sqrt" 累计门槛=(Lv-1)²×coef（默认，越升越难）| "flat"=(Lv-1)×coef（每级固定）；reward=升级奖励（发游戏人生金币） */
+function lvRule(){ const r=store.game.lvRule||{}; const coef=(parseInt(r.coef,10)>0)?parseInt(r.coef,10):50; const reward=(parseInt(r.reward,10)>=0)?parseInt(r.reward,10):20; return {mode:(r.mode==="flat"?"flat":"sqrt"), coef:coef, reward:reward}; }
+function xpNeed(lv){ const r=lvRule(); return r.mode==="flat" ? (lv-1)*r.coef : (lv-1)*(lv-1)*r.coef; }
+function gameLevel(){ const xp=store.game.xp||0; const r=lvRule(); return (r.mode==="flat" ? Math.floor(xp/r.coef) : Math.floor(Math.sqrt(xp/r.coef)))+1; }
+function xpForNext(){ return xpNeed(gameLevel()+1) - (store.game.xp||0); }
+function lvProgress(){   /* v39.06：升级进度条按当前规则算（旧版硬编码 lv*lv*50，改规则后进度条会不准） */
+  const lv=gameLevel(); const a=xpNeed(lv), b=xpNeed(lv+1); const xp=store.game.xp||0;
+  if(b<=a) return 100;
+  return Math.min(100, Math.max(0, Math.round((xp-a)/(b-a)*100)));
+}
 function todayXP(){ const d=store.game.doneToday||{}; return Object.values(d).reduce((a,b)=>a+b,0); }
 function renderGame(){
   const box=$("native-game");
@@ -2266,8 +2274,9 @@ function renderGame(){
     '<div class="card" style="margin-bottom:16px">'+
       '<div style="display:flex;justify-content:space-between;align-items:baseline"><div><div style="font-size:13px;color:var(--sub)">当前等级</div><div style="font-size:34px;font-weight:800;color:var(--brand)">Lv '+lv+'</div></div>'+
       '<div style="text-align:right"><div style="font-size:13px;color:var(--sub)">总经验</div><div style="font-size:28px;font-weight:800">'+store.game.xp+'</div></div></div>'+
-      '<div class="lv-bar"><div class="f" style="width:'+Math.min(100,Math.round(need<=0?100:(1-need/(lv*lv*50))*100))+'%"></div></div>'+
+      '<div class="lv-bar"><div class="f" style="width:'+lvProgress()+'%"></div></div>'+
       '<div style="font-size:12px;color:var(--sub)">距下一级还需 '+need+' 经验 · 今日已得 '+todayXP()+' · 连续打卡 '+store.game.streak+' 天</div>'+
+      '<div style="font-size:12px;color:var(--sub);margin-top:5px">🎉 升级奖励：游戏人生金币 +'+lvRule().reward+'　<button onclick="gameRuleOpen()" style="border:none;background:var(--soft,#FFF1E9);color:var(--brand,#F07C56);font-weight:700;font-size:12px;border-radius:20px;padding:3px 10px;cursor:pointer">📖 查看/修改升级规则</button></div>'+
     '</div>'+
     '<div class="card" style="margin-bottom:16px"><h3 style="margin:0 0 10px">每日任务（完成得经验）</h3>'+tasksHtml+'</div>'+
     '<div class="card"><h3 style="margin:0 0 10px">成就徽章</h3><div class="ach" id="achBox"></div></div>';
@@ -2303,6 +2312,7 @@ function gameDone(id){
   persist(GAME_KEY, store.game); renderGame(); renderNav();
 }
 function awardXP(n, reason){
+  const beforeLv=gameLevel();
   store.game.xp += n;
   if(store.game.lastDone!==todayStr()){
     if(store.game.lastDone && daysBetween(store.game.lastDone, todayStr())===1) store.game.streak=(store.game.streak||0)+1;
@@ -2310,6 +2320,57 @@ function awardXP(n, reason){
     store.game.lastDone=todayStr();
   }
   persist(GAME_KEY, store.game);
+  const afterLv=gameLevel();
+  if(afterLv>beforeLv) gameLevelUp(afterLv);   /* v39.06：升级自动发奖励 */
+}
+function gameLevelUp(lv){
+  const r=lvRule();
+  if(r.reward>0) awardGameModule(r.reward, 0);   /* 奖励发到「游戏人生」钱包（金币），商城直接能花 */
+  shellToast("🎉 恭喜升级到 Lv"+lv+"！"+(r.reward>0?("奖励已发：游戏人生金币 +"+r.reward+"（去游戏人生商城花）"):"继续加油！"));
+  try{ renderGame(); }catch(e){}
+  try{ renderNav(); }catch(e){}
+}
+function gameRuleOpen(){
+  const r=lvRule();
+  const mask=document.createElement("div");
+  mask.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9998;";
+  const pop=document.createElement("div");
+  pop.style.cssText="position:fixed;z-index:9999;left:50%;top:50%;transform:translate(-50%,-50%);width:min(520px,92vw);max-height:86vh;overflow:auto;background:var(--panel,#fff);border-radius:18px;padding:20px;box-shadow:0 14px 40px rgba(0,0,0,.2);box-sizing:border-box;";
+  let rows="";
+  for(let lv=2;lv<=11;lv++){
+    const need=xpNeed(lv), prev=xpNeed(lv-1), step=need-prev;
+    rows+='<tr><td style="padding:4px 10px">Lv'+(lv-1)+' → Lv'+lv+'</td><td style="padding:4px 10px;text-align:right">累计 '+need+'</td><td style="padding:4px 10px;text-align:right">本级 '+((step>0)?step:need)+'</td></tr>';
+  }
+  pop.innerHTML=
+    '<div style="font-weight:800;font-size:16px;margin-bottom:6px">📖 升级规则</div>'+
+    '<div style="font-size:12.5px;color:var(--sub,#8a7d6d);line-height:1.7;margin-bottom:12px">经验来自：完成待办、每日签到等。到达门槛立即升级，<b>升级奖励自动发到「游戏人生」钱包（金币），商城里直接花</b>。下面的规则可以随便改，保存后立刻生效（等级会按新规则重算）。</div>'+
+    '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;font-size:13px">'+
+      '<label><input type="radio" name="gr-mode" value="sqrt" '+(r.mode==="sqrt"?"checked":"")+'> 越升越难（平方根）</label>'+
+      '<label><input type="radio" name="gr-mode" value="flat" '+(r.mode==="flat"?"checked":"")+'> 每级固定经验</label>'+
+    '</div>'+
+    '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;font-size:13px">'+
+      '<label>系数/每级经验 <input id="gr-coef" type="number" min="1" value="'+r.coef+'" style="width:80px"></label>'+
+      '<label>升级奖励金币 <input id="gr-reward" type="number" min="0" value="'+r.reward+'" style="width:80px"></label>'+
+    '</div>'+
+    '<div style="font-size:12px;font-weight:700;margin-bottom:4px">门槛表（当前规则，前 10 级）：</div>'+
+    '<table style="width:100%;font-size:12.5px;border-collapse:collapse;background:var(--soft,#FFF7F0);border-radius:10px">'+rows+'</table>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">'+
+      '<button id="gr-cancel" style="padding:8px 18px;border:none;border-radius:20px;background:var(--soft,#FFF1E9);color:var(--ink,#4A4036);cursor:pointer">取消</button>'+
+      '<button id="gr-save" style="padding:8px 18px;border:none;border-radius:20px;background:var(--brand,#F07C56);color:#fff;font-weight:700;cursor:pointer">保存</button>'+
+    '</div>';
+  function close(){ mask.remove(); pop.remove(); }
+  mask.onclick=close;
+  pop.querySelector("#gr-cancel").onclick=close;
+  pop.querySelector("#gr-save").onclick=()=>{
+    const mode=((pop.querySelector('input[name="gr-mode"]:checked')||{}).value)==="flat"?"flat":"sqrt";
+    const coef=Math.max(1, parseInt(pop.querySelector("#gr-coef").value,10)||50);
+    const reward=Math.max(0, parseInt(pop.querySelector("#gr-reward").value,10)||0);
+    store.game.lvRule={mode:mode, coef:coef, reward:reward};
+    persist(GAME_KEY, store.game);
+    close(); renderGame(); renderNav();
+    shellToast("📖 升级规则已更新：当前 Lv"+gameLevel()+"，下一级还需 "+xpForNext()+" 经验，升级奖游戏人生金币 +"+reward);
+  };
+  document.body.append(mask,pop);
 }
 
 function awardGameModule(coins, petExp){
@@ -2395,7 +2456,7 @@ function myRow(ic,lb,right,act){
 function renderMy(){
   const box=$("native-my"); if(!box) return;
   const g=store.game||{};
-  const lv=(g.level||1), coins=(g.coins||0), xp=(g.xp||0);
+  const lv=gameLevel(), coins=(g.coins||0), xp=(g.xp||0);   /* v39.06：Lv 统一用 gameLevel()（旧 g.level 字段从未维护，一直显示 1） */
   box.innerHTML=
     '<div class="my-head"><div class="my-ava" id="myAva">🐣</div>'+
     '<div><div class="my-name" id="myName">我</div>'+
