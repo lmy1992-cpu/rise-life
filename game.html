@@ -250,8 +250,9 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
       <div data-page-node-id="FY9WwJPP5OeV7C2pqRdXsD" class="pill"><!--pnid:n58jGFNsmPaPQT4wmroPkq-->💰 金币 <b data-page-node-id="xbYwhGnNHmmeZxrIX5MvVv" id="s-coins"><!--pnid:B4RfktlPvmSftXu6wdGzk1-->0</b></div>
       <div data-page-node-id="FHr2ztt8rEwnYIzHPMxcj6" class="pill"><!--pnid:LlW6o33DozZzQPHyt3Ps35-->🧸 小玩具 <b data-page-node-id="FeF6lvddgPLDTNXO0OIaY2" id="s-toy"><!--pnid:AVgLA6IdnpS9tel8TyYlsb-->0</b></div>
       <div data-page-node-id="xEdovIn8IluXZomndqheb2" class="pill"><!--pnid:4hfUgr4tBIES4nNPMHDKWn-->🎁 大玩具 <b data-page-node-id="c6me8ru55mZcESCFwg4SZv" id="s-big"><!--pnid:1b4rl4jz7XXBEgM1b7vk5n-->0</b></div>
-      <div data-page-node-id="8J7usOCg0r3KDGEeDwyz5d" class="pill" title="人生等级：完成待办、签到等任务会累计总完成数，总完成数×5 ≥ 等级×100 时升级。和宠物等级是分开的。"><!--pnid:7AO4f65Anncj14wmtNDd98-->⭐ 人生Lv.<b data-page-node-id="nzwCkeOiLchWnzIr1JXfze" id="s-level"><!--pnid:PCkyZKiPRltBzmEV0ks3jH-->1</b></div>
+      <div data-page-node-id="8J7usOCg0r3KDGEeDwyz5d" class="pill" title="人生等级（游戏人生自己的）：任务中心每完成一个任务记一次完成数，总完成数×5 ≥ 等级×100 时升级（固定规则）。它和左侧导航「游戏人生」旁的 Lv 徽标（工作台游戏等级）是两套，和宠物等级也是分开的。"><!--pnid:7AO4f65Anncj14wmtNDd98-->⭐ 人生Lv.<b data-page-node-id="nzwCkeOiLchWnzIr1JXfze" id="s-level"><!--pnid:PCkyZKiPRltBzmEV0ks3jH-->1</b></div>
       <div data-page-node-id="ZT9FFk54p74UBst2Ahc0t6" class="pill"><!--pnid:tLuEEdeonngMmsoMKv3V3x-->🔥 连击 <b data-page-node-id="JQw5OcpVeDpV1hjQE7FY8m" id="s-streak"><!--pnid:yIGqPQ6Q9zviYtjdiy4gFM-->0</b><!--pnid:1YpedubnqJC1Wd0rOLMYFK-->天</div>
+      <div class="pill" id="pill-rule" title="查看/修改「游戏等级」升级规则（左侧导航「游戏人生」旁 Lv 徽标那套：待办/签到攒经验）" style="cursor:pointer" onclick="openRulePop()">📖 规则</div>
     </div>
     <div data-page-node-id="9RUfwLJLI8J6K0zx8SmtKp" class="progress-wrap">
       <div data-page-node-id="uNHTfHrB5sawTcQn25iHjt" class="progress-label"><span data-page-node-id="NAYmEJm3iR0owM8BPzu20t"><!--pnid:lumH3TgDp2cJS0Puv61FPl-->今日任务进度</span><span data-page-node-id="GDLIbyrFVLmR7uxGiITHEd" id="day-pct"><!--pnid:wTa6B9PHx7NPIOvIwjoahb-->0/0</span></div>
@@ -1533,6 +1534,72 @@ function levelUp(){
   // 每100经验升1级（经验=累计完成任务的积分贡献近似用 totalDone*5）
   const need=S.level*100;const cur=S.totalDone*5;
   if(cur>=need){S.level++;pop('⭐','升级！','你升到了 Lv.'+S.level+'，人生经营得越来越好了');}
+}
+
+/* ============ v39.07：工作台游戏等级规则（左侧导航「游戏人生」旁 Lv 徽标那套，可查看可修改） ============ */
+function grRead(){
+  try{
+    const g=JSON.parse(localStorage.getItem('workbench_game_v1')||'{}');
+    const r=g.lvRule||{};
+    const coef=(parseInt(r.coef,10)>0)?parseInt(r.coef,10):50;
+    const reward=(parseInt(r.reward,10)>=0)?parseInt(r.reward,10):20;
+    return {mode:(r.mode==="flat"?"flat":"sqrt"), coef:coef, reward:reward};
+  }catch(_){ return {mode:"sqrt",coef:50,reward:20}; }
+}
+function grNeed(lv,r){ return r.mode==="flat" ? (lv-1)*r.coef : (lv-1)*(lv-1)*r.coef; }
+function grLevelOf(xp,r){ return (r.mode==="flat" ? Math.floor(xp/r.coef) : Math.floor(Math.sqrt(xp/r.coef)))+1; }
+function openRulePop(){
+  const r=grRead();
+  let xp=0; try{ xp=(JSON.parse(localStorage.getItem('workbench_game_v1')||'{}').xp)||0; }catch(_){}
+  const mask=document.createElement('div');
+  mask.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9998;';
+  const pop=document.createElement('div');
+  pop.style.cssText='position:fixed;z-index:9999;left:50%;top:50%;transform:translate(-50%,-50%);width:min(540px,92vw);max-height:86vh;overflow:auto;background:#fff;border-radius:18px;padding:20px;box-shadow:0 14px 40px rgba(0,0,0,.2);box-sizing:border-box;';
+  let rows='';
+  for(let lv=2;lv<=11;lv++){
+    const need=grNeed(lv,r), prev=grNeed(lv-1,r), step=need-prev;
+    rows+='<tr><td style="padding:4px 10px">Lv'+(lv-1)+' → Lv'+lv+'</td><td style="padding:4px 10px;text-align:right">累计 '+need+'</td><td style="padding:4px 10px;text-align:right">本级 '+((step>0)?step:need)+'</td></tr>';
+  }
+  pop.innerHTML=
+    '<div style="font-weight:800;font-size:16px;margin-bottom:6px">📖 游戏等级规则</div>'+
+    '<div style="font-size:12.5px;color:#8a7d6d;line-height:1.9;margin-bottom:10px">'+
+      '先分清<b>两套等级</b>，它们是分开的：<br>'+
+      '① <b>左侧「游戏人生」旁的 Lv 徽标</b> ＝ 工作台游戏等级：完成待办、每日签到攒经验，<b>下面的规则管它，可以随便改</b>，保存后立刻生效（等级按新规则重算）。'+
+      '到达门槛立即升级，<b>升级奖励金币自动发到本页钱包，商城里直接花</b>。'+
+      '（当前经验 '+xp+'，按当前规则是 Lv'+grLevelOf(xp,r)+'）<br>'+
+      '② <b>本页顶部的 ⭐ 人生Lv</b> ＝ 游戏人生自己的等级：任务中心里每完成一个任务记一次完成数，<b>总完成数×5 达到 等级×100 就升 1 级</b>（固定规则，不用设置）。'+
+    '</div>'+
+    '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;font-size:13px">'+
+      '<label><input type="radio" name="gr-mode" value="sqrt" '+(r.mode==="sqrt"?"checked":"")+'> 越升越难（平方根）</label>'+
+      '<label><input type="radio" name="gr-mode" value="flat" '+(r.mode==="flat"?"checked":"")+'> 每级固定经验</label>'+
+    '</div>'+
+    '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;font-size:13px">'+
+      '<label>系数/每级经验 <input id="gr-coef" type="number" min="1" value="'+r.coef+'" style="width:80px"></label>'+
+      '<label>升级奖励金币 <input id="gr-reward" type="number" min="0" value="'+r.reward+'" style="width:80px"></label>'+
+    '</div>'+
+    '<div style="font-size:12px;font-weight:700;margin-bottom:4px">门槛表（当前规则，前 10 级）：</div>'+
+    '<table style="width:100%;font-size:12.5px;border-collapse:collapse;background:#FFF7F0;border-radius:10px">'+rows+'</table>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">'+
+      '<button id="gr-cancel" style="padding:8px 18px;border:none;border-radius:20px;background:#FFF1E9;color:#4A4036;cursor:pointer">取消</button>'+
+      '<button id="gr-save" style="padding:8px 18px;border:none;border-radius:20px;background:#F07C56;color:#fff;font-weight:700;cursor:pointer">保存</button>'+
+    '</div>';
+  function close(){ mask.remove(); pop.remove(); }
+  mask.onclick=close;
+  pop.querySelector('#gr-cancel').onclick=close;
+  pop.querySelector('#gr-save').onclick=()=>{
+    const mode=((pop.querySelector('input[name="gr-mode"]:checked')||{}).value)==="flat"?"flat":"sqrt";
+    const coef=Math.max(1, parseInt(pop.querySelector('#gr-coef').value,10)||50);
+    const reward=Math.max(0, parseInt(pop.querySelector('#gr-reward').value,10)||0);
+    const nr={mode:mode, coef:coef, reward:reward};
+    try{
+      const obj=JSON.parse(localStorage.getItem('workbench_game_v1')||'{}');
+      obj.lvRule=nr; localStorage.setItem('workbench_game_v1', JSON.stringify(obj));
+    }catch(_){}
+    /* 通知外壳刷新（徽标/卡片/我的页等级）；顶层直接打开时发给自己，无人处理=无害 */
+    try{ window.parent.postMessage({type:'gameRuleChanged', lvRule:nr}, '*'); }catch(_){}
+    close(); toast('📖 升级规则已保存：按新规则当前是 Lv'+grLevelOf(xp,nr)+'，升级奖 '+reward+' 金币');
+  };
+  document.body.append(mask,pop);
 }
 
 /* ============ 导入导出 ============ */
