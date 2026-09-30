@@ -982,6 +982,23 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     .se-plat-l{width:100%;flex:none;border-right:none;border-bottom:1px dashed var(--line);padding-right:0;padding-bottom:10px}
   }
 </style>
+<style>
+/* v39.12 Batch A */
+.anl-badge{cursor:pointer}
+.subs-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg-soft)}
+.subs-row .s-plat{font-weight:700}
+.subs-chip{cursor:pointer;user-select:none;font-size:12px;padding:2px 8px;border-radius:12px;border:1px solid var(--line);color:var(--ink)}
+.subs-chip.yes{background:var(--brand);color:#fff;border-color:var(--brand)}
+.subs-chip.no{background:#c0392b;color:#fff;border-color:#c0392b}
+.subs-sel{padding:4px 8px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:12px}
+.tpl-doc{white-space:pre-wrap;font-size:13px;line-height:1.8;background:var(--bg-soft);border:1px solid var(--line);border-radius:10px;padding:12px}
+.cmp-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.cmp-tbl th,.cmp-tbl td{border:1px solid var(--line);vertical-align:top;padding:8px;text-align:left}
+.cmp-tbl th{background:var(--bg-soft)}
+.cmp-cell{max-height:180px;overflow:auto;white-space:pre-wrap;line-height:1.7}
+.tpl-chip{cursor:pointer;font-size:12px;padding:3px 10px;border-radius:12px;border:1px solid var(--line);color:var(--ink)}
+.tpl-chip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+</style>
 </head>
 <body>
 <!-- 协作登录 -->
@@ -1159,6 +1176,7 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
   <div class="top-row">
     <div class="logo">短篇<small>写作素材模块</small></div>
     <div class="spacer"></div>
+    <button class="btn sm" id="btnGoHome" onclick="location.href='./'" title="返回工作台首页（人生概览）">🏠</button>
     <button class="btn sm" id="btnCollabTheme" onclick="showCollabTheme()">🎨 换肤</button>
     <button class="btn sm" id="btnTagEdit">编辑元素标签</button>
     <button class="btn sm" id="btnBackup">备份 / 恢复</button>
@@ -1251,7 +1269,9 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
       </div>
 
       <div class="anl-lib">
-        <div class="sec-head" style="margin:0 0 10px"><h3>拆文库</h3><span class="hint">拆过的报告按时间倒序排在这里，点「查看」装回上方继续读</span><span class="spacer"></span><span class="anl-count" id="anlLibCount"></span></div>
+        <div class="sec-head" style="margin:0 0 10px"><h3>拆文库</h3><span class="hint">拆过的报告按时间倒序排在这里，点「查看」装回上方继续读</span><span class="spacer"></span><button class="btn sm" id="btnAnlTpl" type="button" onclick="tplOpen()">🧩 套路模板</button>
+        <button class="btn sm" id="btnAnlCmp" type="button" onclick="cmpOpen()">⚖️ 同题材对比</button>
+        <span class="anl-count" id="anlLibCount"></span></div>
         <div class="grid" id="anlLibGrid"></div>
       </div>
 
@@ -1267,6 +1287,7 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
         <button class="btn sm" id="btnSeRecount" type="button">🔄 自动统计数</button>
         <button class="btn sm del" id="btnSeClearAll" type="button">🗑 全部清空</button>
         <button class="btn sm" id="btnSeImport" type="button">⬇ 批量导入</button>
+        <button class="btn sm" id="btnSubsOpen" type="button" onclick="subsOpen()">📮 投稿进度</button>
         <button class="btn primary sm" id="btnAddSubEmail" type="button">+ 添加平台</button>
       </div>
       <div class="se-topline">
@@ -2369,6 +2390,7 @@ function migrate(){
   if(!state || typeof state !== 'object') state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],subEmails:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
   // 容错：损坏数据可能把数组字段写成 null，先归一化为空数组，避免后续 .forEach 崩溃
   if(!Array.isArray(state.examples)) state.examples=[];
+  if(!Array.isArray(state.subs)) state.subs=[];   /* v39.12：投稿进度记录 */
   if(!Array.isArray(state.intros)) state.intros=[];
   if(!Array.isArray(state.materials)) state.materials=[];
   if(!Array.isArray(state.misc)) state.misc=[];
@@ -2449,6 +2471,7 @@ function migrate(){
   }
   state.tutorials.forEach(t=>{ if(!t.category) t.category="其他"; if(!t.createdAt) t.createdAt=Date.now(); if(typeof t.content!=="string") t.content=""; });
   kwBackfillEra();   /* v39.06：存量关键词补时代标记（state 已就绪，时序可靠） */
+  nameLibStripSuffix();   /* v39.12：起名库剥括号后缀（幂等） */
   mergeXlsx();
 }
 const DEFAULT_NAV=[
@@ -2685,6 +2708,7 @@ function renderExamples(){
     card.onclick=()=>openEditor(e.id);
     const pinBtn=document.createElement("button"); pinBtn.className="pin-btn"+(e.pinned?" on":""); pinBtn.textContent=e.pinned?"📌 取消置顶":"📌 置顶"; pinBtn.title="置顶到例文列表最前"; pinBtn.onclick=(ev)=>{ ev.stopPropagation(); e.pinned=!e.pinned; save(); renderExamples(); };
     const _metaEl=card.querySelector(".meta"); if(_metaEl){ const _ct=card.querySelector(".ctime"); if(_ct) _metaEl.insertBefore(pinBtn,_ct); else _metaEl.appendChild(pinBtn); } else { card.appendChild(pinBtn); }
+    const _anlBd=card.querySelector(".anl-badge"); if(_anlBd){ _anlBd.title="查看这篇的拆文报告（左原文右报告）"; _anlBd.onclick=function(ev){ ev.stopPropagation(); anlJumpFromExample(e.id); }; }   /* v39.12：已拆文徽标可点 */
     g.appendChild(card);
   });
   if(list.length>shown.length){
@@ -2758,6 +2782,7 @@ function renderReadingView(){
   $("#rdMeta").innerHTML=tags;
   $("#rdTime").textContent=time?"添加 "+time:"";
   $("#rdWc").innerHTML='<span class="wc">字数 '+wc+'</span>'+(((state.analyses)||[]).some(a=>a.srcId===ex.id)?'<span class="anl-badge">✂️ 已拆文</span>':"");
+  const _rdBd=$("#rdWc").querySelector(".anl-badge"); if(_rdBd){ _rdBd.title="查看这篇的拆文报告（左原文右报告）"; _rdBd.onclick=function(){ anlJumpFromExample(ex.id); }; }   /* v39.12 */
   const body=(ex.content||"").trim();
   const ce=$("#rdContent");
   if(body){ ce.textContent=body; ce.classList.remove("empty"); }
@@ -3727,6 +3752,18 @@ function renderBrainstorms(){
 
 /* ---------- 五、杂项分类（左导览） ---------- */
 function autoGrow(el){ if(!el) return; el.style.height='auto'; el.style.height=(el.scrollHeight)+'px'; }
+/* v39.12：起名库名字末尾的「（女主）/（白月光）」类后缀已冗余（四列分类承担角色），一次性剥掉并把角色记入 role 字段。幂等：剥过的不含括号自然跳过。只处理「💡 起名库」大项，别的大项一律不碰 */
+function nameLibStripSuffix(){
+  const lib=(state.misc||[]).find(c=>c.name==="💡 起名库"); if(!lib||!Array.isArray(lib.items)) return;
+  lib.items.forEach(it=>{
+    if(!it||typeof it.text!=="string") return;
+    const m=it.text.match(/^([\s\S]*?)\s*[（(]([^()（）]{1,10})[）)]\s*$/);
+    if(!m) return;
+    const bare=m[1].trim(); if(!bare) return;
+    if(!it.role) it.role=nameLibRoleOf(it);
+    it.text=bare;
+  });
+}
 function nameLibRoleOf(it){
   const ROLES=["男主","女主","女配","男配"];
   if(it && ROLES.indexOf(it.role)>=0) return it.role;
@@ -4986,7 +5023,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v39.11";
+  var APP_VERSION = "v39.12";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
@@ -5574,6 +5611,136 @@ async function anlReadFile(f){
   var txt=await f.text();
   return typeof decodeTxt==="function" ? decodeTxt(await f.arrayBuffer()) : txt;
 }
+/* ============ v39.12 Batch A：拆文就地看 / 投稿进度 / 套路模板 / 同题材对比 ============ */
+/* 第 7 条：例文「已拆文」徽标 → 切到拆文页，左原文右报告 */
+function anlJumpFromExample(exId){
+  var rec=null; anlList().forEach(function(a){ if(a.srcId===exId && !rec) rec=a; });
+  if(!rec){ toast("这篇还没有拆文报告"); return; }
+  var ex=null; ((state&&state.examples)||[]).forEach(function(x){ if(x.id===exId) ex=x; });
+  try{ $("#maskEdit").classList.remove("on"); }catch(e){}
+  switchSec("analyses");
+  if(ex){ var ta=anlE("anlText"); if(ta){ ta.value=ex.content||""; try{ anlRefreshWords(); }catch(e2){} } }
+  anlOpenRec(rec.id);
+  toast("已载入：左原文 · 右报告");
+}
+/* 第 23 条：投稿进度看板 */
+function subsList(){ if(!Array.isArray(state.subs)) state.subs=[]; return state.subs; }
+var SUBS_FIELDS=[["reply","回复"],["draft","初稿"],["final","终稿"],["sign","签约"]];
+var subsFilter={reply:"",draft:"",final:"",sign:""};
+function subsAddFrom(seId){
+  var se=null; (state.subEmails||[]).forEach(function(x){ if(x.id===seId) se=x; });
+  if(!se) return;
+  if(subsList().some(function(x){ return x.seId===seId; })){ if(!confirm("这位编辑已经投过了，再投一次（会新增一条记录）？")) return; }
+  subsList().unshift({id:"s"+Date.now().toString(36)+Math.random().toString(36).slice(2,7), seId:se.id, platform:se.platform||"", editor:se.editor||"", email:se.email||"", at:Date.now(), reply:"", draft:"", final:"", sign:""});
+  save(); toast("已记入投稿进度（点「投稿进度」查看）");
+}
+function subsOpen(){ renderSubs(); $("#maskSubs").classList.add("on"); }
+function subsTriNext(v){ return v===""?"是":(v==="是"?"否":""); }
+function renderSubs(){
+  var box=$("#subsList"); if(!box) return;
+  var fb=$("#subsFilter");
+  fb.innerHTML=SUBS_FIELDS.map(function(f){
+    return '<label style="font-size:12px;color:var(--ink)">'+f[1]+' <select class="subs-sel" data-f="'+f[0]+'">'+
+      ["","是","否","空"].map(function(v){ return '<option value="'+v+'"'+(subsFilter[f[0]]===v?" selected":"")+'>'+(v===""?"全部":v)+'</option>'; }).join("")+'</select></label>';
+  }).join("");
+  Array.prototype.forEach.call(fb.querySelectorAll("select"),function(sel){ sel.onchange=function(){ subsFilter[sel.getAttribute("data-f")]=sel.value; renderSubs(); }; });
+  var all=subsList().slice().sort(function(a,b){ return (b.at||0)-(a.at||0); });
+  var list=all.filter(function(it){
+    for(var i=0;i<SUBS_FIELDS.length;i++){ var k=SUBS_FIELDS[i][0]; if(subsFilter[k] && (it[k]||"")!==subsFilter[k]) return false; }
+    return true;
+  });
+  var nR=0,nD=0,nF=0,nS=0;
+  all.forEach(function(it){ if(it.reply==="是")nR++; if(it.draft==="是")nD++; if(it.final==="是")nF++; if(it.sign==="是")nS++; });
+  $("#subsStats").textContent="共 "+all.length+" 条投递 ｜ 回复 "+nR+" ｜ 过初稿 "+nD+" ｜ 过终稿 "+nF+" ｜ 签约 "+nS+"（当前显示 "+list.length+" 条）";
+  if(!list.length){ box.innerHTML='<div class="empty">'+(all.length?"没有符合筛选条件的记录":"还没有投递记录。到「投稿邮箱」点编辑行的「投」，就会出现在这里")+'</div>'; return; }
+  box.innerHTML="";
+  list.forEach(function(it){
+    var row=document.createElement("div"); row.className="subs-row";
+    var d=new Date(it.at||Date.now());
+    var info=document.createElement("span");
+    info.innerHTML='<span class="s-plat">'+esc(it.platform||"未命名平台")+'</span> '+esc(it.editor||"")+' <span style="font-size:12px;opacity:.75">'+esc(it.email||"")+' ｜ '+(d.getMonth()+1)+'月'+d.getDate()+'日</span>';
+    row.appendChild(info);
+    SUBS_FIELDS.forEach(function(f){
+      var v=it[f[0]]||"";
+      var c=document.createElement("span");
+      c.className="subs-chip"+(v==="是"?" yes":(v==="否"?" no":""));
+      c.textContent=f[1]+"："+(v||"—");
+      c.title="点击切换：— → 是 → 否";
+      c.onclick=function(){ it[f[0]]=subsTriNext(it[f[0]]||""); save(); renderSubs(); };
+      row.appendChild(c);
+    });
+    var del=document.createElement("button"); del.className="btn sm del"; del.type="button"; del.textContent="✕"; del.title="删除这条投递记录";
+    del.onclick=function(){ if(confirm("删除这条投递记录？")){ state.subs=subsList().filter(function(x){ return x.id!==it.id; }); save(); renderSubs(); } };
+    row.appendChild(del);
+    box.appendChild(row);
+  });
+}
+/* 第 21 条：套路模板——按题材汇总已拆报告，提炼可复用套路（取 开篇钩子/情节结构/伏笔反转/仿写模板 四个维度） */
+var TPL_DIMS=[2,4,6,10];
+var tplGenreSel="";
+function tplOpen(){
+  var box=$("#tplGenre"); if(!box) return;
+  var gs=[];
+  anlList().forEach(function(r){ var g=(r.genre||"").trim(); if(g && gs.indexOf(g)<0) gs.push(g); });
+  box.innerHTML='<span class="tpl-chip'+(tplGenreSel===""?" on":"")+'" data-g="">全部题材</span>'+gs.map(function(g){ return '<span class="tpl-chip'+(tplGenreSel===g?" on":"")+'" data-g="'+esc(g)+'">'+esc(g)+'</span>'; }).join("");
+  Array.prototype.forEach.call(box.querySelectorAll(".tpl-chip"),function(c){ c.onclick=function(){ tplGenreSel=c.getAttribute("data-g"); tplOpen(); }; });
+  $("#tplOut").innerHTML='<div class="tpl-doc">'+esc(tplBuild(tplGenreSel)).replace(/\n/g,"<br>")+'</div>';
+  $("#maskTpl").classList.add("on");
+}
+function tplBuild(genre){
+  var list=anlList().filter(function(r){ return !genre || (r.genre||"")===genre; });
+  if(!list.length) return "还没有"+(genre?("「"+genre+"」题材的"):"")+"拆文报告，先去拆几篇再来。";
+  var out="《"+(genre||"全部题材")+"》套路模板（基于 "+list.length+" 篇拆文提炼）\n";
+  TPL_DIMS.forEach(function(dn){
+    var dim=ANL_DIMS[dn-1];
+    out+="\n"+dim.ic+" "+dim.k+"\n";
+    var seen={}, n=0;
+    list.forEach(function(r){
+      if(n>=12) return;
+      var secs=anlParseReport(r.report||"");
+      for(var i=0;i<secs.length;i++){
+        if(secs[i].n!==dn) continue;
+        var lines=secs[i].body.split("\n");
+        for(var j=0;j<lines.length;j++){
+          var t=lines[j].replace(/^[\s\-*>#•·]+/,"").replace(/^\d+[\.、]/,"").trim();
+          if(t.length<6||t.length>80) continue;
+          if(seen[t]) continue;
+          seen[t]=1; out+="· "+t+"\n"; n++;
+          if(n>=12) break;
+        }
+        break;
+      }
+    });
+    if(!n) out+="（这批报告里没解析出这一维度的内容）\n";
+  });
+  return out;
+}
+function tplCopy(){ copyText(tplBuild(tplGenreSel)); }
+/* 第 24 条：同题材对比——两篇报告十个维度并排 */
+function cmpOpen(){
+  var list=anlList().slice().sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
+  var opts=list.map(function(r){ var t=(r.title==="拆文报告"&&r.srcTitle)?r.srcTitle:(r.title||"未命名"); return '<option value="'+r.id+'">'+esc(t)+'（'+esc(r.genre||"—")+'）</option>'; }).join("");
+  $("#cmpA").innerHTML=opts; $("#cmpB").innerHTML=opts;
+  if(list.length>1) $("#cmpB").value=list[1].id;
+  $("#cmpA").onchange=cmpRender; $("#cmpB").onchange=cmpRender;
+  cmpRender();
+  $("#maskCmp").classList.add("on");
+}
+function cmpRender(){
+  var out=$("#cmpOut"); if(!out) return;
+  var a=anlFindRec($("#cmpA").value), b=anlFindRec($("#cmpB").value);
+  if(!a||!b){ out.innerHTML='<div class="empty">选两份报告（至少拆过两篇才能对比）</div>'; return; }
+  var sa=anlParseReport(a.report||""), sb=anlParseReport(b.report||"");
+  function secOf(secs,n){ for(var i=0;i<secs.length;i++) if(secs[i].n===n) return secs[i].body.trim(); return ""; }
+  var ta=(a.title==="拆文报告"&&a.srcTitle)?a.srcTitle:(a.title||"甲"), tb=(b.title==="拆文报告"&&b.srcTitle)?b.srcTitle:(b.title||"乙");
+  var h='<table class="cmp-tbl"><tr><th style="width:96px">维度</th><th>'+esc(ta)+'</th><th>'+esc(tb)+'</th></tr>';
+  ANL_DIMS.forEach(function(d){
+    var ca=secOf(sa,d.n), cb=secOf(sb,d.n);
+    if(!ca&&!cb) return;
+    h+='<tr><td>'+d.ic+' '+esc(d.k)+'</td><td><div class="cmp-cell">'+esc(ca||"（无）")+'</div></td><td><div class="cmp-cell">'+esc(cb||"（无）")+'</div></td></tr>';
+  });
+  out.innerHTML=h+'</table>';
+}
 var ANL_DEMO="林晚第一次见到沈屹，是在凌晨十二点零七分的末班地铁站。\n那天她加班到深夜，整个城市都睡了。地铁里空荡荡的，只有她和一个坐在角落的男人。他穿一件洗得发白的牛仔外套，膝盖上摊着一本速写本，笔尖在纸上沙沙地画着什么。\n林晚找了个离他不远的位置坐下，抬起头——画的是她。\n准确来说，是地铁车厢灯光下的她，额前碎发垂着，指尖捏着手机，眉头微蹙，连她眼尾那颗小痣都点了出来。\n「你偷画我？」\n男人抬眼，眼神有点懵，像是刚从自己的世界里被拽出来。可他那副窘迫的样子，反倒让林晚笑出了声。\n那是他们的第一次见面。后来他们常常在末班地铁上碰到，他给她带热牛奶，她给他讲公司里的奇葩需求。两个人影在时间缝里错位地拼在了一起。\n半年后他把那本速写本送给她，一页一页，全是她。她说好。\n可有些东西不是说放下就能放下的。那天她提早下班，买了草莓蛋糕坐了四十分钟地铁到他家，门没锁。她推开门，看见他坐在地上，面前摊着一堆旧照片。照片上是一个女孩，眉眼和她有七分像。\n「她是谁？」\n他沉默的那几秒，像一个世纪那么长。\n她怕自己真的只是一个替代品。于是她收拾东西搬回了自己的出租屋，他发消息她敷衍回，他约见面她说加班。\n冷战到第十五天，暴雨。她没带伞，站在公司楼下犹豫要不要冲出去，然后看见了他——黑伞撑着，浑身湿透，不知道站了多久。\n「我只是很想你。」\n那一刻她眼泪混着雨往下掉。可她心里清楚，和好不等于过去真的过去了。\n直到那年冬天，他蒙着她的眼睛开车开了很久，摘下眼罩时，她站在一间画室里。满墙的画，全是她。\n最大的那幅右下角写着一行小字——「致林晚：我的光。」\n她转过身，他单膝跪地。\n末班地铁上的相遇，原来不是偶然。";
 /* ---------- 投稿邮箱（v38.77：拆文 tab 下，按平台收纳编辑邮箱） ---------- */
 /* 单行编辑器：姓名 / 邮箱 / 备注 / 📋复制 / ⭐收藏 / ⇧置顶 / ✕删除 */
@@ -5588,6 +5755,8 @@ function seEditorRow(e, list, isTop){
   note.onchange=function(){ e.note=note.value; save(); };
   const copy=document.createElement("button"); copy.className="btn sm"; copy.type="button"; copy.textContent="📋"; copy.title="复制该编辑的邮箱";
   copy.onclick=function(){ copyText(e.email); };
+  const tou=document.createElement("button"); tou.className="btn sm"; tou.type="button"; tou.textContent="投"; tou.title="投给这位编辑（记入「投稿进度」）";   /* v39.12 */
+  tou.onclick=function(){ subsAddFrom(e.id); };
   const fav=document.createElement("button"); fav.className="btn sm se-favbtn"+(e.fav?" on":""); fav.type="button"; fav.textContent=e.fav?"★":"☆"; fav.title=e.fav?"取消收藏":"收藏到顶部收藏列表";
   fav.onclick=function(){ e.fav=!e.fav; save(); renderSubEmails(); };
   const pin=document.createElement("button"); pin.className="btn sm se-pinbtn"+(e.pinned?" on":""); pin.type="button"; pin.textContent="⇧"; pin.title=e.pinned?"取消置顶":"设为该平台置顶编辑（显示在第一行）";
@@ -5599,7 +5768,7 @@ function seEditorRow(e, list, isTop){
   };
   const del=document.createElement("button"); del.className="btn sm del"; del.type="button"; del.textContent="✕"; del.title="删除该编辑邮箱";
   del.onclick=function(){ if(confirm("删除编辑「"+(e.editor||e.email||"未命名")+"」？")){ state.subEmails=list.filter(function(x){ return x.id!==e.id; }); save(); renderSubEmails(); } };
-  row.appendChild(ed); row.appendChild(em); row.appendChild(note); row.appendChild(copy); row.appendChild(fav); row.appendChild(pin); row.appendChild(del);
+  row.appendChild(ed); row.appendChild(em); row.appendChild(note); row.appendChild(copy); row.appendChild(tou); row.appendChild(fav); row.appendChild(pin); row.appendChild(del);
   return row;
 }
 /* v38.80：编辑自动排序 —— 置顶永远第一；其余「无分部在前、各分部按拼音首字母」，分部内编辑也按拼音 */
@@ -6061,5 +6230,28 @@ try{
 }catch(e){}
 try{ anlInit(); }catch(e){ if(window.console) console.error("anlInit",e); }
 </script>
+<!-- v39.12 Batch A 弹窗 -->
+<div class="mask" id="maskSubs">
+  <div class="modal" style="max-width:880px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><b style="font-size:16px">📮 投稿进度</b><span class="hint">每个状态点一下就切换：— → 是 → 否</span><span class="spacer"></span><button class="btn sm" type="button" onclick="document.getElementById('maskSubs').classList.remove('on')">✕ 关闭</button></div>
+    <div id="subsFilter" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px"></div>
+    <div id="subsStats" class="hint" style="margin-bottom:8px"></div>
+    <div id="subsList" style="display:flex;flex-direction:column;gap:8px;max-height:58vh;overflow:auto"></div>
+  </div>
+</div>
+<div class="mask" id="maskTpl">
+  <div class="modal" style="max-width:880px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><b style="font-size:16px">🧩 套路模板</b><span class="hint">把你拆过的文按题材汇总，提炼能直接套用的套路</span><span class="spacer"></span><button class="btn sm" type="button" onclick="tplCopy()">📋 复制模板</button><button class="btn sm" type="button" onclick="document.getElementById('maskTpl').classList.remove('on')">✕ 关闭</button></div>
+    <div id="tplGenre" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
+    <div id="tplOut" style="max-height:58vh;overflow:auto"></div>
+  </div>
+</div>
+<div class="mask" id="maskCmp">
+  <div class="modal" style="max-width:960px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><b style="font-size:16px">⚖️ 同题材对比</b><span class="hint">选两篇拆文报告，十个维度并排看</span><span class="spacer"></span><button class="btn sm" type="button" onclick="document.getElementById('maskCmp').classList.remove('on')">✕ 关闭</button></div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><select id="cmpA" class="subs-sel" style="max-width:320px"></select><select id="cmpB" class="subs-sel" style="max-width:320px"></select></div>
+    <div id="cmpOut" style="max-height:60vh;overflow:auto"></div>
+  </div>
+</div>
 </body>
 </html>
