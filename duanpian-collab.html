@@ -2689,6 +2689,36 @@ function renderExamples(){
 }
 
 /* ---------- 编辑例文 ---------- */
+/* ============ v39.10：点开例文回到最开头 ============
+   根因：阅读面板的滚动容器 .reader-body 是常驻 DOM（max-height:62vh; overflow:auto），
+   只靠 class/display 切换显隐，浏览器会把上次的 scrollTop 保留下来，
+   所以点开下一篇时会停在中间或后面。这里在每次打开后把滚动位置归零。
+   注意：必须在弹窗已挂到可视状态之后再操作，display:none 时归零会失效。 ============ */
+function resetReaderScroll(){
+  try{
+    const m=document.getElementById("maskEdit");
+    const boxes=[];
+    if(m){
+      const b=m.querySelector(".reader-body"); if(b) boxes.push(b);
+      const md=m.querySelector(".modal.reader"); if(md) boxes.push(md);
+      m.querySelectorAll(".rd-content, .rel-pick, textarea").forEach(function(x){ if(x&&x.scrollTop) boxes.push(x); });
+      boxes.push(m);
+    }
+    boxes.forEach(function(el){ try{ el.scrollTop=0; }catch(e){} });
+    /* 正文里若嵌了 iframe/独立滚动块（如 AI 报告预览），一并归零 */
+    try{
+      if(m) m.querySelectorAll("iframe").forEach(function(f){
+        try{
+          const d=f.contentDocument;
+          if(d){ if(d.documentElement) d.documentElement.scrollTop=0; if(d.body) d.body.scrollTop=0; }
+        }catch(e){}
+      });
+    }catch(e){}
+    /* 外层页面若被联动滚过也拉回顶部（弹窗遮罩下不应有偏移） */
+    try{ const rb=m?m.querySelector(".reader-body"):null; if(rb) rb.scrollTop=0; }catch(e){}
+  }catch(e){ if(window._err) window._err("resetReaderScroll",e); }
+}
+
 function openEditor(id){
   const ex=((state&&state.examples)||[]).find(x=>x.id===id); if(!ex) return;
   editCur={exId:ex.id};
@@ -2698,6 +2728,10 @@ function openEditor(id){
   try{ renderReadingView(); }catch(e){ if(window._err) window._err("openEditor.renderReadingView",e); }
   try{ showReaderView("read"); }catch(e){ if(window._err) window._err("openEditor.showReaderView",e); }
   openMaskEdit();
+  /* v39.10：等弹窗真正渲染出来（下一帧）再归零滚动，否则 display:none 阶段归零不生效 */
+  resetReaderScroll();
+  try{ requestAnimationFrame(function(){ resetReaderScroll(); }); }catch(e){ setTimeout(resetReaderScroll, 0); }
+  try{ setTimeout(resetReaderScroll, 60); }catch(e){}
 }
 function openMaskEdit(){
   try{
@@ -4900,7 +4934,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v39.09";
+  var APP_VERSION = "v39.10";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
