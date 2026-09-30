@@ -77,8 +77,8 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
     setTimeout(check, 4000);
   })();
 </script>
-<script src="https://cdn.jsdelivr.net/npm/crypto-js@4.2.0/crypto-js.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="crypto-js.min.js"></script>
+<script src="supabase-js.min.js"></script>
 <style>
   /* 移动优先：用 JS 读 innerWidth 给 body.m 类（不受媒体查询 quirk 影响） */
   /* mobile 样式全部用 body.m 选择器；桌面默认（> 820px） */
@@ -626,6 +626,15 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   a,button,input,textarea,select,label{ touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
 }
 </style>
+<style>
+/* v39.13 Batch B：即时反馈/宠物气泡/弹层 */
+#fxLayer{position:fixed;inset:0;pointer-events:none;z-index:9999}
+.fx-coin{position:fixed;font-size:20px;animation:fxRise 1.2s ease-out forwards;pointer-events:none}
+.fx-plus{position:fixed;font-size:14px;font-weight:800;color:var(--brand);animation:fxRise 1.2s ease-out forwards;pointer-events:none}
+@keyframes fxRise{0%{opacity:0;transform:translateY(0) scale(.6)}15%{opacity:1}100%{opacity:0;transform:translateY(-90px) scale(1.15)}}
+#fxBubble{position:fixed;right:16px;bottom:16px;z-index:9998;background:var(--panel,#fff);border:1px solid var(--line);border-radius:14px;padding:10px 14px;font-size:14px;box-shadow:0 8px 30px rgba(0,0,0,.15);opacity:0;transform:translateY(12px);transition:all .25s;pointer-events:none;max-width:260px}
+#fxBubble.on{opacity:1;transform:none;pointer-events:auto;cursor:pointer}
+</style>
 </head>
 <body>
 <div id="stage">
@@ -911,7 +920,7 @@ navCfg = navCfg.filter(function(x){ return ["inbox","timeline","mood","recycle"]
   }
 })();
 
-const APP_VERSION = "v39.11";
+const APP_VERSION = "v39.14";
 // ===== 健壮存储层：localStorage 不可用时自动回退 IndexedDB（防止刷新丢数据）=====
 // 内部状态挂在 window 上，避免跨 <script> 块时 let 的暂时性死区（TDZ）报错
 // —— 存储层 v2：每条记录带写入时间戳，读取/合并时"取最新"，杜绝旧空值覆盖新数据 ——
@@ -1829,12 +1838,13 @@ function renderTodo(){
       '<div class="todo-head-info">'+
         '<div class="th-title">今日待办完成度</div>'+
         '<div class="th-rate">'+snap.rate+'% <span>'+snap.done+' / '+snap.total+'</span></div>'+
-        '<div class="th-sub">完成率越高，今天越没白过 ✨</div>'+
+        '<div class="th-sub">还剩 '+(snap.total-snap.done)+' 件事 · 完成率越高，今天越没白过 ✨</div>'+
       '</div>'+
     '</div>'+
     // 今日任务（改为点按钮弹出底部弹层添加，桌面居中/手机底部）
     '<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">'+
       '<button class="btn primary" onclick="openTodoAdd()">＋ 添加待办</button>'+
+      '<button class="btn" id="fxSoundBtn" onclick="fxToggleSound()" title="完成任务的提示音效开关">🔊 音效</button>'+
       '<button class="btn danger" onclick="clearAllTodo()">🗑 一键清空</button>'+
       (store.todoIgnore.length?'<button class="btn" onclick="hiddenOpen=!hiddenOpen;renderTodo()" title="查看已隐藏的任务，可单独恢复">↩ 已隐藏 '+store.todoIgnore.length+' 条</button>':'')+
     '</div>'+
@@ -1871,6 +1881,7 @@ function renderTodo(){
         '</div><div id="hiddenList"></div>'+
       '</div>':'')+
     (hiddenOpen&&!store.todoIgnore.length?'<p class="hint" style="margin-top:16px;color:var(--sub);font-size:13px">没有已隐藏的任务。</p>':'');
+  try{ fxSoundBtnSync(); }catch(e){}
   const u=$("todoUndone"), dn=$("todoDone");
   if(!undone.length) u.innerHTML='<p class="hint" style="color:var(--sub);font-size:13px">暂无，添加一条吧</p>';
   undone.forEach(function(t){ u.appendChild(todoRow(t,false)); });
@@ -1984,7 +1995,7 @@ function rdCheckin(){
   const b=rdBookOf(t);
   let newCur=null;
   if(b && b.totalPages) newCur=Math.min(b.totalPages,(b.currentPage||0)+pages);
-  t.done=true; t.rdlog={pages:pages, minutes:minutes, at:Date.now()}; t._mod=Date.now();
+  t.done=true; t.doneDate=todayStr(); t.rdlog={pages:pages, minutes:minutes, at:Date.now()}; t._mod=Date.now();
   persist(TODO_KEY, store.todo);
   if(b){
     try{
@@ -1994,6 +2005,7 @@ function rdCheckin(){
     }catch(e){}
   }
   try{ gameAward(t); }catch(e){}
+  try{ fxCoinFly(5); fxDing(); taskDoneCelebration(); }catch(e){}
   try{ ensureReadingPlans(); }catch(e){}
   closeMask("rdlogMask");
   renderTodo(); renderNav();
@@ -2007,6 +2019,128 @@ function rdWeekStats(){
   const td=logs.filter(t=>t.date===today), wk=logs.filter(t=>t.date>=monday&&t.date<=today);
   const sum=(a,f)=>a.reduce((s,t)=>s+((t.rdlog&&t.rdlog[f])||0),0);
   return {has:logs.length>0, tMin:sum(td,"minutes"), tPages:sum(td,"pages"), wMin:sum(wk,"minutes"), wPages:sum(wk,"pages")};
+}
+/* ============ v39.13 Batch B：动力系列（即时反馈/每日小奖/宠物主动找你/周报/里程碑/自动备份/进度环强化） ============ */
+let __fxPX=(typeof innerWidth!=="undefined"?innerWidth:300)/2, __fxPY=(typeof innerHeight!=="undefined"?innerHeight:300)/2;
+document.addEventListener("pointerdown", function(e){ __fxPX=e.clientX; __fxPY=e.clientY; }, true);
+function fxShowModal(html){ const b=$("fxMaskBody"); if(!b) return; b.innerHTML=html; openMask("fxMask"); }
+function fxBubble(html, ms){
+  let b=$("fxBubble");
+  if(!b){ b=document.createElement("div"); b.id="fxBubble"; document.body.appendChild(b); }
+  b.innerHTML=html; b.classList.add("on");
+  clearTimeout(b._t); b._t=setTimeout(function(){ b.classList.remove("on"); }, ms||3000);
+  b.onclick=function(){ b.classList.remove("on"); };
+}
+/* 第 11 条：金币飞出动画 + 轻音效（可关） */
+function fxCoinFly(n){
+  let layer=$("fxLayer");
+  if(!layer){ layer=document.createElement("div"); layer.id="fxLayer"; document.body.appendChild(layer); }
+  for(let i=0;i<3;i++){
+    const c=document.createElement("span"); c.className="fx-coin"; c.textContent="🪙";
+    c.style.left=(__fxPX+(Math.random()*36-18))+"px"; c.style.top=(__fxPY-6)+"px";
+    c.style.animationDelay=(i*70)+"ms";
+    layer.appendChild(c); setTimeout(function(){ c.remove(); }, 1400);
+  }
+  const t=document.createElement("span"); t.className="fx-plus"; t.textContent="+"+(n||5)+" 经验";
+  t.style.left=__fxPX+"px"; t.style.top=(__fxPY-24)+"px";
+  layer.appendChild(t); setTimeout(function(){ t.remove(); }, 1400);
+}
+let __fxAC=null;
+function fxDing(){
+  try{
+    if(localStorage.getItem("wb_fx_sound")==="0") return;
+    __fxAC=__fxAC||new (window.AudioContext||window.webkitAudioContext)();
+    const ac=__fxAC, o=ac.createOscillator(), g=ac.createGain();
+    o.type="sine"; o.frequency.setValueAtTime(660, ac.currentTime); o.frequency.setValueAtTime(880, ac.currentTime+0.08);
+    g.gain.setValueAtTime(0.0001, ac.currentTime); g.gain.exponentialRampToValueAtTime(0.08, ac.currentTime+0.02); g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+0.22);
+    o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime+0.24);
+  }catch(e){}
+}
+function fxToggleSound(){
+  const cur=localStorage.getItem("wb_fx_sound")==="0"?"0":"1";
+  localStorage.setItem("wb_fx_sound", cur==="1"?"0":"1");
+  fxSoundBtnSync(); toast(cur==="1"?"音效已关":"音效已开");
+}
+function fxSoundBtnSync(){ const b=$("fxSoundBtn"); if(b) b.textContent=localStorage.getItem("wb_fx_sound")==="0"?"🔇 音效":"🔊 音效"; }
+/* 第 12 条：每日随机小奖（今天完成第 3 / 第 5 个任务各抽一次）+ 第 13 条：完成任务的宠物夸夸 */
+function taskDoneCelebration(){
+  fxBubble("🐾 主人好棒！", 2200);
+  const today=todayStr();
+  const n=store.todo.filter(function(t){ return t.done && (t.doneDate||t.date)===today; }).length;
+  [3,5].forEach(function(th){
+    if(n===th && localStorage.getItem("wb_lucky_"+today+"_"+th)!=="1"){
+      localStorage.setItem("wb_lucky_"+today+"_"+th,"1");
+      const pool=[5,5,8,8,10,10,15,20];
+      const c=pool[Math.floor(Math.random()*pool.length)];
+      store.game.coins=(store.game.coins||0)+c; persist(GAME_KEY, store.game);
+      try{ awardGameModule(c, 0); }catch(e){}
+      fxDing();
+      fxShowModal('<div style="text-align:center;padding:10px 4px"><div style="font-size:44px">🎁</div><h2 style="margin:6px 0">今日第 '+th+' 个任务达成！</h2><p>盲盒开出 🪙'+c+' 金币，已进钱包</p><button class="btn primary" onclick="closeMask(\'fxMask\')">收下</button></div>');
+    }
+  });
+}
+/* 第 13 条：早上打开工作台，宠物主动来找你（每天一次） */
+function petNudgeOnLoad(){
+  const today=todayStr();
+  try{
+    if(localStorage.getItem("wb_petnudge_"+today)==="1") return;
+    const raw=localStorage.getItem("life-rpg-v1"); if(!raw) return;
+    const g=JSON.parse(raw); const pet=g&&g.pet; if(!pet) return;
+    if(pet.fed!==today){
+      localStorage.setItem("wb_petnudge_"+today,"1");
+      fxBubble((pet.emoji||"🐣")+" 今天还没喂我呢…去「游戏人生」看看？", 7000);
+    }
+  }catch(e){}
+}
+/* 第 15 条：每周第一份周报 */
+function weekMondayStr(off){ const d=new Date(); d.setDate(d.getDate()-((d.getDay()+6)%7)+(off||0)*7); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function weeklyReportCheck(){
+  const key="wb_weekly_"+weekMondayStr(0);
+  if(localStorage.getItem(key)==="1") return;
+  localStorage.setItem(key,"1");
+  const mon=weekMondayStr(-1), sun=addDaysStr(weekMondayStr(0),-1);
+  const inR=function(d){ return d && d>=mon && d<=sun; };
+  const done=store.todo.filter(function(t){ return t.done && inR(t.doneDate||t.date); });
+  const planned=store.todo.filter(function(t){ return inR(t.date); });
+  const rate=planned.length?Math.round(done.length/planned.length*100):0;
+  let ci=0; (store.checkin.apps||[]).forEach(function(a){ (a.dates||[]).forEach(function(d){ if(inR(d)) ci++; }); });
+  const rd=store.todo.filter(function(t){ return t.rdlog && inR(t.date); });
+  const pages=rd.reduce(function(s,t){ return s+(t.rdlog.pages||0); },0), mins=rd.reduce(function(s,t){ return s+(t.rdlog.minutes||0); },0);
+  const proj={}; done.forEach(function(t){ const p=t.projectName||"本机"; proj[p]=(proj[p]||0)+1; });
+  let top="",topN=0; Object.keys(proj).forEach(function(p){ if(proj[p]>topN){ topN=proj[p]; top=p; } });
+  let maxStreak=0; (store.checkin.apps||[]).forEach(function(a){ if((a.streak||0)>maxStreak) maxStreak=a.streak; });
+  function wc(l,v){ return '<div style="background:var(--bg-soft,#fff7f3);border:1px solid var(--line);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--sub)">'+l+'</div><div style="font-size:18px;font-weight:800">'+v+'</div></div>'; }
+  fxShowModal('<h2>📊 上周周报（'+mon+' ~ '+sun+'）</h2>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0">'+
+    wc("✅ 完成任务", done.length+" 件")+wc("📈 完成率", rate+"%")+wc("🗓 签到次数", ci+" 次")+wc("🔥 当前最长连击", maxStreak+" 天")+
+    (pages?wc("📖 阅读", pages+" 页 · "+mins+" 分钟"):"")+(top?wc("💪 最坚持", esc(top)+"（"+topN+" 件）"):"")+
+    '</div><p style="color:var(--sub);font-size:13px">新的一周，先把最简单的那件做完开个头 ✨</p>'+
+    '<button class="btn primary" onclick="closeMask(\'fxMask\')">收到</button>');
+}
+/* 第 16 条：连击里程碑（7/30/100 天直接发金币） */
+function milestoneCheck(){
+  const MILE=[[7,50],[30,150],[100,500]];
+  (store.checkin.apps||[]).forEach(function(a){
+    const st=a.streak||0;
+    MILE.forEach(function(m){
+      const key="wb_ms_"+a.id+"_"+m[0];
+      if(st>=m[0] && !localStorage.getItem(key)){
+        localStorage.setItem(key,"1");
+        store.game.coins=(store.game.coins||0)+m[1]; persist(GAME_KEY, store.game);
+        try{ awardGameModule(m[1], 0); }catch(e){}
+        fxDing();
+        fxShowModal('<div style="text-align:center;padding:10px 4px"><div style="font-size:44px">🏆</div><h2 style="margin:6px 0">连击 '+m[0]+' 天达成！</h2><p>「'+esc(a.name||"签到")+'」已连续 '+st+' 天，奖励 🪙'+m[1]+' 金币！</p><button class="btn primary" onclick="closeMask(\'fxMask\')">收下奖励</button></div>');
+      }
+    });
+  });
+}
+/* 第 18 条：自动备份——距上次导出超过 7 天就自动导出一份到本地下载 */
+function autoBackupCheck(){
+  try{
+    const last=lastBackupTs();
+    if(!last){ robustSetRaw(BACKUP_TS_KEY, String(Date.now())); return; }   /* 从没备过：只记录，不突然弹下载 */
+    if(Date.now()-last > 7*864e5){ toast("正在自动导出本周备份…"); exportAll(); }
+  }catch(e){}
 }
 function togglePin(id){
   const t=store.todo.find(x=>x.id===id); if(!t) return;
@@ -2029,6 +2163,7 @@ function toggleTodo(id){
   persist(TODO_KEY, store.todo); renderTodo(); renderNav();
   if(t.done && !wasDone){
     awardXP(5, "完成待办"); gameAward(t);
+    try{ fxCoinFly(5); fxDing(); taskDoneCelebration(); }catch(e){}
     // 今日待办全部完成 → 额外奖励（每天一次，金币+经验）
     if(TASK_ALLDONE_BONUS>0 && pendingCount()===0 && store.todo.length>0){
       const adKey="todo_alldone_"+todayStr();
@@ -2211,6 +2346,7 @@ function doCheckin(id){
   if(!a.dates) a.dates=[]; if(a.dates.indexOf(a.last)<0) a.dates.push(a.last);
   persist(CHECKIN_KEY, store.checkin); renderCheckin(); renderNav();
   awardXP(1, "签到"); store.game.coins=(store.game.coins||0)+1; persist(GAME_KEY, store.game); awardGameModule(1,1);
+  try{ milestoneCheck(); }catch(e){}
   shellToast("✅ 已签到 "+a.name+" ｜ 🪙金币+1  💡经验+1");
 }
 let pendingUndoId=null;
@@ -2241,6 +2377,7 @@ function makeupCheckin(id){
   if(!a.dates) a.dates=[]; if(a.dates.indexOf(yest)<0) a.dates.push(yest);
   persist(CHECKIN_KEY, store.checkin); renderCheckin(); renderNav();
   awardXP(1, "补签"); store.game.coins=(store.game.coins||0)+1; persist(GAME_KEY, store.game); awardGameModule(1,1);
+  try{ milestoneCheck(); }catch(e){}
   shellToast("✅ 已补签 "+a.name+" ｜ 🪙金币+1  💡经验+1");
 }
 function delApp(id){
@@ -4421,6 +4558,10 @@ hydrateKV().then(function(){
   try{ if(syncCfg.auto && syncCfg.pass && cryptoReady()) startAutoSync(); }catch(e){}
   setTimeout(warnStorageIfBroken, 1200);
   setTimeout(maybeRemindBackup, 2500);
+  setTimeout(function(){ try{ petNudgeOnLoad(); }catch(e){} }, 3200);
+  setTimeout(function(){ try{ weeklyReportCheck(); }catch(e){} }, 3800);
+  setTimeout(function(){ try{ milestoneCheck(); }catch(e){} }, 4300);
+  setTimeout(function(){ try{ autoBackupCheck(); }catch(e){} }, 6000);
 }).catch(function(e){
   // hydrateKV 失败（极少数环境 IndexedDB 不可用）也绝不白屏：用默认数据直接渲染首页
   try{ if(typeof go==='function') go("overview"); }catch(_){}
@@ -4456,5 +4597,12 @@ function hardRefresh(){
   try{ doRefresh(); }catch(e){ go(); }
 }
 </script>
+<!-- v39.13 Batch B 通用庆祝弹层 -->
+<div class="mask" id="fxMask">
+  <div class="sheet">
+    <span class="closex" onclick="closeMask('fxMask')">×</span>
+    <div id="fxMaskBody"></div>
+  </div>
+</div>
 </body>
 </html>
