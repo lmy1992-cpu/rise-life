@@ -2009,7 +2009,14 @@ $("#btnRdClose").onclick=()=>$("#maskEdit").classList.remove("on");
     const txt=sel.toString(); const n=txt.replace(/\s/g,"").length;
     if(!n){ badge.style.display="none"; return; }
     badge.textContent="已选 "+n+" 字"; badge.style.display="block";
-    try{ const r=sel.getRangeAt(0).getBoundingClientRect(); badge.style.left=(window.scrollX+r.left+r.width/2)+"px"; badge.style.top=(window.scrollY+r.top-30)+"px"; }catch(e){}
+    try{ const r=sel.getRangeAt(0).getBoundingClientRect(); /* v39.09：跨屏选区修复——徽标是 fixed 定位不加 scroll 偏移；选区跨屏时并集矩形顶端在视口外，改取「视口内最后一段可见行」定位并夹回屏内 */
+      const rects=sel.getRangeAt(0).getClientRects();
+      const vw=window.innerWidth||document.documentElement.clientWidth; const vh=window.innerHeight||document.documentElement.clientHeight;
+      let top=r.top, cx=r.left+r.width/2;
+      for(let i=rects.length-1;i>=0;i--){ const q=rects[i]; if(q.height>2 && q.bottom>0 && q.top<vh){ top=q.top; cx=q.left+q.width/2; break; } }
+      if(r.bottom<=0) top=8; else if(r.top>=vh) top=vh-36;
+      cx=Math.max(80, Math.min(cx, vw-80)); top=Math.max(8, Math.min(top-30, vh-36));
+      badge.style.left=cx+"px"; badge.style.top=top+"px"; }catch(e){}
   }
   function renderRelated(){
     const ex=curEx(); const box=document.getElementById("rdRelated"); if(!box) return;
@@ -3440,7 +3447,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v39.08";
+  var APP_VERSION = "v39.09";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
