@@ -162,6 +162,17 @@
   .drop-zone b{color:var(--ink)}
   .tagtree .tg-group{font-weight:600; font-size:13px; color:var(--sub); margin:14px 0 6px; border-left:3px solid var(--brand); padding-left:8px}
   .tagtree .tg-group:first-child{margin-top:0}
+  /* v39.11：起名库四列布局 */
+  .nl-bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:2px 0 10px}
+  .nl-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  .nl-col{border:1px solid var(--line);border-radius:10px;padding:8px;min-width:0;background:rgba(255,255,255,.5)}
+  .nl-colhead{font-weight:700;font-size:13px;margin:0 0 6px;color:var(--sub,#8a7d6d)}
+  .nl-row{display:flex;gap:4px;align-items:center;margin:0 0 4px;min-width:0}
+  .nl-row input{flex:1;min-width:0;padding:4px 7px;font-size:13px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--ink)}
+  .nl-empty{font-size:12px;opacity:.55}
+  @media(max-width:900px){.nl-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:560px){.nl-grid{grid-template-columns:1fr}}
+  
   .mi-intro{flex:1; min-width:120px; border:1px solid var(--line); border-radius:8px; padding:6px 9px; font-size:13px; background:#fff; color:var(--ink); resize:none; line-height:1.45; font-family:inherit; min-height:34px; overflow:hidden}
   .ideas-wrap{display:grid; grid-template-columns:minmax(280px,1fr) minmax(280px,1fr); gap:18px; align-items:start}
   .ideas-pick{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px}
@@ -1345,11 +1356,7 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
         <button class="mtab" id="miscTabAi">🤖 AI 自动归类</button>
         <button class="mtab" id="miscTabKw">🏷️ AI关键词</button>
       </div>
-      <div class="misc-gen" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 12px">
-        <button class="btn sm primary" id="btnGenName">✨ 一键起名</button>
-        <button class="btn sm primary" id="btnGenDeath">💔 一键心死名场面</button>
-        <span class="hint">本地离线生成，结果存进下方对应大项，可随时改</span>
-      </div>
+      <!-- v39.11：删掉顶部「一键起名 / 一键心死名场面」按钮行——生成入口移进「💡 起名库 / 💔 心死名场面」大项内部 -->
       <div id="miscList"></div>
     </section>
 
@@ -3720,7 +3727,6 @@ function renderBrainstorms(){
 
 /* ---------- 五、杂项分类（左导览） ---------- */
 function autoGrow(el){ if(!el) return; el.style.height='auto'; el.style.height=(el.scrollHeight)+'px'; }
-/* ===== v39.06：起名库按角色分组（男主/女主/女配/男配），新起的名字排最前 ===== */
 function nameLibRoleOf(it){
   const ROLES=["男主","女主","女配","男配"];
   if(it && ROLES.indexOf(it.role)>=0) return it.role;
@@ -3728,34 +3734,67 @@ function nameLibRoleOf(it){
   if(m) return m[1]==="白月光"?"女配":(m[1]==="深情男二"?"男配":m[1]);
   return "";
 }
-function renderNameLib(cat, body){
-  const ROLES=["男主","女主","女配","男配"];
-  const ICONS={"男主":"👑","女主":"🌸","女配":"🌙","男配":"🤵"};
-  const groups=ROLES.map(r=>({r:r,items:cat.items.filter(it=>nameLibRoleOf(it)===r)}));
-  const others=cat.items.filter(it=>!nameLibRoleOf(it));
-  function nameRow(it){
-    const row=document.createElement("div"); row.className="misc-row";
-    const inp=document.createElement("input"); inp.value=it.text;
-    inp.onchange=()=>{ it.text=inp.value; save(); };
-    const intro=document.createElement("textarea"); intro.className="mi-intro"; intro.value=it.intro||""; intro.placeholder="人设简介（可选）"; intro.rows=1;
-    intro.oninput=()=>{ it.intro=intro.value; autoGrow(intro); };
-    intro.onchange=()=>{ it.intro=intro.value; save(); };
-    const x=document.createElement("button"); x.className="iconbtn del"; x.textContent="✕"; x.title="删除这个名字";
-    x.onclick=()=>{ const i2=cat.items.indexOf(it); if(i2>=0){ cat.items.splice(i2,1); save(); renderMisc(); } };
-    row.append(inp,intro,x); body.appendChild(row);
-  }
-  function seg(title,ic,arr){
-    const h=document.createElement("div");
-    h.style.cssText="font-weight:700;font-size:13px;margin:12px 0 6px;color:var(--sub,#8a7d6d);";
-    h.textContent=ic+" "+title+" ×"+arr.length;
-    body.appendChild(h);
-    if(!arr.length){ const e=document.createElement("div"); e.style.cssText="font-size:12px;opacity:.55;margin:0 0 4px;"; e.textContent="还没有"+title+"的名字（点「✨ 一键起名」，名字会出现在对应分组最前面）"; body.appendChild(e); return; }
-    arr.forEach(nameRow);
-  }
-  groups.forEach(g=>seg(g.r,ICONS[g.r],g.items));
-  if(others.length) seg("未分类","❔",others);
+/* ===== v39.06：起名库按角色分组；v39.11 重设计：四列纯姓名（女主/女配/男主/男配）+ 角色选择生成 + 每个名字一键复制，
+ * 去掉描述框（intro 数据仍保留在存储里只是不再显示，旧数据一字不动） ===== */
+function nlCopyName(t){
+  t=(t||"").trim(); if(!t){ toast("名字为空，无法复制"); return; }
+  const done=()=>toast("已复制："+t);
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(done,function(){ nlCopyFallback(t,done); }); return; } }catch(e){}
+  nlCopyFallback(t,done);
 }
-
+function nlCopyFallback(t,done){
+  try{ const ta=document.createElement("textarea"); ta.value=t; ta.style.cssText="position:fixed;left:-9999px;top:0"; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); done(); }
+  catch(e){ toast("复制失败，请手动长按复制"); }
+}
+function renderNameLib(cat, body){
+  const ROLES=["女主","女配","男主","男配"];   /* v39.11：列顺序=女主、女配、男主、男配 */
+  const ICONS={"男主":"👑","女主":"🌸","女配":"🌙","男配":"🤵"};
+  const bar=document.createElement("div"); bar.className="nl-bar";
+  ROLES.forEach(r=>{
+    const b=document.createElement("button"); b.className="mtab"+(nlGenRole===r?" on":""); b.textContent=ICONS[r]+" "+r;
+    b.onclick=()=>{ nlGenRole=r; renderMisc(); };
+    bar.appendChild(b);
+  });
+  const gen=document.createElement("button"); gen.className="btn sm primary"; gen.style.marginLeft="auto";
+  gen.textContent="✨ 生成一位"+nlGenRole+"名字"; gen.onclick=nlGenNameNow;
+  bar.appendChild(gen);
+  body.appendChild(bar);
+  const grid=document.createElement("div"); grid.className="nl-grid";
+  ROLES.forEach(r=>{
+    const arr=cat.items.filter(it=>nameLibRoleOf(it)===r);
+    const col=document.createElement("div"); col.className="nl-col";
+    const h=document.createElement("div"); h.className="nl-colhead"; h.textContent=ICONS[r]+" "+r+" ×"+arr.length;
+    col.appendChild(h);
+    if(!arr.length){ const e=document.createElement("div"); e.className="nl-empty"; e.textContent="还没有，点上方生成"; col.appendChild(e); }
+    arr.forEach(it=>{
+      const row=document.createElement("div"); row.className="nl-row";
+      const inp=document.createElement("input");
+      inp.value=(it.role? it.text.replace(/（[^）]*）/g,"").trim() : it.text)||it.text; inp.title=it.text;   /* 有 role 字段才脱前缀，旧数据靠文本正则归组不能破坏 */
+      inp.onchange=()=>{ const v=inp.value.trim(); if(v&&v!==it.text){ it.text=(it.role? v : v); save(); } };
+      const cp=document.createElement("button"); cp.className="iconbtn"; cp.textContent="📋"; cp.title="复制这个名字";
+      cp.onclick=()=>nlCopyName(it.text);
+      const x=document.createElement("button"); x.className="iconbtn del"; x.textContent="✕"; x.title="删除这个名字";
+      x.onclick=()=>{ const i2=cat.items.indexOf(it); if(i2>=0){ cat.items.splice(i2,1); save(); renderMisc(); } };
+      row.append(inp,cp,x); col.appendChild(row);
+    });
+    grid.appendChild(col);
+  });
+  body.appendChild(grid);
+  const others=cat.items.filter(it=>!nameLibRoleOf(it));   /* 旧数据兜底：识别不出角色的照旧列出，绝不丢 */
+  if(others.length){
+    const h=document.createElement("div"); h.className="nl-colhead"; h.style.marginTop="10px"; h.textContent="❔ 未分类 ×"+others.length;
+    body.appendChild(h);
+    others.forEach(it=>{
+      const row=document.createElement("div"); row.className="nl-row";
+      const inp=document.createElement("input"); inp.value=it.text;
+      inp.onchange=()=>{ const v=inp.value.trim(); if(v){ it.text=v; save(); } };
+      const cp=document.createElement("button"); cp.className="iconbtn"; cp.textContent="📋"; cp.title="复制"; cp.onclick=()=>nlCopyName(it.text);
+      const x=document.createElement("button"); x.className="iconbtn del"; x.textContent="✕";
+      x.onclick=()=>{ const i2=cat.items.indexOf(it); if(i2>=0){ cat.items.splice(i2,1); save(); renderMisc(); } };
+      row.append(inp,cp,x); body.appendChild(row);
+    });
+  }
+}
 function renderMisc(){
   const box=$("#miscList"); if(!box) return;
   if(miscZone==="ai"){ renderMiscAi(); return; }
@@ -3796,6 +3835,7 @@ function renderMisc(){
     const del=document.createElement("button"); del.className="iconbtn del"; del.textContent="✕"; del.title="删除大项";
     del.onclick=()=>armDelete(del, ()=>{ state.misc.splice(ci,1); save(); renderMisc(); });
     head.append(name,addBtn,up,down,del);
+    if(cat.name==="💔 心死名场面"){ const gb=document.createElement("button"); gb.className="btn sm primary"; gb.textContent="💔 生成一个名场面"; gb.title="本地离线生成，新生成的排在最上面"; gb.onclick=nlGenDeathNow; head.append(gb); }   /* v39.11 */
     const body=document.createElement("div"); body.className="misc-body";
     function kwRow(it){
       const ii=cat.items.indexOf(it);
@@ -3938,9 +3978,9 @@ const DP_NAME_POOL={
   "男配":{s:["陆","江","程","宋","谢","卫","晏"],g:["照","怀瑾","渡","时砚","听舟","斯远","行止","屿"],hint:"一直默默守着她，在她最狼狈时接住她"}
 };
 function dpPick(a){ return a[Math.floor(Math.random()*a.length)]; }
-function genName(){
+function genName(roleArg){
   const roles=Object.keys(DP_NAME_POOL);
-  const role=dpPick(roles);
+  const role=(typeof roleArg==="string"&&DP_NAME_POOL[roleArg])?roleArg:dpPick(roles);   /* v39.11：可指定角色 */
   const p=DP_NAME_POOL[role];
   const name=p.s[Math.floor(Math.random()*p.s.length)]+p.g[Math.floor(Math.random()*p.g.length)];
   return {name, roleLabel:role, persona:p.hint};
@@ -3970,8 +4010,20 @@ function genDeathScene(){
   return {title:dpPick(titles), body, hook:dpPick(DP_HOOK)};
 }
 function dpEnsureCat(name){ let c=state.misc.find(m=>m.name===name); if(!c){ c={id:uid(),name,items:[]}; state.misc.push(c);} miscActive=c.id; return c; }
-$("#btnGenName").onclick=()=>{ const n=genName(); const c=dpEnsureCat("💡 起名库"); c.items.unshift({id:uid(),text:n.name+"（"+n.roleLabel+"）",intro:n.persona,role:n.roleLabel});   /* v39.06：新名字插最前 + 记角色分类 */ save(); renderMisc(); toast("已生成起名："+n.name+"（"+n.roleLabel+"）"); };
-$("#btnGenDeath").onclick=()=>{ const s=genDeathScene(); const c=dpEnsureCat("💔 心死名场面"); c.items.push({id:uid(),text:s.title,intro:s.body+"\n\n🔁 追妻反差："+s.hook}); save(); renderMisc(); toast("已生成心死名场面"); };
+/* ===== v39.11：生成入口移进大项内（起名可选角色）；心死名场面改为新生成的排最上（原来 push 在最下） ===== */
+let nlGenRole="女主";
+function nlGenNameNow(){
+  const n=genName(nlGenRole);
+  const c=dpEnsureCat("💡 起名库");
+  c.items.unshift({id:uid(),text:n.name+"（"+n.roleLabel+"）",intro:n.persona,role:n.roleLabel});
+  save(); renderMisc(); toast("已生成 "+n.roleLabel+"："+n.name);
+}
+function nlGenDeathNow(){
+  const s=genDeathScene();
+  const c=dpEnsureCat("💔 心死名场面");
+  c.items.unshift({id:uid(),text:s.title,intro:s.body+"\n\n🔁 追妻反差："+s.hook});
+  save(); renderMisc(); toast("已生成心死名场面："+s.title);
+}
 function renderMiscAi(){
   const box=$("#miscList"); box.innerHTML="";
   const hasAny=state.examples.some(e=>aiHasContent(e.ai));
@@ -4934,7 +4986,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v39.10";
+  var APP_VERSION = "v39.11";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
