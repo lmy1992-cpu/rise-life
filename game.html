@@ -548,6 +548,9 @@ const defaults=()=>({
     {id:uid(),name:'咖啡',cost:60,em:'☕',ds:'提神一下',type:'normal'},
     {id:uid(),name:'看一场电影',cost:150,em:'🎬',ds:'院线或在家都行',type:'normal'},
     {id:uid(),name:'打游戏半小时',cost:50,em:'🎮',ds:'理直气壮玩',type:'normal'},
+    {id:uid(),name:'刷 10 分钟手机',cost:15,em:'📱',ds:'小奖励，立刻能换',type:'normal'},
+    {id:uid(),name:'快乐水一杯',cost:20,em:'🥤',ds:'咕嘟咕嘟',type:'normal'},
+    {id:uid(),name:'追剧一集',cost:30,em:'📺',ds:'光明正大看',type:'normal'},
     {id:uid(),name:'乐高积木',cost:800,em:'🧱',ds:'攒钱买大件',type:'normal'},
     {id:uid(),name:'一束花',cost:120,em:'💐',ds:'取悦自己',type:'normal'},
     {id:uid(),name:'小玩具',cost:100,em:'🧸',ds:'收集物，10个合成大玩具',type:'toy'},
@@ -1280,6 +1283,11 @@ function migrateOld(){
   if(S.pet && typeof S.pet.grow!=='undefined'){ S.pet.exp=S.pet.grow; delete S.pet.grow; }
   if(S.pet && !S.pet.kind){ S.pet.kind='chick'; S.pet.emoji=PET_FB.chick; }
   if(S.pet && S.pet.level>10){ S.pet.level=10; }
+  /* v39.13：奖励商城补「立刻能买」的小档奖励（15-30 金币）——按名字缺则补，不碰已有商品 */
+  if(Array.isArray(S.shop)){
+    const CHEAP=[{name:'刷 10 分钟手机',cost:15,em:'📱',ds:'小奖励，立刻能换'},{name:'快乐水一杯',cost:20,em:'🥤',ds:'咕嘟咕嘟'},{name:'追剧一集',cost:30,em:'📺',ds:'光明正大看'}];
+    CHEAP.forEach(function(c){ if(!S.shop.some(function(x){return x.name===c.name;})) S.shop.push({id:uid(),name:c.name,cost:c.cost,em:c.em,ds:c.ds,type:'normal'}); });
+  }
   /* 旧版宠物玩具：购买即生效且记进 petInventory，仓库/宠物界面都看不到。迁移为统一消耗品：旧 toy 条目转成 S.toy 库存并从 petInventory 移除（已加属性保留，不删除用户数据） */
   if(Array.isArray(S.petInventory)){
     const oldToys=S.petInventory.filter(function(p){return p&&p.cat==='toy';});
