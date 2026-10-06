@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>短篇协作版 · 共享工作台</title>
-<script>var APP_VERSION="v39.17";</script>
+<script>var APP_VERSION="v39.18";</script>
 <!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
 <script src="mammoth.browser.min.js"></script>
 <!-- v38.72：JSZip 本地部署（国内镜像下载），用于自研 Word 转换器读取字体颜色/高亮底色（mammoth 不支持） -->
@@ -1792,6 +1792,10 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
       <input id="inpDeviceName" type="text" placeholder="例如：我的iPad / 阿芳的手机" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px" />
       <div class="sub" style="margin-top:6px">协作空间是多人共享同一口令，没有账号体系。给每台设备起个名，同步后状态栏会显示「来源：XX（电脑）· 时间」，一眼看出最新内容是谁、何时写的，避免误覆盖。留空则用系统自动生成的临时名。</div>
     </div>
+    <div class="field" style="margin-top:12px;border-top:1px dashed var(--line);padding-top:10px">
+      <label>云端最新一笔（谁写的、什么时候）</label>
+      <div class="sub" id="syncWriterPanel" style="margin-top:6px;font-size:13px;color:#333">尚未从云端同步过，暂无记录</div>
+    </div>
     <div class="modal-actions" style="margin-top:14px">
       <button class="btn" id="btnSyncSetCancel">取消</button>
       <button class="btn primary" id="btnSyncSetSave">保存并尝试同步</button>
@@ -2167,13 +2171,30 @@ function _fmtWriterTime(at){
   const d=new Date(at); const p=function(x){ return (x<10?"0":"")+x; };
   return (d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes());
 }
-function showCloudWriter(){
-  const el=document.getElementById("syncWriter"); if(!el) return;
+function _writerText(){
   if(_lastCloudWriter && _lastCloudWriter.by){
     const w=_lastCloudWriter; const who=w.by+(w.type?("（"+w.type+"）"):"");
-    el.textContent="来源："+who+" · "+_fmtWriterTime(w.at);
-    el.title="云端最新内容由「"+who+"」于 "+_fmtWriterTime(w.at)+" 写入"+(w.v?("（v"+w.v+"）"):"");
-  } else { el.textContent=""; el.title=""; }
+    return { text:"来源："+who+" · "+_fmtWriterTime(w.at),
+             title:"云端最新内容由「"+who+"」于 "+_fmtWriterTime(w.at)+" 写入"+(w.v?("（v"+w.v+"）"):"") };
+  }
+  // v39.18：云端最新一笔若是旧版本上传的（包里没有写入方记录），不再留空白——明说「暂无记录」，否则用户以为功能没做
+  if(_collabLoadedFromCloud) return { text:"来源：暂无记录（旧版同步）",
+    title:"云端最新一笔由旧版本上传，包里还没有写入方记录；任意设备用新版同步一次后，这里就会显示是谁、何时写的" };
+  return null;
+}
+function showCloudWriter(){
+  const el=document.getElementById("syncWriter");
+  if(el){
+    const t=_writerText();
+    if(t){ el.textContent=t.text; el.title=t.title; } else { el.textContent=""; el.title=""; }
+  }
+  // v39.18：同步设置面板里也放一行明晃晃的「云端最新一笔」，别只藏在右下角小胶囊里
+  const p=document.getElementById("syncWriterPanel");
+  if(p){
+    const t=_writerText();
+    if(t){ p.textContent="☁️ 最新一笔： "+t.text.replace(/^来源：/,"来自 ")+"（悬停右下角胶囊可看详情）"; p.title=t.title; }
+    else p.textContent="尚未从云端同步过，暂无记录";
+  }
 }
 async function save(force=false){
   if(!state || typeof state !== 'object'){ state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],subEmails:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; }
@@ -5005,6 +5026,7 @@ function openSyncSettings(){
   if(r) r.value=cbRegion();
   const pk=$("#inpCbPkey"); if(pk) pk.value=cbPkey();
   const dn=$("#inpDeviceName"); if(dn){ try{ dn.value=localStorage.getItem("dp_collab_device_name")||""; }catch(e){} } // v39.17：回填设备昵称
+  try{ showCloudWriter(); }catch(e){} // v39.18：打开设置面板时刷新「云端最新一笔」展示
   syncSettingsUi();
   m.classList.add("on");
 }
