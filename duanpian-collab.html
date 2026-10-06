@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>短篇协作版 · 共享工作台</title>
+<script>var APP_VERSION="v39.17";</script>
 <!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
 <script src="mammoth.browser.min.js"></script>
 <!-- v38.72：JSZip 本地部署（国内镜像下载），用于自研 Word 转换器读取字体颜色/高亮底色（mammoth 不支持） -->
@@ -1019,7 +1020,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     <div style="text-align:center;margin-top:10px"><a href="javascript:void(0)" id="btnDiagLogin" style="color:#888;font-size:12px;text-decoration:underline">🩺 进不去？点这里自检（自动检查配置和云端数据）</a></div>
   </div>
 </div>
-<div id="collabBar" style="display:none;position:fixed;right:12px;bottom:12px;z-index:60;background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.12)">🔗 协作中 · <span id="syncStatus" style="color:#1a8a3c">已同步 ✓</span> · <a href="javascript:void(0)" id="btnSyncSettings" title="同步设置" style="color:#666;margin:0 6px">⚙️</a> · <a href="javascript:void(0)" id="btnCollabLogout" style="color:var(--brand);font-weight:600">退出</a></div>
+<div id="collabBar" style="display:none;position:fixed;right:12px;bottom:12px;z-index:60;background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.12)">🔗 协作中 · <span id="syncStatus" style="color:#1a8a3c">已同步 ✓</span><span id="syncWriter" style="color:#888;margin-left:6px"></span> · <a href="javascript:void(0)" id="btnSyncSettings" title="同步设置" style="color:#666;margin:0 6px">⚙️</a> · <a href="javascript:void(0)" id="btnCollabLogout" style="color:var(--brand);font-weight:600">退出</a></div>
 <script>if(window.self!==window.top && !/[?&]ipad=/.test(location.search)){document.body.className+=" embedded";}</script>
 <script>
 /* v38.35：早期错误捕获——把页面运行中的异常记下来，供「点状态栏看诊断」排查（朋友端出问题不用再靠猜） */
@@ -1786,6 +1787,11 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
       <input id="inpCbPkey" type="password" placeholder="在控制台「身份源 / 密钥」复制 Publishable Key" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px" />
       <div class="sub" style="margin-top:6px">留空则用匿名登录；若匿名登录连不上，请到控制台生成 Publishable Key 填这里。</div>
     </div>
+    <div class="field" style="margin-top:12px;border-top:1px dashed var(--line);padding-top:10px">
+      <label>本机设备昵称（写入云端，方便识别"数据来自哪台设备 / 谁"）</label>
+      <input id="inpDeviceName" type="text" placeholder="例如：我的iPad / 阿芳的手机" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px" />
+      <div class="sub" style="margin-top:6px">协作空间是多人共享同一口令，没有账号体系。给每台设备起个名，同步后状态栏会显示「来源：XX（电脑）· 时间」，一眼看出最新内容是谁、何时写的，避免误覆盖。留空则用系统自动生成的临时名。</div>
+    </div>
     <div class="modal-actions" style="margin-top:14px">
       <button class="btn" id="btnSyncSetCancel">取消</button>
       <button class="btn primary" id="btnSyncSetSave">保存并尝试同步</button>
@@ -1959,7 +1965,9 @@ function mergeXlsx(){
     }
   });
   state.importedXlsx = true;
-  save();
+  // v39.17：不再在此处 save()（那会无条件触发一次云端上传）——mergeXlsx 只是把内置 xlsx 种子数据并回 state.misc/tags，
+  // 这些字段本就在共享包里，下次正常保存/同步自然会带上；此处上传会让「刚拉取云端数据」的设备立刻把云端 _syncMeta 重签成自己，
+  // 既污染「数据来自哪台设备」的来源展示，又造成无谓的上传。
 }
 
 let brTags = [];
@@ -2140,6 +2148,33 @@ let _saveUploading=false; // 云端上传进行中标志：防止重试定时器
 let _savePending=false;   // 上传期间又有新改动：结束后自动补传，绝不漏
 let _lastSyncError="";    // 最后一次上传失败的简要原因（悬停状态条可见）
 let _cloudCorrupt=false;  // v38.59：云端分块解密失败（残留旧块混入）标志，触发本机干净重传自愈
+let _lastCloudWriter=null; // v39.17：云端最新写入方 {by, at, type, v}，供状态栏展示"数据来自哪台设备/谁、何时"
+function collabDeviceType(){
+  const ua=navigator.userAgent||"";
+  if(/iPad|Tablet/i.test(ua)) return "平板";
+  if(/Mobi|Android|iPhone|iPod/i.test(ua)) return "手机";
+  return "电脑";
+}
+function collabDeviceName(){
+  let n=null; try{ n=localStorage.getItem("dp_collab_device_name"); }catch(e){}
+  if(n) return n;
+  n = collabDeviceType()+"-"+Math.random().toString(36).slice(2,6);
+  try{ localStorage.setItem("dp_collab_device_name", n); }catch(e){}
+  return n;
+}
+function _fmtWriterTime(at){
+  if(!at) return "";
+  const d=new Date(at); const p=function(x){ return (x<10?"0":"")+x; };
+  return (d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes());
+}
+function showCloudWriter(){
+  const el=document.getElementById("syncWriter"); if(!el) return;
+  if(_lastCloudWriter && _lastCloudWriter.by){
+    const w=_lastCloudWriter; const who=w.by+(w.type?("（"+w.type+"）"):"");
+    el.textContent="来源："+who+" · "+_fmtWriterTime(w.at);
+    el.title="云端最新内容由「"+who+"」于 "+_fmtWriterTime(w.at)+" 写入"+(w.v?("（v"+w.v+"）"):"");
+  } else { el.textContent=""; el.title=""; }
+}
 async function save(force=false){
   if(!state || typeof state !== 'object'){ state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],subEmails:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; }
   // 手动强制同步：清掉可能卡死的标志、停止旧重试，立即再试一次
@@ -2167,13 +2202,16 @@ async function save(force=false){
     // v38.35 单保险箱：原私有字段（脑洞/想法拓展/抓取收藏/AI 记忆）与 AI 密钥一并进共享包，一个口令全共享
     const shared={examples:state.examples||[],intros:state.intros||[],materials:state.materials||[],misc:state.misc||[],tags:state.tags||[],tutorials:state.tutorials||[],aiFields:state.aiFields||[],nav:state.nav||[],
       brainstorms:state.brainstorms||[],ideas:state.ideas||[],crawlFav:state.crawlFav||[],analyses:state.analyses||[],subEmails:state.subEmails||[],
-      aiCfg:state.aiCfg?{provider:state.aiCfg.provider||"",key:state.aiCfg.key||"",baseUrl:state.aiCfg.baseUrl||"",model:state.aiCfg.model||"",instruction:state.aiCfg.instruction||"",aiMemory:state.aiCfg.aiMemory||""}:null};
+      aiCfg:state.aiCfg?{provider:state.aiCfg.provider||"",key:state.aiCfg.key||"",baseUrl:state.aiCfg.baseUrl||"",model:state.aiCfg.model||"",instruction:state.aiCfg.instruction||"",aiMemory:state.aiCfg.aiMemory||""}:null,
+      _syncMeta:{by:collabDeviceName(), at:Date.now(), type:collabDeviceType(), v:APP_VERSION}}; // v39.17：写入方+时间，供来源展示
     const priv=null; // 私有保险箱已取消：保留变量只为兼容旧的广播消息格式
     const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
     await deriveKey(collabSharedPwd).then(k=>encBundle(k,shared)).then(p=>syncUpsertChunked(sId,p,ts));
     collabSharedUpdatedAt=ts;
     _lastSyncError="";
     setPendingLocal(false); // 上传成功：本机改动已到云端，可放心应用云端最新数据
+    _lastCloudWriter={by:collabDeviceName(), at:Date.now(), type:collabDeviceType(), v:APP_VERSION}; // v39.17：刚上传，来源即本机
+    try{ showCloudWriter(); }catch(e){}
     // 同电脑多窗口即时同步：通知其它窗口立刻拉取（不再等 20 秒云端轮询）
     if(_collabBC){ try{ _collabBC.postMessage({type:'collab-state', from:_COLLAB_TAB_ID, ts:ts, shared:shared, priv:priv}); }catch(e){} }
     setSyncStatus("已同步 ✓", true);
@@ -2210,35 +2248,34 @@ function forceSyncNow(){
     }catch(e){}
     const m=$("#maskLogin"); if(m) m.classList.add("on");
     toast("请先填写协作口令进入协作空间");
-    return;
+    return Promise.resolve();
   }
   const btn=document.getElementById('btnSyncNow');
   if(btn){ btn.disabled=true; btn.textContent='同步中…'; }
   setSyncStatus('正在同步…', null, '手动触发中');
   const done=function(){ if(btn){ btn.disabled=false; btn.textContent='☁️ 同步'; } };
-  const doSave=function(){ save(true).then(done).catch(done); };
-  if(!_collabLoadedFromCloud && collabSharedPwd){
-    // 本次进入还没成功连上云端（当前可能是本地缓存）：先拉云端合并，确认过云端状态再上传，避免旧缓存盲传覆盖云端
-    load().then(function(ok){
-      if(ok===false){
-        done();
-        setSyncStatus("云端未连接，未上传（避免旧数据覆盖云端）", false, "请检查网络后点「☁️ 同步」重试");
-        // v39.01：失败要出声——状态条可能被藏住（未进过主界面），必须 toast 真实原因并打开自检
-        toast("云端连不上，未上传。原因："+(_lastSyncError||"网络不可达"));
-        startLoadRetry();
-        return;
-      }
-      doSave();
-    }).catch(function(e){
-      // v39.01：联网读取抛错（如环境 ID 未配置/接口不通）此前只静默复位按钮，用户看到的就是「没反应」
+  const doSave=function(){ return save(true).then(done).catch(done); };
+  // v39.17：手动同步始终「先拉云端全量合并、再上传本地」——修此前进入页面 load 过一次后 _collabLoadedFromCloud=true，
+  // 之后点「☁️ 同步」只走 doSave() 上传、永远不重新下载，导致别的设备（如平板）在电脑首次 load 之后写入的内容，
+  // 在电脑端点同步也拉不到的 bug。load() 内部对「本机有未上传改动(_pendingLocal)」走本地优先并集，绝不丢数据；
+  // 无未上传改动时云端优先全量覆盖（含他人改过的旧条目），保证跨设备实时同步。
+  return load().then(function(ok){
+    if(ok===false){
       done();
-      var em=(e&&e.message)?String(e.message):String(e);
-      toast("同步失败："+em.slice(0,120));
-      try{ showDiag(); }catch(_){}
-    });
-  } else {
-    doSave();
-  }
+      setSyncStatus("云端未连接，未上传（避免旧数据覆盖云端）", false, "请检查网络后点「☁️ 同步」重试");
+      // v39.01：失败要出声——状态条可能被藏住（未进过主界面），必须 toast 真实原因并打开自检
+      toast("云端连不上，未上传。原因："+(_lastSyncError||"网络不可达"));
+      startLoadRetry();
+      return;
+    }
+    return doSave();
+  }).catch(function(e){
+    // v39.01：联网读取抛错（如环境 ID 未配置/接口不通）此前只静默复位按钮，用户看到的就是「没反应」
+    done();
+    var em=(e&&e.message)?String(e.message):String(e);
+    toast("同步失败："+em.slice(0,120));
+    try{ showDiag(); }catch(_){}
+  });
 }
 let _loadPromise=null;
 /* ---- v38.32 合并引擎：以「本机是否有未上传改动 + 云端逐字段优先」取代旧的「条数多者胜」----
@@ -2309,6 +2346,7 @@ async function load(){
       }catch(e){}
       const def={examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],subEmails:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))};
       const cloudState = Object.assign(def, shared||{});
+      const cloudMeta = (shared && shared._syncMeta) ? shared._syncMeta : null; // v39.17：云端最新写入方，供来源展示
       if(priv){
         ['brainstorms','ideas','crawlFav'].forEach(function(k){ if(Array.isArray(priv[k])&&priv[k].length) cloudState[k]=_unionById(cloudState[k]||[], priv[k]); });
         if(priv.aiMemory && !(cloudState.aiCfg&&cloudState.aiCfg.aiMemory)) cloudState.aiCfg=Object.assign({},cloudState.aiCfg||{},{aiMemory:priv.aiMemory});
@@ -2353,8 +2391,11 @@ async function load(){
           ['provider','baseUrl','model','instruction'].forEach(function(k){ if(cloudState.aiCfg[k] && !chosen.aiCfg[k]) chosen.aiCfg[k]=cloudState.aiCfg[k]; });
         }
       }catch(e){}
+      chosen._syncMeta = (cloudMeta || (localState&&localState._syncMeta) || null); // v39.17：随包记录写入方，供来源展示
       state = chosen;
+      _lastCloudWriter = chosen._syncMeta; // v39.17
       if(!state || typeof state !== 'object') state = Object.assign({}, def);
+      try{ showCloudWriter(); }catch(e){} // v39.17：同步后刷新"来源"展示
       ['examples','intros','materials','misc','tags','brainstorms','ideas','crawlFav','aiFields','nav','subEmails'].forEach(function(k){ if(!Array.isArray(state[k])) state[k]=(k==='aiFields'?DEFAULT_AI_FIELDS.map(f=>({...f})):(k==='nav'?DEFAULT_NAV.map(x=>({...x})):(k==='subEmails'?[]:[]))); });
       _DATA_KEYS.forEach(function(k){ if(Array.isArray(state[k])) _dedupItems(state[k]); }); // v38.63：同名同正文重复收录只留一篇，根治删除后从云端复活
       // v38.33：恢复本地 AI 设置（补空语义）：云端包不含 key，本机备份补回空位——key 永不丢
@@ -4640,22 +4681,12 @@ async function collabPoll(){
     const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
     const row=await syncGetChunked(sId);
     if(row && row.updated_at!==collabSharedUpdatedAt){
-      const shared=row.payload ? await decBundle(await deriveKey(collabSharedPwd), row.payload) : null;
       // v38.32：不再用「条数比本地少就反推」——那会把正常删除误判成回退攻击、回滚其它设备的删除。
       // 云端 updated_at 前进 = 其它设备有新写入（增/删/改），直接应用；本地未上传改动已由 _pendingLocal 在上方挡掉。
-      if(shared){
-        // v38.61：不再 Object.assign 整体替换数组，改用按 id 合并：保留本机新增，吸收云端新增，防止并发拉取覆盖未上传内容
-        _DATA_KEYS.forEach(function(k){
-          if(Array.isArray(shared[k]) && shared[k].length){
-            state[k]=_unionById(state[k]||[], shared[k]);
-          }
-        });
-        _DATA_KEYS.forEach(function(k){ if(Array.isArray(state[k])) _dedupItems(state[k]); }); // v38.63：合并他人新增后再去重，避免残留重复被并回
-        if(shared.aiFields && shared.aiFields.length) state.aiFields=shared.aiFields;
-        if(shared.nav && shared.nav.length) state.nav=shared.nav;
-        // v38.33：云端共享包不含 AI key，直接 assign 会把本机 key 抹空 → 补空找回（不覆盖云端非空字段）
-        try{ await ensureAiCfg(); }catch(e){}
-      }
+      // v39.17：云端有更新时改用 load() 全量合并（云端优先+吸收云端增删改，含他人改过的旧条目），
+      // 取代原浅合并 _unionById（只加新 id、漏掉别人改过的旧条目）。load() 已尊重 _pendingLocal（本地优先并集），绝不丢数据。
+      const ok=await load();
+      if(ok===false) return; // 云端不可达，等下个周期再试
       collabSharedUpdatedAt=row.updated_at;
       _collabLoadedFromCloud=true;
       migrate(); renderAll();
@@ -4973,6 +5004,7 @@ function openSyncSettings(){
   if(e) e.value=cbEnvId();
   if(r) r.value=cbRegion();
   const pk=$("#inpCbPkey"); if(pk) pk.value=cbPkey();
+  const dn=$("#inpDeviceName"); if(dn){ try{ dn.value=localStorage.getItem("dp_collab_device_name")||""; }catch(e){} } // v39.17：回填设备昵称
   syncSettingsUi();
   m.classList.add("on");
 }
@@ -4993,6 +5025,7 @@ async function saveSyncSettings(){
   try{ if(e) localStorage.setItem("dp_sync_cb_env", (e.value||"").trim()); }catch(_){}
   try{ if(r) localStorage.setItem("dp_sync_cb_region", (r.value||"ap-shanghai").trim()); }catch(_){}
   try{ const pk=$("#inpCbPkey"); if(pk) localStorage.setItem("dp_sync_cb_pkey", (pk.value||"").trim()); }catch(_){}
+  try{ const dn=$("#inpDeviceName"); if(dn) localStorage.setItem("dp_collab_device_name", (dn.value||"").trim()); }catch(_){} // v39.17：保存设备昵称
   // 切到 CloudBase 时重置缓存的 app 实例，下次同步用新配置
   __cbApp=null; __cbSigned=false; __cbPkeyNow="";
   closeSyncSettings();
@@ -5031,7 +5064,6 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v39.16";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
