@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>短篇协作版 · 共享工作台</title>
-<script>var APP_VERSION="v39.18";</script>
+<script>var APP_VERSION="v39.19";</script>
 <!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
 <script src="mammoth.browser.min.js"></script>
 <!-- v38.72：JSZip 本地部署（国内镜像下载），用于自研 Word 转换器读取字体颜色/高亮底色（mammoth 不支持） -->
@@ -1796,6 +1796,12 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
       <label>云端最新一笔（谁写的、什么时候）</label>
       <div class="sub" id="syncWriterPanel" style="margin-top:6px;font-size:13px;color:#333">尚未从云端同步过，暂无记录</div>
     </div>
+    <div class="field" style="margin-top:12px;border-top:1px dashed var(--line);padding-top:10px">
+      <label>🆘 误覆盖急救（找回云端上一版）</label>
+      <div class="sub" style="margin-top:6px">万一某台设备的旧数据覆盖了新数据，云端通常还留着「上一版」。点下面按钮扫描（<b>只读取，不会动云端</b>），看哪一版里的条目更多、写入方对得上，就<b>先下载备份</b>、再<b>用这版恢复</b>。<br><b style="color:var(--danger)">注意：之后每同步一次，云端会往前推进一版，较旧的那一版就可能被清掉。发现被覆盖后请尽快来这里处理，并先关掉其它设备上的页面。</b></div>
+      <button class="btn" id="btnRescueScan" style="margin-top:8px" onclick="rescueScan()">扫描云端版本</button>
+      <div id="rescueList"></div>
+    </div>
     <div class="modal-actions" style="margin-top:14px">
       <button class="btn" id="btnSyncSetCancel">取消</button>
       <button class="btn primary" id="btnSyncSetSave">保存并尝试同步</button>
@@ -2196,6 +2202,108 @@ function showCloudWriter(){
     else p.textContent="尚未从云端同步过，暂无记录";
   }
 }
+
+/* ===== v39.19：云端误覆盖急救 —— 找回上一版 =====
+   背景：每次上传会推进版本号（epoch），并清理掉“上上版”的块。
+   如果你某台设备的旧数据覆盖了你真正的新数据，云端往往还留着“上一版”，可以原地捞回来。
+   用法：⚙️ 同步设置 → 「🆘 误覆盖急救」→ 扫描 → 先下载备份 → 再用目标版本恢复。
+   安全：扫描只读取不写入；恢复是显式操作，会二次确认。 */
+let _rescueVersions=[];
+async function rescueFetchVersions(){
+  if(!collabSharedPwd) throw new Error("尚未登录协作空间");
+  const sId="collab_share:"+await sha256Hex("collab:"+collabSharedPwd);
+  const row=await syncGet(sId);
+  if(!row||typeof row.payload!=="string") throw new Error("云端暂无数据（或读取失败）");
+  const key=await deriveKey(collabSharedPwd);
+  let meta=null; try{ const m=JSON.parse(row.payload); if(m&&m.__chunked) meta=m; }catch(e){}
+  const vers=[];
+  if(meta){
+    if(meta.epoch!=null) vers.push({epoch:String(meta.epoch), n:Number(meta.n)||0, label:"当前版（云端现在这一份）"});
+    if(meta.prev!=null && String(meta.prev)!==String(meta.epoch)) vers.push({epoch:String(meta.prev), n:Number(meta.pn)||Number(meta.n)||0, label:"上一版（更早的一份，误覆盖后通常能在这里找回）"});
+  } else {
+    vers.push({epoch:null, n:0, label:"当前版（未分块）"});
+  }
+  const out=[];
+  for(let i=0;i<vers.length;i++){
+    const v=vers[i];
+    try{
+      let payload=row.payload;
+      if(v.n>0){
+        const got=await cbGetChunkedVer(row, sId, v.n, v.epoch);
+        payload=got.payload;
+      }
+      const st=await decBundle(key,payload);
+      out.push({label:v.label, state:st, ok:true});
+    }catch(e){
+      out.push({label:v.label, state:null, ok:false, err:String((e&&e.message)||e)});
+    }
+  }
+  return out;
+}
+function rescueCount(st,k){ return (st&&Array.isArray(st[k]))?st[k].length:0; }
+function rescueSummarize(st){
+  if(!st) return "无法读取";
+  return "例文 "+rescueCount(st,'examples')+" ｜ 素材 "+rescueCount(st,'materials')+" ｜ 标签 "+rescueCount(st,'tags')
+    +" ｜ 脑洞 "+rescueCount(st,'brainstorms')+" ｜ 灵感 "+rescueCount(st,'ideas')+" ｜ 杂项 "+rescueCount(st,'misc')
+    +" ｜ 拆文 "+rescueCount(st,'analyses')+" ｜ 邮箱 "+rescueCount(st,'subEmails');
+}
+function rescueWho(st){
+  const m=st&&st._syncMeta;
+  if(!m||!m.by) return "未记录（旧版本上传）";
+  return m.by+(m.type?("（"+m.type+"）"):"")+(m.at?(" · "+_fmtWriterTime(m.at)):"");
+}
+function rescueDownload(i){
+  const v=_rescueVersions[i];
+  if(!v||!v.state){ toast("这一版读取失败，无法下载"); return; }
+  try{
+    const st=JSON.parse(JSON.stringify(v.state));
+    const blob=new Blob([JSON.stringify(st,null,2)],{type:"application/json;charset=utf-8"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="协作版恢复备份_"+String(v.label).replace(/（.*/,"")+"_"+new Date().toISOString().slice(0,19).replace(/[:T]/g,"-")+".json";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ try{ URL.revokeObjectURL(a.href); }catch(e){} },4000);
+    toast("已下载备份，请妥善保存");
+  }catch(e){ toast("下载失败："+String((e&&e.message)||e)); }
+}
+async function rescueRestore(i){
+  const v=_rescueVersions[i];
+  if(!v||!v.state){ toast("这一版读取失败，无法恢复"); return; }
+  if(!confirm("确定要用「"+v.label+"」覆盖吗？\n\n写入方："+rescueWho(v.state)+"\n"+rescueSummarize(v.state)+"\n\n强烈建议先点「下载这版备份」留底。此操作会把本机与云端都换成这一版的内容。")) return;
+  try{
+    state=v.state;
+    try{ await persistLocal(); }catch(e){}
+    setPendingLocal(true);
+    await save(true);
+    toast("已恢复并上传成功，正在刷新页面…");
+    setTimeout(function(){ try{ location.reload(); }catch(e){} },1500);
+  }catch(e){ toast("恢复失败："+String((e&&e.message)||e)); }
+}
+async function rescueScan(){
+  const box=document.getElementById("rescueList"), b=document.getElementById("btnRescueScan");
+  if(!box) return;
+  if(b){ b.disabled=true; b.textContent="正在扫描云端…"; }
+  box.innerHTML='<div class="sub">正在读取云端「当前版」与「上一版」，请稍候…（只读取，不会改动云端）</div>';
+  try{ _rescueVersions=await rescueFetchVersions(); }
+  catch(e){
+    box.innerHTML='<div class="sub" style="color:var(--danger)">读取失败：'+String((e&&e.message)||e)+'</div>';
+    if(b){ b.disabled=false; b.textContent="重新扫描"; }
+    return;
+  }
+  box.innerHTML=_rescueVersions.map(function(v,i){
+    if(!v.ok) return '<div class="sub" style="color:var(--danger)">'+v.label+"：读取失败（"+v.err+"）</div>";
+    return '<div style="border:1px dashed var(--line);border-radius:10px;padding:9px 11px;margin-top:9px">'
+      +'<div style="font-weight:600">'+v.label+'</div>'
+      +'<div class="sub">写入方：'+rescueWho(v.state)+'</div>'
+      +'<div class="sub">'+rescueSummarize(v.state)+'</div>'
+      +'<div style="margin-top:7px;display:flex;gap:8px;flex-wrap:wrap">'
+      +'<button class="btn sm" onclick="rescueDownload('+i+')">下载这版备份</button>'
+      +'<button class="btn sm" onclick="rescueRestore('+i+')">用这版恢复</button>'
+      +'</div></div>';
+  }).join("");
+  if(b){ b.disabled=false; b.textContent="重新扫描"; }
+}
+try{ window.rescueDownload=rescueDownload; window.rescueRestore=rescueRestore; window.rescueScan=rescueScan; }catch(e){}
 async function save(force=false){
   if(!state || typeof state !== 'object'){ state = {examples:[],intros:[],materials:[],misc:[],tags:[],aiFields:DEFAULT_AI_FIELDS.map(f=>({...f})),brainstorms:[],ideas:[],crawlFav:[],tutorials:[],analyses:[],subEmails:[],aiMemory:"",aiCfg:{provider:"",key:"",baseUrl:"",model:"",instruction:"",aiMemory:""},nav:DEFAULT_NAV.map(x=>({...x}))}; }
   // 手动强制同步：清掉可能卡死的标志、停止旧重试，立即再试一次
