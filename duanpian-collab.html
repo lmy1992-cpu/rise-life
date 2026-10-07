@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>短篇协作版 · 共享工作台</title>
-<script>var APP_VERSION="v39.19";</script>
+<script>var APP_VERSION="v39.20";</script>
 <!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
 <script src="mammoth.browser.min.js"></script>
 <!-- v38.72：JSZip 本地部署（国内镜像下载），用于自研 Word 转换器读取字体颜色/高亮底色（mammoth 不支持） -->
@@ -277,6 +277,9 @@
   .modal h3{margin:0 0 4px; font-size:18px}
   .modal .sub{color:var(--sub); font-size:12.5px; margin-bottom:12px}
   .modal-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:16px; flex-wrap:wrap}
+  /* v39.20：长弹窗（同步设置/误覆盖急救）内部滚动，操作栏吸底不跑出屏幕 */
+  .modal-scroll::-webkit-scrollbar{width:8px}
+  .modal-scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
   /* 阅读模式 */
   .modal.reader{max-width:800px}
   .reader-head{display:flex; flex-direction:column; gap:8px; border-bottom:1px solid var(--line); padding-bottom:12px; margin-bottom:14px}
@@ -1760,7 +1763,8 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
 
 <!-- 同步后端设置弹窗 -->
 <div class="mask" id="maskSyncSet">
-  <div class="modal" style="max-width:460px">
+  <div class="modal modal-pin" style="max-width:460px;display:flex;flex-direction:column;max-height:calc(100vh - 40px)">
+  <div class="modal-scroll" style="overflow:auto;flex:1 1 auto;min-height:0">
     <h3>☁️ 同步设置</h3>
     <div class="sub">已默认使用腾讯云 CloudBase（国内直连）。建环境时「数据库类型」保持默认的【PostgreSQL 数据库】即可（也是当前新环境默认）。控制台四步：① 开通 CloudBase 环境（套餐可先选免费体验版）② 在「身份源 / 密钥」生成 Publishable Key（或：身份认证里开启「匿名登录」）③ 环境配置→安全配置，把 <code>lmy1992-cpu.github.io</code> 加进 Web 安全域名 ④ 在 PostgreSQL 控制台执行下方 SQL 建表并开放匿名用户读写权限。填好环境 ID 即可同步。</div>
     <div class="field" style="margin-top:10px">
@@ -1790,21 +1794,17 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
     <div class="field" style="margin-top:12px;border-top:1px dashed var(--line);padding-top:10px">
       <label>本机设备昵称（写入云端，方便识别"数据来自哪台设备 / 谁"）</label>
       <input id="inpDeviceName" type="text" placeholder="例如：我的iPad / 阿芳的手机" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px" />
-      <div class="sub" style="margin-top:6px">协作空间是多人共享同一口令，没有账号体系。给每台设备起个名，同步后状态栏会显示「来源：XX（电脑）· 时间」，一眼看出最新内容是谁、何时写的，避免误覆盖。留空则用系统自动生成的临时名。</div>
+      <div class="sub" id="deviceNameSaved" style="margin-top:6px;color:var(--brand);font-weight:600;display:none">✓ 昵称已自动保存，下次同步生效</div>
+      <div class="sub" style="margin-top:6px">协作空间是多人共享同一口令，没有账号体系。给每台设备起个名，同步后状态栏会显示「来源：XX（电脑）· 时间」，一眼看出最新内容是谁、何时写的，避免误覆盖。<b>这里改完一离开输入框就自动保存，不用点任何按钮</b>；留空则用系统自动生成的临时名。</div>
     </div>
     <div class="field" style="margin-top:12px;border-top:1px dashed var(--line);padding-top:10px">
       <label>云端最新一笔（谁写的、什么时候）</label>
       <div class="sub" id="syncWriterPanel" style="margin-top:6px;font-size:13px;color:#333">尚未从云端同步过，暂无记录</div>
     </div>
     <div class="field" style="margin-top:12px;border-top:1px dashed var(--line);padding-top:10px">
-      <label>🆘 误覆盖急救（找回云端上一版）</label>
-      <div class="sub" style="margin-top:6px">万一某台设备的旧数据覆盖了新数据，云端通常还留着「上一版」。点下面按钮扫描（<b>只读取，不会动云端</b>），看哪一版里的条目更多、写入方对得上，就<b>先下载备份</b>、再<b>用这版恢复</b>。<br><b style="color:var(--danger)">注意：之后每同步一次，云端会往前推进一版，较旧的那一版就可能被清掉。发现被覆盖后请尽快来这里处理，并先关掉其它设备上的页面。</b></div>
-      <button class="btn" id="btnRescueScan" style="margin-top:8px" onclick="rescueScan()">扫描云端版本</button>
-      <div id="rescueList"></div>
-    </div>
-    <div class="modal-actions" style="margin-top:14px">
-      <button class="btn" id="btnSyncSetCancel">取消</button>
-      <button class="btn primary" id="btnSyncSetSave">保存并尝试同步</button>
+      <label>数据被覆盖了？</label>
+      <div class="sub" style="margin-top:6px">某台设备用旧数据盖掉了新数据时，可以从云端把「上一版」捞回来。这是个<b>独立功能，跟上面的昵称、设置完全无关</b>，点开单独处理，避免误触。</div>
+      <button class="btn" id="btnOpenRescue" style="margin-top:8px">🆘 打开「误覆盖急救」</button>
     </div>
     <div class="navset-hint">控制台四步：① 开通 CloudBase 环境（数据库类型保持默认的【PostgreSQL 数据库】；套餐需升级「个人版」——免费体验版加不了 Web 安全域名）② 在「身份源 / 密钥」生成 Publishable Key（或：身份认证里开启「匿名登录」）③ 环境配置→安全配置，把 <code>lmy1992-cpu.github.io</code> 加进 Web 安全域名（约 10 分钟生效）④ 在 PostgreSQL 控制台「SQL 编辑器」执行下面这段 SQL（复制粘贴即可）：<br><code style="display:block;white-space:pre-wrap;background:#f8f8f8;padding:6px;border-radius:6px;margin:4px 0">CREATE TABLE IF NOT EXISTS sync_vault (
   vault_id TEXT PRIMARY KEY,
@@ -1814,6 +1814,26 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
 ALTER TABLE sync_vault ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS anon_rw ON sync_vault;
 CREATE POLICY anon_rw ON sync_vault FOR ALL USING (true) WITH CHECK (true);</code><br>数据已在本地用协作口令加密，云端只存密文，开放匿名读写是安全的。切换后端不会删除本地数据。</div>
+  </div>
+  <div class="modal-actions" style="position:sticky;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:12px 0 2px;margin-top:12px;flex:0 0 auto">
+      <button class="btn" id="btnSyncSetCancel">关闭</button>
+      <button class="btn primary" id="btnSyncSetSave">保存同步设置并同步</button>
+    </div>
+  </div>
+</div>
+
+<!-- v39.20：误覆盖急救独立弹窗（与「同步设置」彻底分开，避免改昵称时误触恢复） -->
+<div class="mask" id="maskRescue">
+  <div class="modal" style="max-width:560px;display:flex;flex-direction:column;max-height:calc(100vh - 40px)">
+  <div class="modal-scroll" style="overflow:auto;flex:1 1 auto;min-height:0">
+    <h3>🆘 误覆盖急救（找回云端上一版）</h3>
+    <div class="sub">万一某台设备的旧数据覆盖了新数据，云端通常还留着「上一版」。扫描<b>只读取、不会改动云端</b>；看完先<b>下载备份</b>，确认内容对了再<b>用这版恢复</b>。<br><b style="color:var(--danger)">每同步一次云端就会往前推进一版，较旧的那一版可能被清掉。发现被覆盖后请尽快处理，并先关掉其它设备上的页面。</b></div>
+    <button class="btn" id="btnRescueScan" style="margin-top:6px" onclick="rescueScan()">扫描云端版本</button>
+    <div id="rescueList"></div>
+  </div>
+  <div class="modal-actions" style="position:sticky;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:12px 0 2px;margin-top:12px;flex:0 0 auto">
+    <button class="btn" id="btnRescueClose">关闭</button>
+  </div>
   </div>
 </div>
 
@@ -5135,6 +5155,20 @@ function openSyncSettings(){
   const pk=$("#inpCbPkey"); if(pk) pk.value=cbPkey();
   const dn=$("#inpDeviceName"); if(dn){ try{ dn.value=localStorage.getItem("dp_collab_device_name")||""; }catch(e){} } // v39.17：回填设备昵称
   try{ showCloudWriter(); }catch(e){} // v39.18：打开设置面板时刷新「云端最新一笔」展示
+  // v39.20：设备昵称「输入即存」，不再需要找保存按钮（用户反馈：底部按钮看不出管昵称，易误触）
+  try{
+    const dn2=$("#inpDeviceName"), tip=$("#deviceNameSaved");
+    if(dn2 && !dn2._autoSaveBound){
+      const autoSave=function(){
+        try{ localStorage.setItem("dp_collab_device_name", (dn2.value||"").trim()); }catch(e){}
+        if(tip){ tip.style.display="inline"; clearTimeout(tip._t); tip._t=setTimeout(function(){ tip.style.display="none"; },2600); }
+        try{ showCloudWriter(); }catch(e){}
+      };
+      dn2.addEventListener("change", autoSave);
+      dn2.addEventListener("blur", autoSave);
+      dn2._autoSaveBound=true;
+    }
+  }catch(e){}
   syncSettingsUi();
   m.classList.add("on");
 }
@@ -5170,6 +5204,9 @@ $("#btnCollabLogout").onclick=()=>collabLogout();
 try{ const _bss=$("#btnSyncSettings"); if(_bss) _bss.onclick=openSyncSettings; }catch(e){}
 try{ $("#btnSyncSetCancel").onclick=closeSyncSettings; }catch(e){}
 try{ $("#btnSyncSetSave").onclick=saveSyncSettings; }catch(e){}
+// v39.20：误覆盖急救独立弹窗（与同步设置分开，杜绝「改昵称顺手点到恢复」）
+try{ $("#btnOpenRescue").onclick=function(){ try{ closeSyncSettings(); }catch(e){} try{ $("#maskRescue").classList.add("on"); }catch(e){} }; }catch(e){}
+try{ $("#btnRescueClose").onclick=function(){ try{ $("#maskRescue").classList.remove("on"); }catch(e){} }; }catch(e){}
 try{ const _ssb=$("#selSyncBackend"); if(_ssb) _ssb.onchange=syncSettingsUi; }catch(e){}
 try{ var _ss=document.getElementById("syncStatus"); if(_ss){ _ss.style.cursor="pointer"; _ss.title="点一下看连接诊断（可复制发给对方）"; _ss.onclick=showDiag; } }catch(e){}
 try{ var _bdl=document.getElementById("btnDiagLogin"); if(_bdl) _bdl.onclick=function(){ showDiag(); }; }catch(e){}
