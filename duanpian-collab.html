@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>短篇协作版 · 共享工作台</title>
-<script>var APP_VERSION="v39.20";</script>
+<script>var APP_VERSION="v39.21";</script>
 <!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
 <script src="mammoth.browser.min.js"></script>
 <!-- v38.72：JSZip 本地部署（国内镜像下载），用于自研 Word 转换器读取字体颜色/高亮底色（mammoth 不支持） -->
@@ -2190,7 +2190,53 @@ function collabDeviceName(){
   if(n) return n;
   n = collabDeviceType()+"-"+Math.random().toString(36).slice(2,6);
   try{ localStorage.setItem("dp_collab_device_name", n); }catch(e){}
+  // v39.21：老用户昵称突然变成临时名 = 浏览器把存储弄丢了（非正常关机回滚/清理软件误清），必须提醒，不能无声无息
+  try{
+    const returning=!!(localStorage.getItem("dp_sync_cb_env")||localStorage.getItem("dp_collab_remember")||localStorage.getItem("dp_collab_pending"));
+    if(returning) toast("⚠️ 设备昵称丢了（浏览器存储被清理或回滚），已生成临时名 "+n+"。请到「同步设置」重新起名，会自动备份防止再丢");
+  }catch(e){}
   return n;
+}
+// ===== v39.21 设备昵称双备份自愈 =====
+// localStorage 与 IndexedDB 是浏览器里两套独立的仓库：localStorage 会因非正常关机/清理软件被清空或回滚，
+// IndexedDB 不受影响。昵称改动时同时写入两边；启动时发现 localStorage 里丢了，就从备份自动恢复。
+let _metaDb=null;
+function metaIdbOpen(){
+  return new Promise((res,rej)=>{
+    if(_metaDb) return res(_metaDb);
+    if(typeof indexedDB==="undefined") return rej(new Error("indexedDB 不可用"));
+    try{
+      const r=indexedDB.open("dp_meta_v1",1);
+      r.onupgradeneeded=e=>{ const db=e.target.result; if(!db.objectStoreNames.contains("kv")) db.createObjectStore("kv"); };
+      r.onsuccess=()=>{ _metaDb=r.result; res(_metaDb); };
+      r.onerror=()=>rej(r.error);
+    }catch(e){ rej(e); }
+  });
+}
+function metaIdbSet(k,v){
+  return metaIdbOpen().then(db=>new Promise((res,rej)=>{
+    try{ const tx=db.transaction("kv","readwrite"); tx.objectStore("kv").put(v,k); tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error); }catch(e){ rej(e); }
+  })).catch(()=>false);
+}
+function metaIdbGet(k){
+  return metaIdbOpen().then(db=>new Promise((res,rej)=>{
+    try{ const tx=db.transaction("kv","readonly"); const q=tx.objectStore("kv").get(k); q.onsuccess=()=>res(q.result==null?null:String(q.result)); q.onerror=()=>rej(q.error); }catch(e){ rej(e); }
+  })).catch(()=>null);
+}
+const _TEMP_NAME_RE=/^(电脑|平板|手机)-[a-z0-9]{4}$/;
+function deviceNameMirrorSave(n){ metaIdbSet("device_name", n||""); } // 空串=用户有意清空，恢复时不复活
+function _restoreDeviceName(){
+  return metaIdbGet("device_name").then(bak=>{
+    if(!bak) return; // 无备份或有意清空
+    let cur=null; try{ cur=localStorage.getItem("dp_collab_device_name"); }catch(e){}
+    if(cur===bak) return;
+    if(!cur || _TEMP_NAME_RE.test(cur)){ // 丢了（空/临时名）→ 自动恢复
+      try{ localStorage.setItem("dp_collab_device_name", bak); }catch(e){}
+      try{ showCloudWriter(); }catch(e){}
+      try{ const sp=$("#syncWriterPanel"); if(sp && sp.textContent) showCloudWriter(); }catch(e){}
+      if(cur) toast("✅ 检测到昵称丢失，已从本地备份自动恢复为「"+bak+"」");
+    }
+  });
 }
 function _fmtWriterTime(at){
   if(!at) return "";
@@ -5161,6 +5207,7 @@ function openSyncSettings(){
     if(dn2 && !dn2._autoSaveBound){
       const autoSave=function(){
         try{ localStorage.setItem("dp_collab_device_name", (dn2.value||"").trim()); }catch(e){}
+        try{ deviceNameMirrorSave((dn2.value||"").trim()); }catch(e){} // v39.21：同步写入双备份
         if(tip){ tip.style.display="inline"; clearTimeout(tip._t); tip._t=setTimeout(function(){ tip.style.display="none"; },2600); }
         try{ showCloudWriter(); }catch(e){}
       };
@@ -5189,7 +5236,7 @@ async function saveSyncSettings(){
   try{ if(e) localStorage.setItem("dp_sync_cb_env", (e.value||"").trim()); }catch(_){}
   try{ if(r) localStorage.setItem("dp_sync_cb_region", (r.value||"ap-shanghai").trim()); }catch(_){}
   try{ const pk=$("#inpCbPkey"); if(pk) localStorage.setItem("dp_sync_cb_pkey", (pk.value||"").trim()); }catch(_){}
-  try{ const dn=$("#inpDeviceName"); if(dn) localStorage.setItem("dp_collab_device_name", (dn.value||"").trim()); }catch(_){} // v39.17：保存设备昵称
+  try{ const dn=$("#inpDeviceName"); if(dn){ const _nv=(dn.value||"").trim(); localStorage.setItem("dp_collab_device_name", _nv); deviceNameMirrorSave(_nv); } }catch(_){} // v39.17：保存设备昵称；v39.21：双备份
   // 切到 CloudBase 时重置缓存的 app 实例，下次同步用新配置
   __cbApp=null; __cbSigned=false; __cbPkeyNow="";
   closeSyncSettings();
@@ -5207,6 +5254,7 @@ try{ $("#btnSyncSetSave").onclick=saveSyncSettings; }catch(e){}
 // v39.20：误覆盖急救独立弹窗（与同步设置分开，杜绝「改昵称顺手点到恢复」）
 try{ $("#btnOpenRescue").onclick=function(){ try{ closeSyncSettings(); }catch(e){} try{ $("#maskRescue").classList.add("on"); }catch(e){} }; }catch(e){}
 try{ $("#btnRescueClose").onclick=function(){ try{ $("#maskRescue").classList.remove("on"); }catch(e){} }; }catch(e){}
+try{ _restoreDeviceName(); }catch(e){} // v39.21：启动时检查昵称是否被浏览器弄丢，丢了自动从备份恢复
 try{ const _ssb=$("#selSyncBackend"); if(_ssb) _ssb.onchange=syncSettingsUi; }catch(e){}
 try{ var _ss=document.getElementById("syncStatus"); if(_ss){ _ss.style.cursor="pointer"; _ss.title="点一下看连接诊断（可复制发给对方）"; _ss.onclick=showDiag; } }catch(e){}
 try{ var _bdl=document.getElementById("btnDiagLogin"); if(_bdl) _bdl.onclick=function(){ showDiag(); }; }catch(e){}
