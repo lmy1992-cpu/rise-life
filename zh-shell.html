@@ -285,16 +285,16 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   .rc-x{font-size:11px;fill:var(--sub);text-anchor:middle;font-family:var(--font-cute)}
   .rc-v{font-size:11px;fill:var(--brand-deep);font-weight:700;text-anchor:middle;font-family:var(--font-cute)}
   .rc-empty{color:var(--sub);font-size:12px;text-align:center;padding:10px}
-  .td-row{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 15px;margin-bottom:9px;transition:.15s;font-family:var(--font-cute)}
+  .td-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 15px;margin-bottom:9px;transition:.15s;font-family:var(--font-cute)}
   .td-row:hover{border-color:var(--brand);box-shadow:0 4px 12px rgba(255,142,114,.1)}
   .td-row.done{background:#FFFAF0}
   .td-pri{width:4px;align-self:stretch;border-radius:3px;margin:-12px 0 -12px 0;flex:none}
   .td-ck{width:22px;height:22px;border-radius:50%;border:2px solid var(--line);cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;transition:.15s;background:#fff}
   .td-ck.on{background:linear-gradient(135deg,var(--brand),var(--brand-deep));border-color:var(--brand-deep)}
-  .td-row .mf{flex:1;min-width:0}
-  .td-row .t{font-weight:600;font-size:15px}
+  .td-row .mf{flex:1 1 150px;min-width:0}
+  .td-row .t{font-weight:600;font-size:15px;overflow-wrap:anywhere;word-break:break-word}
   .td-row.done .t{text-decoration:line-through;color:var(--sub)}
-  .td-row .m{color:var(--sub);font-size:12.5px;margin-top:3px}
+  .td-row .m{color:var(--sub);font-size:12.5px;margin-top:3px;overflow-wrap:anywhere}
   .td-row .pin{color:var(--sub);border:1px solid var(--line);background:#fff}
   .td-row .pin.on{background:var(--brand);color:#fff;border-color:var(--brand);box-shadow:0 2px 8px rgba(255,142,114,.35)}
   /* 签到：暖奶油软萌风（圆体+渐变背景+彩色色条） */
@@ -430,6 +430,10 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   body.m .btn{min-height:44px;font-size:15px;padding:11px 16px}
   body.m .btn.sm{min-height:36px;padding:7px 11px}
   body.m .td-ck{width:26px;height:26px}
+  /* 手机端：待办正文占满整行，操作按钮自动换行到下方，避免正文被压成窄列（一列一字） */
+  body.m .td-row{gap:8px 10px;align-items:flex-start}
+  body.m .td-row .mf{flex:1 1 100%}
+  body.m .td-row .td-ck{align-self:flex-start;margin-top:2px}
   /* 签到卡手机更透气 */
   body.m .chk-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
   body.m .chk-cell{padding:16px 12px 12px}
@@ -920,7 +924,7 @@ navCfg = navCfg.filter(function(x){ return ["inbox","timeline","mood","recycle"]
   }
 })();
 
-const APP_VERSION = "v39.22";
+const APP_VERSION = "v39.23";
 // ===== 健壮存储层：localStorage 不可用时自动回退 IndexedDB（防止刷新丢数据）=====
 // 内部状态挂在 window 上，避免跨 <script> 块时 let 的暂时性死区（TDZ）报错
 // —— 存储层 v2：每条记录带写入时间戳，读取/合并时"取最新"，杜绝旧空值覆盖新数据 ——
@@ -3656,6 +3660,29 @@ function moduleHasContent(mk, data){
   if(mk==="game")     return !!(data.level||data.xp||0||(data.tasks&&data.tasks.length)||(data.pets&&data.pets.length));
   return true; // 其他模块：无法判断则视为有内容，照常应用
 }
+
+/* v39.23 关键修复：识别某模块是否仍处于「默认空壳」状态（用户从未真正使用过）。
+   空壳设备（如刚装好、还没打开过游戏人生的手机 PWA）在收集同步包时，
+   会用 Date.now() 给默认数据打上「最新时间戳」并上传，从而把云端真实进度整块清零。
+   此函数让「空壳」永远不能覆盖「有真实内容的模块」。 */
+function moduleIsEmpty(mk, data){
+  if(!data || typeof data!=="object") return true;
+  if(mk==="yuedu")    return !moduleHasContent("yuedu", data);
+  if(mk==="dianying") return !moduleHasContent("dianying", data);
+  if(mk==="jianfei")  return !moduleHasContent("jianfei", data);
+  if(mk==="health")   return !moduleHasContent("health", data);
+  if(mk==="game"){
+    var coins=(data.coins||0), lvl=(data.pet&&data.pet.level)||1, exp=(data.pet&&data.pet.exp)||0;
+    var small=(data.smallToys||0), big=(data.bigToys||0), streak=(data.streak||0);
+    var hasArr = ((data.tasks&&data.tasks.length)||0) || ((data.pets&&data.pets.length)||0)
+              || ((data.shop&&data.shop.length)||0) || ((data.owned&&data.owned.length)||0)
+              || ((data.log&&data.log.length)||0);
+    /* 下列任一为真 → 认为有真实进度，不算空壳：金币/经验/连击非零、等级>1、有玩具、有任意数组内容 */
+    return (coins===0 && exp===0 && lvl<=1 && small===0 && big===0 && streak===0 && !hasArr);
+  }
+  /* 其它模块：无法判断，保守当作「非空」，照常参与合并 */
+  return false;
+}
 /* v37.6 把云端模块数据写回 localStorage（主渠道），再尝试让 iframe 即时刷新（辅助渠道）。
    这样即使 iframe 通信失败，模块下次打开/概览探针也能读到最新数据。 */
 function distributeModules(mods, cloudTs, force){
@@ -3674,9 +3701,9 @@ function distStep(){
   if(cfg && cloudData && typeof cloudData==="object"){
     try{
       const localData=readModuleLS(mk);
-      /* v37.8 防丢护栏：云端是空壳且本机有数据 → 不覆盖（云端为空多半是旧 bug 留下的空包，
-         强行覆盖会清空本机；本机为空时仍照常写入，不影响首次同步） */
-      if(moduleHasContent(mk, cloudData) || !localData){
+      /* v39.23 防丢护栏升级：云端是空壳（默认/从未使用）且本机有真实数据 → 绝不覆盖，
+         即使点了「强制覆盖」也保护本机真实进度不被空包清空；本机为空时仍照常写入。 */
+      if(!moduleIsEmpty(mk, cloudData) || !localData){
         var merged = (distState.force || !localData) ? cloudData : _mergeObjObj(localData, cloudData, kvTsOf(cfg.key)||0, distState.cloudTs);
         writeModuleLS(mk, merged);
         setModuleTs(mk, distState.cloudTs);
@@ -3806,8 +3833,15 @@ function mergeBundles(local, cloud){
         if(!local.modules[mk]){ out.modules[mk]=cloud.modules[mk]; return; }
         var lm=(local.modules[mk]&&local.modules[mk].data)||local.modules[mk];
         var cm=(cloud.modules[mk]&&cloud.modules[mk].data)||cloud.modules[mk];
-        out.modules[mk]={ ts: Math.max((local.modules[mk].ts||0),(cloud.modules[mk].ts||0)),
-                         data: _mergeObjObj(lm, cm, local.ts||0, cloud.ts||0) };
+        var localEmpty=moduleIsEmpty(mk,lm), cloudEmpty=moduleIsEmpty(mk,cm);
+        /* v39.23：空壳不覆盖真值（修「空设备上传把云端游戏数值清零」的根因）。
+           两端都有内容或都为空时，才按「模块级时间戳」取最新者胜、逐字段合并。 */
+        if(localEmpty && !cloudEmpty){ out.modules[mk]=cloud.modules[mk]; return; }
+        if(cloudEmpty && !localEmpty){ out.modules[mk]=local.modules[mk]; return; }
+        var lts=Math.max(local.modules[mk].ts||0, moduleTsOf(mk)||0);
+        var cts=cloud.modules[mk].ts||0;
+        out.modules[mk]={ ts: Math.max(local.modules[mk].ts||0, cloud.modules[mk].ts||0),
+                         data: _mergeObjObj(lm, cm, lts, cts) };
       });
     } else {
       var lts=(local.tsMap && local.tsMap[sec])||local.ts||0;
