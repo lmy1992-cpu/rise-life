@@ -791,7 +791,7 @@ navCfg = navCfg.filter(function(x){ return x.key!=="duanpian"; });
 // 迁移：v36 起把 灵感收件箱/时间轴/心情日记/回收站 收进「每日待办」与「人生概览」，移除独立侧栏大模块
 navCfg = navCfg.filter(function(x){ return ["inbox","timeline","mood","recycle"].indexOf(x.key)<0; });
 
-const APP_VERSION = "v39.21";
+const APP_VERSION = "v39.22";
 // ===== 健壮存储层：localStorage 不可用时自动回退 IndexedDB（防止刷新丢数据）=====
 // 内部状态挂在 window 上，避免跨 <script> 块时 let 的暂时性死区（TDZ）报错
 // —— 存储层 v2：每条记录带写入时间戳，读取/合并时"取最新"，杜绝旧空值覆盖新数据 ——
@@ -1704,6 +1704,8 @@ function renderCheckin(){
     '<p style="color:var(--sub);font-size:12px;margin:0 0 12px">💡 拖动卡片可自由排序；hover 右上角可编辑 / 删除；已签到可撤销（点一下再点一次确认），昨天漏签可补签</p>'+
     '<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">'+
       '<button class="btn primary" onclick="openCheckinAdd()">＋ 添加签到项</button>'+
+      '<button class="btn" onclick="checkinAllToday()">⚡ 一键签到</button>'+
+      '<button class="btn" onclick="makeupAllYesterday()">📝 一键补签（昨天）</button>'+
     '</div><div id="chkGrid" class="chk-grid"></div>';
   const grid=$("chkGrid");
   if(!store.checkin.apps.length) grid.innerHTML='<div class="empty"><div class="big">📅</div>还没有要签到的 App<br>加上你每天要签到的，避免忘记</div>';
@@ -1815,16 +1817,26 @@ function saveAppEdit(){
 function finishSaveEdit(){
   persist(CHECKIN_KEY, store.checkin); closeMask("appEditMask"); renderCheckin(); renderNav();
 }
+/* 签到/补签 核心：只改内存里的日期与连击，不发奖、不渲染 */
+function _applyCheckin(a, dateStr){
+  a._undoToday={last:a.last, streak:a.streak};   // 存撤销快照，还原用
+  if(a.last && daysBetween(a.last, dateStr)===1) a.streak=(a.streak||0)+1; else a.streak=1;
+  a.last=dateStr;
+  if(!a.dates) a.dates=[]; if(a.dates.indexOf(dateStr)<0) a.dates.push(dateStr);
+}
+/* 签到/补签 发奖：金币+经验 同步到「游戏人生」钱包与宠物经验 */
+function _awardCheckin(reason, n){
+  if(n<=0) return;
+  awardXP(n, reason); store.game.coins=(store.game.coins||0)+n; persist(GAME_KEY, store.game); awardGameModule(n,n);
+  try{ milestoneCheck(); }catch(e){}
+}
 function doCheckin(id){
   const a=store.checkin.apps.find(x=>x.id===id); if(!a) return;
   if(a.last===todayStr()) return;
   pendingUndoId=null;
-  a._undoToday={last:a.last, streak:a.streak};   // 存撤销快照，还原用
-  if(a.last && daysBetween(a.last, todayStr())===1) a.streak=(a.streak||0)+1; else a.streak=1;
-  a.last=todayStr();
+  _applyCheckin(a, todayStr());
   persist(CHECKIN_KEY, store.checkin); renderCheckin(); renderNav();
-  awardXP(1, "签到"); store.game.coins=(store.game.coins||0)+1; persist(GAME_KEY, store.game); awardGameModule(1,1);
-  try{ milestoneCheck(); }catch(e){}
+  _awardCheckin("签到", 1);
   shellToast("✅ 已签到 "+a.name+" ｜ 🪙金币+1  💡经验+1");
 }
 let pendingUndoId=null;
@@ -1848,13 +1860,29 @@ function makeupCheckin(id){
   const a=store.checkin.apps.find(x=>x.id===id); if(!a) return;
   const yest=addDaysStr(todayStr(), -1);
   if(a.last===todayStr() || a.last===yest) return;        // 今天已签 / 昨天已签都不必补
-  const oldLast=a.last, oldStreak=a.streak;
-  if(oldLast && daysBetween(oldLast, yest)===1) a.streak=(a.streak||0)+1; else a.streak=1;
-  a.last=yest;
+  _applyCheckin(a, yest);
   persist(CHECKIN_KEY, store.checkin); renderCheckin(); renderNav();
-  awardXP(1, "补签"); store.game.coins=(store.game.coins||0)+1; persist(GAME_KEY, store.game); awardGameModule(1,1);
-  try{ milestoneCheck(); }catch(e){}
+  _awardCheckin("补签", 1);
   shellToast("✅ 已补签 "+a.name+" ｜ 🪙金币+1  💡经验+1");
+}
+/* 一键签到：把今天还没签的全部签到项一次性签掉（金币+经验 同步累加） */
+function checkinAllToday(){
+  const apps=store.checkin.apps.filter(function(a){ return a.last!==todayStr(); });
+  if(!apps.length){ shellToast("今天所有签到项都已经签过啦 🎉"); return; }
+  apps.forEach(function(a){ pendingUndoId=null; _applyCheckin(a, todayStr()); });
+  persist(CHECKIN_KEY, store.checkin); renderCheckin(); renderNav();
+  _awardCheckin("签到", apps.length);
+  shellToast("✅ 一键签到完成："+apps.length+" 项 ｜ 🪙金币+"+apps.length+"  💡经验+"+apps.length);
+}
+/* 一键补签：把昨天漏签的全部签到项一次性补上（金币+经验 同步累加） */
+function makeupAllYesterday(){
+  const yest=addDaysStr(todayStr(), -1);
+  const apps=store.checkin.apps.filter(function(a){ return a.last!==todayStr() && a.last!==yest; });
+  if(!apps.length){ shellToast("没有需要补签的：昨天都签过了，或今天已签无法补"); return; }
+  apps.forEach(function(a){ _applyCheckin(a, yest); });
+  persist(CHECKIN_KEY, store.checkin); renderCheckin(); renderNav();
+  _awardCheckin("补签", apps.length);
+  shellToast("✅ 一键补签完成："+apps.length+" 项 ｜ 🪙金币+"+apps.length+"  💡经验+"+apps.length);
 }
 function delApp(id){
   const a=store.checkin.apps.find(x=>x.id===id); if(!a) return;
