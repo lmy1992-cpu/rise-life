@@ -2052,13 +2052,30 @@ $("#btnRdClose").onclick=()=>$("#maskEdit").classList.remove("on");
       cx=Math.max(80, Math.min(cx, vw-80)); top=Math.max(8, Math.min(top-30, vh-36));
       badge.style.left=cx+"px"; badge.style.top=top+"px"; }catch(e){}
   }
-  function renderRelated(){
+  /* v39.24 关联文档：同类圈子按关联链连通（传递闭包），显示整组而非仅直接邻居 */
+function relatedComponent(startId){
+  var adj={};
+  state.examples.forEach(function(x){
+    if(!Array.isArray(x.related)) x.related=[];
+    adj[x.id]=adj[x.id]||[];
+    (x.related).forEach(function(r){
+      if(state.examples.some(function(y){return y.id===r;})){
+        adj[x.id].push(r); adj[r]=adj[r]||[]; adj[r].push(x.id);
+      }
+    });
+  });
+  var seen={}, stack=[startId], out=[];
+  while(stack.length){ var cur=stack.pop(); if(seen[cur]) continue; seen[cur]=1; (adj[cur]||[]).forEach(function(n){ if(!seen[n]) stack.push(n); }); }
+  Object.keys(seen).forEach(function(k){ if(k!==startId) out.push(k); });
+  return out;
+}
+function sameComponent(id1,id2){ if(id1===id2) return true; return relatedComponent(id1).indexOf(id2)>=0; }
+function renderRelated(){
     const ex=curEx(); const box=document.getElementById("rdRelated"); if(!box) return;
     if(!ex){ box.innerHTML=""; return; }
     if(!Array.isArray(ex.related)) ex.related=[];
     let html='<div class="rel-row"><span class="rel-label">🔗 关联文档</span>';
-    let relIds=(ex.related||[]).slice();
-    state.examples.forEach(function(x){ if(x.id!==ex.id && Array.isArray(x.related) && x.related.indexOf(ex.id)>=0 && relIds.indexOf(x.id)<0) relIds.push(x.id); });
+    let relIds=relatedComponent(ex.id);
     if(relIds.length){
       html+=relIds.map(function(rid){
         const r=state.examples.find(function(x){return x.id===rid;});
@@ -2080,8 +2097,10 @@ $("#btnRdClose").onclick=()=>$("#maskEdit").classList.remove("on");
       const target=state.examples.find(function(x){return x.id!==ex.id && (x.title||"").trim()===title;});
       if(!target){ toast("没找到标题为「"+title+"」的其他例文"); return; }
       const _rev=(Array.isArray(target.related) && target.related.indexOf(ex.id)>=0);
+      const _sameComp=(!_rev && sameComponent(ex.id, target.id));
       if(ex.related.indexOf(target.id)>=0){ toast("已关联该篇"); }
       else if(_rev){ toast("已关联该篇（对方已关联你）"); }
+      else if(_sameComp){ toast("已在同一关联组（经其他例文连通）"); }
       else { ex.related.push(target.id); save(); }
       document.getElementById("rdRelPick").style.display="none"; inp.value="";
       renderRelated(); renderReadingView(); renderExamples();
@@ -3481,7 +3500,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v39.23";
+  var APP_VERSION = "v39.24";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
