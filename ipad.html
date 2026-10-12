@@ -791,7 +791,7 @@ navCfg = navCfg.filter(function(x){ return x.key!=="duanpian"; });
 // 迁移：v36 起把 灵感收件箱/时间轴/心情日记/回收站 收进「每日待办」与「人生概览」，移除独立侧栏大模块
 navCfg = navCfg.filter(function(x){ return ["inbox","timeline","mood","recycle"].indexOf(x.key)<0; });
 
-const APP_VERSION = "v39.25";
+const APP_VERSION = "v39.26";
 // ===== 健壮存储层：localStorage 不可用时自动回退 IndexedDB（防止刷新丢数据）=====
 // 内部状态挂在 window 上，避免跨 <script> 块时 let 的暂时性死区（TDZ）报错
 // —— 存储层 v2：每条记录带写入时间戳，读取/合并时"取最新"，杜绝旧空值覆盖新数据 ——
@@ -1583,6 +1583,7 @@ function weeklyReportCheck(){
   const planned=store.todo.filter(function(t){ return inR(t.date); });
   const rate=planned.length?Math.round(done.length/planned.length*100):0;
   let ci=0; (store.checkin.apps||[]).forEach(function(a){ (a.dates||[]).forEach(function(d){ if(inR(d)) ci++; }); });
+  let dp=0; try{ const dpa=robustGet("life_duanpian_done_v1",[]); if(Array.isArray(dpa)){ const t0=new Date(mon+"T00:00:00").getTime(), t1=new Date(sun+"T23:59:59").getTime(); dp=dpa.filter(function(e){ return e && e.ts>=t0 && e.ts<=t1; }).length; } }catch(e){}
   const rd=store.todo.filter(function(t){ return t.rdlog && inR(t.date); });
   const pages=rd.reduce(function(s,t){ return s+(t.rdlog.pages||0); },0), mins=rd.reduce(function(s,t){ return s+(t.rdlog.minutes||0); },0);
   const proj={}; done.forEach(function(t){ const p=t.projectName||"本机"; proj[p]=(proj[p]||0)+1; });
@@ -1591,8 +1592,7 @@ function weeklyReportCheck(){
   function wc(l,v){ return '<div style="background:var(--bg-soft,#fff7f3);border:1px solid var(--line);border-radius:10px;padding:10px"><div style="font-size:12px;color:var(--sub)">'+l+'</div><div style="font-size:18px;font-weight:800">'+v+'</div></div>'; }
   fxShowModal('<h2>📊 上周周报（'+mon+' ~ '+sun+'）</h2>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0">'+
-    wc("✅ 完成任务", done.length+" 件")+wc("📈 完成率", rate+"%")+wc("🗓 签到次数", ci+" 次")+wc("🔥 当前最长连击", maxStreak+" 天")+
-    (pages?wc("📖 阅读", pages+" 页 · "+mins+" 分钟"):"")+(top?wc("💪 最坚持", esc(top)+"（"+topN+" 件）"):"")+
+    wc("✨ 完成短篇数", dp+" 篇")+wc("📈 任务完成率", rate+"%")+wc("🗓 签到次数", ci+" 次")+wc("📖 阅读总页数", pages+" 页")+
     '</div><p style="color:var(--sub);font-size:13px">新的一周，先把最简单的那件做完开个头 ✨</p>'+
     '<button class="btn primary" onclick="closeMask(\'fxMask\')">收到</button>');
 }
