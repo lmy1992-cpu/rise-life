@@ -924,7 +924,7 @@ navCfg = navCfg.filter(function(x){ return ["inbox","timeline","mood","recycle"]
   }
 })();
 
-const APP_VERSION = "v39.26";
+const APP_VERSION = "v39.27";
 // ===== 健壮存储层：localStorage 不可用时自动回退 IndexedDB（防止刷新丢数据）=====
 // 内部状态挂在 window 上，避免跨 <script> 块时 let 的暂时性死区（TDZ）报错
 // —— 存储层 v2：每条记录带写入时间戳，读取/合并时"取最新"，杜绝旧空值覆盖新数据 ——
@@ -1338,8 +1338,9 @@ function fillLifeStats(){
   const exM=done.filter(function(e){ return inM(e.ts); }).length;
   const exLM=done.filter(function(e){ const d=new Date(e.ts); return d.getFullYear()===prevY && d.getMonth()===prevM; }).length;
   const exTotal=done.length;
-  const nowTs=Date.now(), wkMs=7*86400000; const wk=[0,0,0,0];
-  done.forEach(function(e){ const diff=nowTs-e.ts; if(diff>=0 && diff<wkMs*4){ const idx=Math.floor(diff/wkMs); if(idx<4) wk[3-idx]++; } });
+  /* 自然周分组（周一为界）：wk[3]=本周、wk[2]=上周、wk[1]=2周前、wk[0]=3周前 */
+  const curMon=(function(){ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()-((d.getDay()+6)%7)); return d.getTime(); })(); const wk=[0,0,0,0];
+  done.forEach(function(e){ if(!e||!e.ts) return; const d=new Date(e.ts); const rMon=new Date(d.getFullYear(),d.getMonth(),d.getDate()); rMon.setDate(rMon.getDate()-((rMon.getDay()+6)%7)); const off=Math.round((curMon-rMon.getTime())/604800000); if(off>=0&&off<4) wk[3-off]++; });
   const hist=loadHistory();
   /* 待办完成率：直接用「当前真实任务清单」算 已完成/总数。
      store.todo 里不含被隐藏的任务（隐藏时已挪到 store.todoIgnore），所以天然不统计隐藏部分。
@@ -1388,7 +1389,7 @@ function fillLifeStats(){
   const wTone = (wDelta==null||wDelta===0) ? "" : (wDelta<0?"good":"bad");
   const wLabel = (wDelta==null) ? "本月体重浮动" : (wDelta<0?"本月体重（已减）":(wDelta>0?"本月体重（回涨）":"本月体重（持平）"));
   setKpi("kpiJianfei", wText, wLabel, (startW!=null?("起 "+startW+" → 现 "+latestW+" kg"):"还没记录体重"), jianPct, wTone);
-  lifeBar("barWeek", wk, ["4周前","3周前","2周前","本周"]);
+  lifeBar("barWeek", wk, ["3周前","2周前","上周","本周"]);
   lifeLine("lineWeight", weights.map(function(w){return w.value;}), "#5bb98c", {area:true, labels:weights.map(function(w){return new Date(w.date).getDate();})});
   const dr=last14Rates(hist); lifeLine("lineTodo", dr.vals, "#6aa9e9", {area:true, labels:dr.labels});
   renderLifeGoals({exM:exM, todoRate:todoRate, doneM:doneM, lost:lost, wDelta:wDelta});
