@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>短篇协作版 · 共享工作台</title>
-<script>var APP_VERSION="v39.30";</script>
+<script>var APP_VERSION="v39.31";</script>
 <!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
 <script src="mammoth.browser.min.js"></script>
 <!-- v38.72：JSZip 本地部署（国内镜像下载），用于自研 Word 转换器读取字体颜色/高亮底色（mammoth 不支持） -->
@@ -5798,7 +5798,8 @@ async function anlStart(){
     var kwN=anlKwMergeMisc(kr.kw, ANL.srcTitle||ANL.title||"手动拆文");   /* v38.87：关键词自动进杂项「AI关键词」 */
     var dimN=(ANL.srcId&&Object.keys(kd.dims).length)?anlMergeDims(ANL.srcId,kd.dims):0;   /* v38.94：维度归纳进来源例文 */
     anlE("anlProg").textContent="已完成 · 共 "+ANL.sections.length+" 个维度"+(cut?"（原文过长，已取前 4 万字）":"");
-    toast("拆文完成"+(kwN?("，已提取 "+kwN+" 个关键词到杂项·AI关键词"):"")+(dimN?("，已归纳 "+dimN+" 个维度到杂项·AI自动归类"):""));
+    await anlAutoSaveLib();   /* v39.31：拆完自动进拆文库，不用再手点 */
+    toast("拆文完成，报告已自动存入拆文库"+(kwN?("，提取 "+kwN+" 个关键词"):"")+(dimN?("，归纳 "+dimN+" 个维度"):""));
   }catch(err){
     anlE("anlErr").textContent="拆文失败："+((err&&err.message)||err);
     if(!ANL.report.trim()) anlE("anlReport").innerHTML='<div class="empty">没跑起来。多半是 AI 密钥 / 模型名不对，去「🤖 AI 设置」检查一下</div>';
@@ -5865,6 +5866,25 @@ function anlCopyFallback(txt){
     var ta=document.createElement("textarea"); ta.value=txt; ta.style.position="fixed"; ta.style.left="-9999px";
     document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); toast("已复制");
   }catch(e){ toast("复制失败，请手动选中文本"); }
+}
+/* v39.31：拆完自动进拆文库（同源已存过→静默更新不弹窗；旧报告内容不同时先进回收站兜底） */
+async function anlAutoSaveLib(){
+  if(!(ANL.report||"").trim()) return;
+  var old=(ANL.srcId&&anlList().find(function(a){return a.srcId===ANL.srcId;}))||null;
+  if(old){
+    if((old.report||"")!==ANL.report){ try{ trashPush("analysis",(old.title==="拆文报告"&&old.srcTitle)?old.srcTitle:(old.title||"拆文报告"),JSON.parse(JSON.stringify(old))); }catch(e){} }
+    old.report=ANL.report;
+    old.title=ANL.srcTitle||ANL.title||old.title;
+    if(ANL.genre) old.genre=ANL.genre;
+    if(ANL.words) old.words=ANL.words;
+    old.createdAt=Date.now();
+  }else{
+    anlList().unshift({id:("anl"+Date.now()+Math.random().toString(36).slice(2,6)),
+      title:ANL.srcTitle||ANL.title||"未命名",srcId:ANL.srcId||"",srcTitle:ANL.srcTitle||"",genre:ANL.genre,words:ANL.words||0,report:ANL.report,createdAt:Date.now()});
+  }
+  try{ await save(); }catch(e){}
+  anlLibPage=1;   /* 回第 1 页，确保能看见刚存的 */
+  anlRenderLib();
 }
 async function anlSaveLib(){
   anlLibPage=1;   /* v39.29：保存后回到第一页，确保能看到刚存的报告 */
