@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>短篇协作版 · 共享工作台</title>
-<script>var APP_VERSION="v39.29";</script>
+<script>var APP_VERSION="v39.30";</script>
 <!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
 <script src="mammoth.browser.min.js"></script>
 <!-- v38.72：JSZip 本地部署（国内镜像下载），用于自研 Word 转换器读取字体颜色/高亮底色（mammoth 不支持） -->
@@ -914,6 +914,15 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   .anl-pager .btn.sm[disabled]{opacity:.4;cursor:not-allowed}
   .anl-pager .ap-ell{color:var(--sub);padding:0 2px}
   .anl-pager .ap-info{color:var(--sub);font-size:12px;margin-left:4px}
+  /* v39.30：批量拆文后台浮动进度 */
+  .anl-pill{position:fixed;right:16px;bottom:16px;z-index:9999;display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--brand2);border-radius:999px;padding:8px 10px 8px 12px;
+    box-shadow:0 6px 20px rgba(0,0,0,.14);font-size:13px;color:var(--ink);max-width:92vw}
+  .anl-pill-ic{font-size:15px}
+  .anl-pill-tx{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .anl-pill-btn{border:none;background:var(--brand);color:#fff;border-radius:999px;padding:5px 12px;
+    font-size:12.5px;cursor:pointer;font-family:inherit;flex:none}
+  .anl-pill-btn:hover{background:var(--brand-deep)}
   /* ===== v38.79 投稿邮箱（独立 tab：左列平台 + 右列置顶编辑 + ▾展开 + 收藏） ===== */
   .se-wrap{display:flex;flex-direction:column;gap:12px}
   .se-import{background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:12px}
@@ -5930,6 +5939,62 @@ function anlRefreshBatchHint(){
   var n=0; (state.examples||[]).forEach(function(e){ if((e.content||"").trim().length>=200 && !anlList().some(function(a){return a.srcId===e.id;})) n++; });
   h.textContent = n? ("（还有 "+n+" 篇未拆）") : "（未拆的都拆完啦）";
 }
+/* ===== v39.30：批量拆文「花费预估」+「后台浮动进度」（边跑边看例文）+ 停止按钮 ===== */
+var ANL_PRICE_REF=[
+  {k:"api.deepseek.com",       pIn:2,   pOut:8,   name:"DeepSeek"},
+  {k:"dashscope.aliyuncs.com", pIn:0.8, pOut:2,   name:"通义千问"},
+  {k:"bigmodel.cn",            pIn:0,   pOut:0,   name:"智谱 GLM"},
+  {k:"api.openai.com",         pIn:1.1, pOut:4.4, name:"OpenAI"}
+];
+function anlPriceOf(cfg){
+  try{
+    var c=(cfg&&typeof cfg==="object")?cfg:{};
+    var a=parseFloat(c.priceIn), b=parseFloat(c.priceOut);
+    if(isFinite(a)&&isFinite(b)) return {pIn:a, pOut:b, name:"自定义单价"};
+  }catch(e){}
+  var u=String((cfg&&(cfg.baseUrl||cfg.baseurl))||"https://api.deepseek.com/v1").toLowerCase();
+  for(var i=0;i<ANL_PRICE_REF.length;i++){
+    if(u.indexOf(ANL_PRICE_REF[i].k)>=0) return {pIn:ANL_PRICE_REF[i].pIn, pOut:ANL_PRICE_REF[i].pOut, name:ANL_PRICE_REF[i].name};
+  }
+  return {pIn:null, pOut:null, name:"未知服务商"};
+}
+/* 预估：按「字符数 ÷ 1.3」折 token（中文约 1.3 字≈1 token，偏保守、宁可估高） */
+function anlBatchEstimate(exs){
+  var totalChars=0; (exs||[]).forEach(function(e){ totalChars+=Math.min((e.content||"").length, 40000); });
+  var sysLen=3500;
+  try{
+    var probe=anlMessages("", (exs[0]&&exs[0].genre)||((typeof ANL!=="undefined")&&ANL.genre)||"追妻火葬场");
+    var t=0; probe.forEach(function(m){ t+=(m.content||"").length; });
+    if(t>200) sysLen=t;
+  }catch(e){}
+  var n=(exs&&exs.length)||0;
+  var avgOut=4500, have=0, sum=0;
+  try{
+    anlList().forEach(function(a){ var L=(a.report||"").length; if(L>800){ sum+=L; have++; } });
+    if(have>=3) avgOut=Math.round(sum/have);
+  }catch(e){}
+  var inChars=totalChars+(sysLen+30)*n;
+  var outChars=avgOut*n;
+  var CH=1.3;
+  var inTok=Math.round(inChars/CH), outTok=Math.round(outChars/CH);
+  var pr=anlPriceOf((typeof state!=="undefined"&&state)?state.aiCfg:null);
+  var cost=null;
+  if(pr.pIn!=null&&pr.pOut!=null&&isFinite(pr.pIn)&&isFinite(pr.pOut)) cost=(inTok/1e6)*pr.pIn+(outTok/1e6)*pr.pOut;
+  return {n:n, totalChars:totalChars, sysLen:sysLen, avgOut:avgOut, inTok:inTok, outTok:outTok, cost:cost, price:pr};
+}
+function anlPillShow(txt){
+  var el=document.getElementById("anlBatchPill"); if(!el) return;
+  var t=document.getElementById("anlBatchPillTxt"); if(t) t.textContent=txt||"批量拆文中…";
+  el.style.display="flex";
+}
+function anlPillHide(){
+  var el=document.getElementById("anlBatchPill"); if(!el) return;
+  el.style.display="none";
+}
+function anlBatchStop(){
+  if(typeof ANL==="undefined"||!ANL.running) return;
+  if(confirm("停止本批拆文？已经拆完的会自动保存，下次可以从「还没拆的」继续。")) ANL.stopReq=true;
+}
 async function anlBatchRun(){
   if(ANL.running){ toast("正在拆文中，先等当前任务结束"); return; }
   if(!(state.aiCfg && state.aiCfg.key)){ toast("还没配置 AI 密钥，先去「🤖 AI 设置」填好再拆"); return; }
@@ -5943,15 +6008,23 @@ async function anlBatchRun(){
   var maxN=parseInt(raw,10);
   if(raw && (!isFinite(maxN)||maxN<1)){ toast("「本次上限」要填正整数，或不填=全部"); return; }
   if(isFinite(maxN)&&maxN>=1) exs=exs.slice(0,maxN);
-  var totalChars=exs.reduce(function(s,e){ return s+(e.content||"").length; },0);
-  var msg="即将批量拆文：\n\n本批将拆 "+exs.length+" 篇还没拆过的例文（每篇原文上限 4 万字），合计约 "+totalChars.toLocaleString()+" 字。\n\n⚠️ 重要提醒：这要向你的 AI 接口发起 "+exs.length+" 次调用，会真实消耗你的 API 额度（花钱/扣量），且耗时较长（每篇几十秒到几分钟，几百篇可能要几小时）。\n\n中途关掉页面会暂停，下次再点会从「还没拆的」继续，已拆的不重复、不会白花钱。\n\n点「确定」开始，点「取消」先不拆。";
+  var totalChars=exs.reduce(function(s,e){ return s+Math.min((e.content||"").length,40000); },0);
+  var est=anlBatchEstimate(exs);
+  var msg="即将批量拆文：\n\n本批将拆 "+est.n+" 篇还没拆过的例文（每篇原文上限 4 万字），合计约 "+est.totalChars.toLocaleString()+" 字。\n\n💰 花费预估：输入约 "+est.inTok.toLocaleString()+" tokens、输出约 "+est.outTok.toLocaleString()+" tokens（"+est.price.name+"，参考单价 输入 ¥"+est.price.pIn+"/百万、输出 ¥"+est.price.pOut+"/百万）";
+  if(est.cost!=null) msg+="\n　　≈ 约 ¥"+est.cost.toFixed(2)+" 左右（按内置参考单价估算，实际以你的服务商账单为准）";
+  else msg+="\n　　（没识别出服务商单价，折算不出金额；可去「🤖 AI 设置」填自定义单价）";
+  msg+="\n\n⚠️ 重要提醒：这要向你的 AI 接口发起 "+est.n+" 次调用，会真实消耗你的 API 额度（花钱/扣量），且耗时较长（每篇几十秒到几分钟，几百篇可能要几小时）。\n\n✅ 可以后台跑：点「确定」开始后，你可以切到「例文库」继续看例文，右下角会有个小进度；只要不关页面就行（手机锁屏或切到别的 App，系统可能会把网页暂停）。\n\n中途关掉页面会暂停，下次再点会从「还没拆的」继续，已拆的不重复、不会白花钱。\n\n点「确定」开始，点「取消」先不拆。";
   if(!confirm(msg)) return;
+  ANL.stopReq=false;
   ANL.running=true;
   var ok=0, fail=0, fails=[];
   try{
     for(var i=0;i<exs.length;i++){
+      if(ANL.stopReq){ toast("已停止本批拆文（已保存完成部分）"); break; }
       var ex=exs[i];
-      var p=anlE("anlProg"); if(p) p.textContent="批量拆文中 "+(i+1)+"/"+exs.length+"（成功 "+ok+" 失败 "+fail+"）";
+      var progTxt="批量拆文中 "+(i+1)+"/"+exs.length+"（成功 "+ok+" 失败 "+fail+"）";
+      var p=anlE("anlProg"); if(p) p.textContent=progTxt;
+      anlPillShow(progTxt);
       var r=await anlAnalyzeOne(ex);
       if(!r.ok){ fail++; fails.push((ex.title||ex.fileName||"未命名")+"："+r.reason); continue; }
       anlList().unshift({id:("anl"+Date.now()+Math.random().toString(36).slice(2,6)),
@@ -5972,7 +6045,8 @@ async function anlBatchRun(){
     anlRenderLib(); anlRefreshBatchHint();
     toast("批量拆文中断（已保存完成部分）："+((err&&err.message)||err));
   }finally{
-    ANL.running=false;
+    ANL.running=false; ANL.stopReq=false;
+    anlPillHide();
   }
 }
 
@@ -6764,5 +6838,13 @@ try{ anlInit(); }catch(e){ if(window.console) console.error("anlInit",e); }
     <div id="cmpOut" style="max-height:60vh;overflow:auto"></div>
   </div>
 </div>
+
+<!-- v39.30：批量拆文后台浮动进度（切到别的 tab 也能看到进度/停止） -->
+<div class="anl-pill" id="anlBatchPill" style="display:none">
+  <span class="anl-pill-ic">✂️</span>
+  <span class="anl-pill-tx" id="anlBatchPillTxt">批量拆文中…</span>
+  <button class="anl-pill-btn" type="button" onclick="anlBatchStop()">⏹ 停止</button>
+</div>
+
 </body>
 </html>
