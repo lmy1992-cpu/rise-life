@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>短篇协作版 · 共享工作台</title>
-<script>var APP_VERSION="v39.28";</script>
+<script>var APP_VERSION="v39.29";</script>
 <!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
 <script src="mammoth.browser.min.js"></script>
 <!-- v38.72：JSZip 本地部署（国内镜像下载），用于自研 Word 转换器读取字体颜色/高亮底色（mammoth 不支持） -->
@@ -906,6 +906,14 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   .anl-sec-b th{background:var(--brand-soft);color:var(--ink)}
   .anl-curve{margin:10px 0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 6px}
   .anl-lib{margin-top:20px}
+  /* v39.29：拆文库分页 */
+  .anl-pager{margin-top:16px;display:flex;justify-content:center}
+  .anl-pager .ap-wrap{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center}
+  .anl-pager .btn.sm{margin:0;min-width:34px}
+  .anl-pager .btn.sm.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .anl-pager .btn.sm[disabled]{opacity:.4;cursor:not-allowed}
+  .anl-pager .ap-ell{color:var(--sub);padding:0 2px}
+  .anl-pager .ap-info{color:var(--sub);font-size:12px;margin-left:4px}
   /* ===== v38.79 投稿邮箱（独立 tab：左列平台 + 右列置顶编辑 + ▾展开 + 收藏） ===== */
   .se-wrap{display:flex;flex-direction:column;gap:12px}
   .se-import{background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:12px}
@@ -1282,6 +1290,7 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
         <button class="btn sm" id="btnAnlCmp" type="button" onclick="cmpOpen()">⚖️ 同题材对比</button>
         <span class="anl-count" id="anlLibCount"></span></div>
         <div class="grid" id="anlLibGrid"></div>
+        <div class="anl-pager" id="anlLibPager"></div>
       </div>
 
     </section>
@@ -1856,6 +1865,7 @@ let miscActive = null;
 let miscZone = "manual";   // "manual" 手工输入 / "ai" AI 自动归类 / "kw" AI关键词
 let miscKwGroup = "男女主关系";   /* v38.89：AI关键词标签墙当前选中的组 */
 let exPage = 1; const EX_PAGE_SIZE = 24;   // 例文列表分页，避免几百篇时一次性渲染卡顿
+let anlLibPage = 1; const ANL_LIB_PAGE_SIZE = 24;   // 拆文库分页，避免几百篇报告一次性渲染卡顿（v39.29）
 let miscAiActive = null;
 let matTags = [];
 // ===== AI 分析：归纳维度可由你自定义（你来决定 AI 如何总结）=====
@@ -5848,6 +5858,7 @@ function anlCopyFallback(txt){
   }catch(e){ toast("复制失败，请手动选中文本"); }
 }
 async function anlSaveLib(){
+  anlLibPage=1;   /* v39.29：保存后回到第一页，确保能看到刚存的报告 */
   if(!ANL.report.trim()){ toast("还没有报告可以保存"); return; }
   var oldRec=(ANL.srcId&&anlList().find(function(a){return a.srcId===ANL.srcId;}))||null;   /* v38.93：同源例文已存过→先问更新还是另存，防重复 */
   if(oldRec){
@@ -5970,9 +5981,15 @@ function anlRenderLib(){
   var kw=(ANL.libKw||"").trim().toLowerCase();
   var list=anlList().slice().sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
   if(kw) list=list.filter(function(r){ return ((r.title||"")+(r.srcTitle||"")+(r.genre||"")).toLowerCase().indexOf(kw)>=0; });
-  if(!list.length){ grid.innerHTML='<div class="empty">'+(kw?"没有匹配的拆文报告":"还没有拆过文。上面拆完一篇，点「保存到拆文库」就会存在这里")+'</div>'; anlE("anlLibCount").textContent=""; return; }
-  anlE("anlLibCount").textContent="共 "+list.length+" 篇";
-  grid.innerHTML=list.map(function(r){
+  if(!list.length){ grid.innerHTML='<div class="empty">'+(kw?"没有匹配的拆文报告":"还没有拆过文。上面拆完一篇，点「保存到拆文库」就会存在这里")+'</div>'; anlE("anlLibCount").textContent=""; anlRenderPager(0,1); return; }
+  var total=list.length;
+  var anlPages=Math.max(1, Math.ceil(total/ANL_LIB_PAGE_SIZE));
+  if(anlLibPage>anlPages) anlLibPage=anlPages;
+  if(anlLibPage<1) anlLibPage=1;
+  var anlStart=(anlLibPage-1)*ANL_LIB_PAGE_SIZE;
+  var pageList=list.slice(anlStart, anlStart+ANL_LIB_PAGE_SIZE);
+  anlE("anlLibCount").textContent="共 "+total+" 篇"+(anlPages>1?(" ｜ 第 "+anlLibPage+" / "+anlPages+" 页"):"");
+  grid.innerHTML=pageList.map(function(r){
     var d=new Date(r.createdAt||Date.now()); var ds=(d.getMonth()+1)+"月"+d.getDate()+"日 "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
     var snip=(r.report||"").replace(/[#>*`|\-]/g," ").replace(/\s+/g," ").slice(0,70);
     var tShow=(r.title==="拆文报告"&&r.srcTitle)?r.srcTitle:(r.title||"未命名");   /* v38.87：旧记录标题兜底显示例文名 */
@@ -5996,7 +6013,37 @@ function anlRenderLib(){
     state.analyses=anlList().filter(function(r){ return r.id!==id; });
     try{ await save(); }catch(e){}
     anlRenderLib(); toast("已删除"); }; });
+  anlRenderPager(total, anlPages);
   anlRefreshBatchHint();
+}
+function anlRenderPager(total, pages){
+  var pg=anlE("anlLibPager"); if(!pg) return;
+  if(total<=ANL_LIB_PAGE_SIZE || pages<=1){ pg.innerHTML=""; return; }
+  var html='<div class="ap-wrap">';
+  html+='<button class="btn sm" data-ap="prev"'+(anlLibPage<=1?" disabled":"")+'>‹ 上一页</button>';
+  var nums=[];
+  for(var p=1;p<=pages;p++){
+    if(p===1||p===pages||Math.abs(p-anlLibPage)<=2) nums.push(p);
+    else if(nums.length && nums[nums.length-1]!=="…") nums.push("…");
+  }
+  nums.forEach(function(p){
+    if(p==="…") html+='<span class="ap-ell">…</span>';
+    else html+='<button class="btn sm'+(p===anlLibPage?" on":"")+'" data-ap="'+p+'">'+p+'</button>';
+  });
+  html+='<button class="btn sm" data-ap="next"'+(anlLibPage>=pages?" disabled":"")+'>下一页 ›</button>';
+  html+='<span class="ap-info">第 '+anlLibPage+' / '+pages+' 页</span>';
+  html+='</div>';
+  pg.innerHTML=html;
+  Array.prototype.forEach.call(pg.querySelectorAll("[data-ap]"),function(b){
+    b.onclick=function(){
+      var v=b.getAttribute("data-ap");
+      if(v==="prev") anlLibPage=Math.max(1, anlLibPage-1);
+      else if(v==="next") anlLibPage=Math.min(pages, anlLibPage+1);
+      else anlLibPage=parseInt(v,10)||1;
+      anlRenderLib();
+      try{ pg.scrollIntoView({behavior:"smooth",block:"nearest"}); }catch(e){}
+    };
+  });
 }
 function anlFindRec(id){ var f=null; anlList().forEach(function(r){ if(r.id===id) f=r; }); return f; }
 function anlOpenRec(id){
@@ -6672,7 +6719,7 @@ function anlInit(){
     fold.textContent=allFold?"全部展开":"全部折叠";
   };
   var se=anlE("anlSearch");
-  if(se) se.oninput=function(){ ANL.libKw=se.value; anlRenderLib(); };
+  if(se) se.oninput=function(){ ANL.libKw=se.value; anlLibPage=1; anlRenderLib(); };
   var skb=anlE("anlSrcKw"); if(skb) skb.oninput=function(){ anlRefreshSrc(); };
 }
 // 例文阅读器里的「✂️ AI 拆文」：把这篇带进拆文页
