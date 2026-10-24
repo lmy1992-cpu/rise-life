@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>短篇协作版 · 共享工作台</title>
-<script>var APP_VERSION="v39.31";</script>
+<script>var APP_VERSION="v39.32";</script>
 <!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
 <script src="mammoth.browser.min.js"></script>
 <!-- v38.72：JSZip 本地部署（国内镜像下载），用于自研 Word 转换器读取字体颜色/高亮底色（mammoth 不支持） -->
@@ -1462,6 +1462,7 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
           <button class="ctab" data-ctab="fav">我的收藏</button>
         </div>
         <div class="crawl-platforms" id="crawlPlatforms"></div>
+        <button class="btn sm" id="btnCrawlAiIdea" type="button">🤖 AI 生成短篇想法</button>
       </div>
       <div class="crawl-meta" id="crawlMeta"></div>
       <div id="crawlList"></div>
@@ -4900,6 +4901,83 @@ function crawlItemCard(it,idx){
   card.querySelector(".crawl-fav").onclick=()=>toggleCrawlFav(it);
   return card;
 }
+/* ===== v39.32：内容抓取「AI 生成短篇想法」 =====
+/* 把用户自己的例文开头 + 拆文库里的结构模板抽出来，作为「什么才算短篇」的学习样本 */
+function crawlAiSamples(){
+  var out=[];
+  try{
+    var exs=(state.examples||[]).filter(function(e){ return (e.content||"").length>1500; });
+    exs.slice(-3).forEach(function(e,i){
+      out.push("【例文样本"+(i+1)+"】《"+(e.title||e.fileName||"未命名")+"》开头：\n"+(e.content||"").replace(/\s+/g," ").slice(0,260));
+    });
+  }catch(e){}
+  try{
+    var an=anlList().slice().sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); }).slice(0,3);
+    an.forEach(function(r,i){
+      var rp=r.report||"";
+      var k=rp.indexOf("可复用仿写模板");
+      var seg=(k>=0)? rp.slice(k, k+700) : rp.slice(-700);
+      out.push("【拆文结构样本"+(i+1)+"】《"+(r.srcTitle||r.title||"")+"》\n"+seg.replace(/\s+/g," "));
+    });
+  }catch(e){}
+  return out.join("\n\n");
+}
+async function crawlGenIdeas(){
+  if(crawlTab==="fav"){ toast("请切到「每日热榜」或「七日内」再生成"); return; }
+  var data=getCrawl();
+  var src=(crawlTab==="daily")?(data.daily||[]):(data.week||[]);
+  if(!src.length){ toast("当前没有可生成的热点"); return; }
+  var cfg=(typeof ensureAiCfg==="function")? await ensureAiCfg() : (state.aiCfg||{});
+  if(!cfg || !cfg.key){ toast("还没配置 AI 密钥，先去「🤖 AI 设置」填好"); return; }
+  var samples=crawlAiSamples();
+  var nS=(samples.match(/【/g)||[]).length;
+  if(!confirm("用你的 AI 接口，为当前「"+src.length+" 条」热点各生成一个可直接动笔的短篇骨架。\n\n"
+    +"AI 会先看 "+nS+" 段学习样本（你收录的例文开头 + 拆文库里的结构模板），从中体会什么才算一篇能写的短篇，再动笔。\n\n"
+    +"会发起 1 次 AI 调用（消耗你的额度，耗时几十秒到几分钟）。\n\n点「确定」开始。")) return;
+  var btn=$("#btnCrawlAiIdea"); var oldTxt=btn?btn.textContent:"";
+  if(btn){ btn.disabled=true; btn.textContent="AI 生成中…"; }
+  try{
+    var listTxt=src.map(function(it,i){
+      return (i+1)+". id="+it.id+" ｜ "+it.platform+" ｜ "+it.title+" ｜ "+(it.cat||"")+" ｜ "+((it.summary||"").slice(0,120));
+    }).join("\n");
+    var sys="你是一位中文短篇小说策划编辑。用户是写「追妻火葬场 / 爽文 / 世情 / 复仇」类中文短篇的作者。\n"
+      +"下面先给你她自己收藏的【例文样本】，以及她对例文做过的【拆文结构样本】。请先从这些材料里体会：什么样的东西才算一篇「能直接动笔的中文短篇」——"
+      +"完整的人物处境与反差、明确的冲突起因、至少两步递进、一个翻而有据的反转、明确的结局走向、最后落在一个具体画面上，篇幅 4000-7000 字。\n\n"
+      +"=== 用户自己的例文与拆文样本（仅供学习，不要复述、不要引用）===\n"+samples+"\n=== 样本结束 ===\n\n"
+      +"接下来我给你一批热点，请你为【每一条】热点各创作一个可直接动笔的完整短篇骨架："
+      +"只借用该热点的社会情绪与话题，人物与情节完全虚构，不要复述新闻本身，不要写新闻评论，不要写现实中的真实人物。\n\n"
+      +"每条 idea 必须照这个结构写，200-280 字：\n"
+      +"完整骨架（约XXXX字）类型：人设（谁 + 身份/处境反差）→ 冲突起因 → 递进：①…；②… → 反转：… → 结局HE/BE/开放式：… → 落幅：…（最后一个具体镜头）\n"
+      +"类型从「追妻火葬场 / 世情 / 爽文 / 复仇」中选 1-2 个，用「/」连接，写在「类型：」后面。\n"
+      +"反转要翻而有据，落幅要具体到画面，语言口语化、有画面感，不要文艺腔。\n\n"
+      +"只返回 JSON 对象：{\"items\":[{\"id\":\"原样填我给你的 id\",\"idea\":\"完整骨架…\"}]}，不要附加任何说明文字，id 必须与输入完全一致，一条都不能少。";
+    var mem=(state.aiCfg&&state.aiCfg.aiMemory)||"";
+    if(mem.trim()) sys+="\n\n用户的长期偏好（务必遵守）：\n"+mem.trim();
+    var msgs=[{role:"system",content:sys},{role:"user",content:"今天的热点清单（共 "+src.length+" 条）：\n"+listTxt}];
+    var resp=await aiChat(msgs, true, 0.8);
+    if(!resp || !resp.ok) resp=await aiChat(msgs, false, 0.8);
+    if(!resp || !resp.ok){ toast("AI 调用失败（HTTP "+(resp&&resp.status)+"）：检查密钥/模型名/额度"); return; }
+    var d=await resp.json().catch(function(){ return null; });
+    var c=d&&d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content;
+    var j=tryParseJson(c);
+    var arr=(j&&j.items)||[];
+    if(!arr.length){ toast("AI 没返回可解析的结果，换个模型或再试一次"); return; }
+    state.crawlIdeas=state.crawlIdeas||{};
+    var ok=0;
+    arr.forEach(function(x){
+      var id=String((x&&x.id)||"").trim();
+      var idea=String((x&&x.idea)||"").trim();
+      if(id && idea.length>60){ state.crawlIdeas[id]=idea; ok++; }
+    });
+    try{ await save(); }catch(e){}
+    renderCrawl();
+    toast("AI 已生成 "+ok+" / "+src.length+" 条短篇骨架（已保存，会同步到其他设备）");
+  }catch(err){
+    toast("生成失败："+((err&&err.message)||err));
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent=oldTxt||"🤖 AI 生成短篇想法"; }
+  }
+}
 function renderCrawl(){
   const data=getCrawl();
   renderCrawlPlatforms();
@@ -4915,14 +4993,17 @@ function renderCrawl(){
     const updated = data.updated ? ("数据更新于 "+data.updated) : "当前为内置示例数据（每日自动抓取后将自动替换）";
     meta.textContent=(crawlTab==="daily"?"每日热榜":"七日内")+" · 共 "+list.length+" 条 · 按热度排序 · "+updated;
   }
+  const _ciIdeas=state.crawlIdeas||{};
+  list=list.map(x=> _ciIdeas[x.id] ? Object.assign({},x,{idea:_ciIdeas[x.id]}) : x);
   const box=$("#crawlList"); box.innerHTML="";
   if(!list.length){ box.innerHTML='<div class="empty">'+(crawlTab==="fav"?"还没有收藏，点条目右侧「☆ 收藏」即可":"暂无内容")+'</div>'; return; }
   list.forEach((it,idx)=>box.appendChild(crawlItemCard(it,idx)));
 }
-$$(".ctab").forEach(b=>b.onclick=()=>{
-  $$(".ctab").forEach(x=>x.classList.remove("on")); b.classList.add("on");
+$(".ctab").forEach(b=>b.onclick=()=>{
+  $(".ctab").forEach(x=>x.classList.remove("on")); b.classList.add("on");
   crawlTab=b.dataset.ctab; renderCrawl();
 });
+var _caiIdeaBtn=$("#btnCrawlAiIdea"); if(_caiIdeaBtn) _caiIdeaBtn.onclick=crawlGenIdeas;   /* v39.32 */
 
 /* ---------- 启动（协作版：先登录，再加载共享+私有双保险箱）---------- */
 let collabSharedPwd="", collabPrivPwd="";
