@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>短篇协作版 · 共享工作台</title>
-<script>var APP_VERSION="v39.33";</script>
+<script>var APP_VERSION="v39.34";</script>
 <!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
 <script src="mammoth.browser.min.js"></script>
 <!-- v38.72：JSZip 本地部署（国内镜像下载），用于自研 Word 转换器读取字体颜色/高亮底色（mammoth 不支持） -->
@@ -5006,8 +5006,8 @@ function renderCrawl(){
   if(!list.length){ box.innerHTML='<div class="empty">'+(crawlTab==="fav"?"还没有收藏，点条目右侧「☆ 收藏」即可":"暂无内容")+'</div>'; return; }
   list.forEach((it,idx)=>box.appendChild(crawlItemCard(it,idx)));
 }
-$(".ctab").forEach(b=>b.onclick=()=>{
-  $(".ctab").forEach(x=>x.classList.remove("on")); b.classList.add("on");
+$$(".ctab").forEach(b=>b.onclick=()=>{
+  $$(".ctab").forEach(x=>x.classList.remove("on")); b.classList.add("on");
   crawlTab=b.dataset.ctab; renderCrawl();
 });
 var _caiIdeaBtn=$("#btnCrawlAiIdea"); if(_caiIdeaBtn) _caiIdeaBtn.onclick=crawlGenIdeas;   /* v39.32 */
