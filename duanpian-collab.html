@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>短篇协作版 · 共享工作台</title>
-<script>var APP_VERSION="v39.32";</script>
+<script>var APP_VERSION="v39.33";</script>
 <!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
 <script src="mammoth.browser.min.js"></script>
 <!-- v38.72：JSZip 本地部署（国内镜像下载），用于自研 Word 转换器读取字体颜色/高亮底色（mammoth 不支持） -->
@@ -4908,7 +4908,13 @@ function crawlAiSamples(){
   try{
     var exs=(state.examples||[]).filter(function(e){ return (e.content||"").length>1500; });
     exs.slice(-3).forEach(function(e,i){
-      out.push("【例文样本"+(i+1)+"】《"+(e.title||e.fileName||"未命名")+"》开头：\n"+(e.content||"").replace(/\s+/g," ").slice(0,260));
+      /* v39.33：改「开头+中段+结尾」三段取样——只给开头教不会 AI 什么是一篇完整的短篇 */
+      var t=(e.content||"").replace(/\s+/g," ").trim();
+      var head=t.slice(0,200);
+      var mi=Math.floor(t.length*0.45), mid=t.slice(mi, mi+150);
+      var tail=t.slice(-150);
+      out.push("【例文样本"+(i+1)+"】《"+(e.title||e.fileName||"未命名")+"》\n"
+        +"开头："+head+"\n中段（冲突推进处）："+mid+"\n结尾："+tail);
     });
   }catch(e){}
   try{
@@ -4932,7 +4938,7 @@ async function crawlGenIdeas(){
   var samples=crawlAiSamples();
   var nS=(samples.match(/【/g)||[]).length;
   if(!confirm("用你的 AI 接口，为当前「"+src.length+" 条」热点各生成一个可直接动笔的短篇骨架。\n\n"
-    +"AI 会先看 "+nS+" 段学习样本（你收录的例文开头 + 拆文库里的结构模板），从中体会什么才算一篇能写的短篇，再动笔。\n\n"
+    +"AI 会先看 "+nS+" 段学习样本（你例文的开头/中段/结尾 + 拆文库里的结构模板），从中体会什么才算一篇能写的短篇，再动笔。\n\n"
     +"会发起 1 次 AI 调用（消耗你的额度，耗时几十秒到几分钟）。\n\n点「确定」开始。")) return;
   var btn=$("#btnCrawlAiIdea"); var oldTxt=btn?btn.textContent:"";
   if(btn){ btn.disabled=true; btn.textContent="AI 生成中…"; }
@@ -4941,7 +4947,8 @@ async function crawlGenIdeas(){
       return (i+1)+". id="+it.id+" ｜ "+it.platform+" ｜ "+it.title+" ｜ "+(it.cat||"")+" ｜ "+((it.summary||"").slice(0,120));
     }).join("\n");
     var sys="你是一位中文短篇小说策划编辑。用户是写「追妻火葬场 / 爽文 / 世情 / 复仇」类中文短篇的作者。\n"
-      +"下面先给你她自己收藏的【例文样本】，以及她对例文做过的【拆文结构样本】。请先从这些材料里体会：什么样的东西才算一篇「能直接动笔的中文短篇」——"
+      +"下面先给你她自己收藏的【例文样本】，以及她对例文做过的【拆文结构样本】。【例文样本】每篇给了开头、中段、结尾三段，请重点体会它的起笔方式、冲突推进的节奏、以及最后如何收尾落幅。\n"
+      +"请先从这些材料里体会：什么样的东西才算一篇「能直接动笔的中文短篇」——"
       +"完整的人物处境与反差、明确的冲突起因、至少两步递进、一个翻而有据的反转、明确的结局走向、最后落在一个具体画面上，篇幅 4000-7000 字。\n\n"
       +"=== 用户自己的例文与拆文样本（仅供学习，不要复述、不要引用）===\n"+samples+"\n=== 样本结束 ===\n\n"
       +"接下来我给你一批热点，请你为【每一条】热点各创作一个可直接动笔的完整短篇骨架："
