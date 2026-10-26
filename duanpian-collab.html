@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>短篇协作版 · 共享工作台</title>
-<script>var APP_VERSION="v39.35";</script>
+<script>var APP_VERSION="v39.36";</script>
 <!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
 <script src="mammoth.browser.min.js"></script>
 <!-- v38.72：JSZip 本地部署（国内镜像下载），用于自研 Word 转换器读取字体颜色/高亮底色（mammoth 不支持） -->
@@ -4211,6 +4211,33 @@ function kwReqOpen(){   /* v38.92：编辑「提取方向」——类型/方向�
   pop.append(h,tip,ta,row); row.append(cancel,okBtn);
   document.body.append(mask,pop); ta.focus();
 }
+/* v39.36：导出整个 AI 关键词库为 txt：=== 分组 · 时代（n） 开头，之后每行一个词 */
+function kwExportTxt(){
+  const cat=kwCatGet(); const items=(cat&&Array.isArray(cat.items))?cat.items:[];
+  if(!items.length){ toast("词库还是空的"); return; }
+  const loose=items.filter(it=>!KW_GROUPS.some(g=>(it.intro||"").indexOf(g[1])===0));
+  const groups=KW_GROUPS.map(g=>g[1]); if(loose.length) groups.push("其他");
+  const lines=["# AI关键词词库 · 共 "+items.length+" 个词 · 导出时间 "+new Date().toLocaleString("zh-CN")];
+  groups.forEach(function(gn){
+    const list=(gn==="其他")?loose:items.filter(it=>(it.intro||"").indexOf(gn)===0);
+    ["m","a"].forEach(function(era){
+      const arr=list.filter(it=>(it.era||"m")===era); if(!arr.length) return;
+      lines.push("=== "+gn+" · "+(era==="m"?"现代":"古代")+"（"+arr.length+"）");
+      arr.forEach(function(it){ lines.push(String(it.text||"").trim()); });
+    });
+  });
+  const txt=lines.join("\n");
+  try{
+    const blob=new Blob([txt],{type:"text/plain;charset=utf-8"});
+    const a=document.createElement("a");
+    const d=new Date(); const pad=function(x){ return (x<10?"0":"")+x; };
+    a.href=URL.createObjectURL(blob);
+    a.download="AI关键词库_"+d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+".txt";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1000);
+    toast("已导出 "+items.length+" 个关键词（txt，每行一词）");
+  }catch(e){ toast("导出失败："+e.message); }
+}
 function renderMiscKw(box){
   box.innerHTML="";   /* v38.90 修复：切 tab 先清空旧内容，否则标签墙追加在底下看似没反应 */
   if(!KW_GROUPS.some(g=>g[1]===miscKwGroup)) miscKwGroup=KW_GROUPS[0][1];
@@ -4249,6 +4276,10 @@ function renderMiscKw(box){
   const reqBtn=document.createElement("button"); reqBtn.className="btn sm"; reqBtn.textContent="🎯 提取方向"; reqBtn.title="告诉 AI 你想要哪种类型/方向的关键词，它会照着方向提并自我总结";
   reqBtn.onclick=()=>kwReqOpen();
   head.appendChild(reqBtn);
+  /* v39.36：一键导出整个词库（4 组 × 现代/古代），每行一个词，便于整理成打印稿 */
+  const expBtn=document.createElement("button"); expBtn.className="btn sm"; expBtn.textContent="📤 导出词库"; expBtn.title="把全部关键词按分组、现代/古代导出成 txt 文件（每行一个词）";
+  expBtn.onclick=()=>kwExportTxt();
+  head.appendChild(expBtn);
   const body=document.createElement("div"); body.className="misc-body kw-tagwall";
   const list=(miscKwGroup==="其他")?loose:items.filter(it=>(it.intro||"").indexOf(miscKwGroup)===0);
   /* v39.06：组内分「现代 / 古代」两段——点词切换时代，也可直接拖到另一边；AI 判不出的默认归现代 */
