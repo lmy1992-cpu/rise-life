@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>短篇协作版 · 共享工作台</title>
-<script>var APP_VERSION="v39.37";</script>
+<script>var APP_VERSION="v39.38";</script>
 <!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
 <script src="mammoth.browser.min.js"></script>
 <!-- v38.72：JSZip 本地部署（国内镜像下载），用于自研 Word 转换器读取字体颜色/高亮底色（mammoth 不支持） -->
@@ -1416,6 +1416,7 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
         <span class="hint">分为「类型」与「核心梗」两类，可一键切换，不分级；每个含详细简介</span>
         <span class="spacer"></span>
         <button class="btn primary" id="btnAddTag">+ 新增元素</button>
+        <button class="btn sm" id="btnExportTags" type="button">📤 导出词库</button>
       </div>
       <!-- 元素总览（最上方）：只展示第一行，其余可展开 -->
       <div class="tag-summary" id="tagSummary">
@@ -4468,6 +4469,30 @@ function renderMiscAi(){
 
 /* ---------- 六、元素标签（类型 / 核心梗，不分级） ---------- */
 const tagSumExpanded={type:false,trope:false};
+/* v39.38：导出全部元素标签为 txt：=== 类型（n）/ === 核心梗（n），每行一词；同时复制到剪贴板 */
+function tagExportTxt(){
+  var tags=Array.isArray(state.tags)?state.tags:[];
+  if(!tags.length){ toast("还没有元素标签"); return; }
+  function uniq(arr){ var seen={},out=[]; arr.forEach(function(t){ var n=String(t.name||"").trim(); if(!n||seen[n]) return; seen[n]=1; out.push(n); }); return out; }
+  var types=uniq(tags.filter(function(t){ return (t.kind||"type")==="type"; }));
+  var tropes=uniq(tags.filter(function(t){ return t.kind==="trope"; }));
+  var total=types.length+tropes.length;
+  var lines=["# 元素标签库 · 共 "+total+" 个（已去重） · 导出时间 "+new Date().toLocaleString("zh-CN")];
+  if(types.length){ lines.push("=== 类型（"+types.length+"）"); types.forEach(function(n){ lines.push(n); }); }
+  if(tropes.length){ lines.push("=== 核心梗（"+tropes.length+"）"); tropes.forEach(function(n){ lines.push(n); }); }
+  var txt=lines.join("\n");
+  try{ if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).catch(function(){}); }catch(e){}
+  try{
+    var blob=new Blob([txt],{type:"text/plain;charset=utf-8"});
+    var a=document.createElement("a");
+    var d=new Date(); var pad=function(x){ return (x<10?"0":"")+x; };
+    a.href=URL.createObjectURL(blob);
+    a.download="元素标签库_"+d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+".txt";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1000);
+    toast("已导出 "+total+" 个元素标签：txt 已下载，也已复制，可直接粘贴（每行一词）");
+  }catch(e){ toast("导出失败："+e.message); }
+}
 function renderTagTreeInto(box, filter){
   box.innerHTML="";
   filter=(filter||"").toLowerCase();
@@ -4553,6 +4578,7 @@ function delTag(id){
       b.classList.add("on"); b.style.background="var(--brand,#FF8E72)"; b.style.color="#fff";
     };
   });
+  $("#btnExportTags").onclick=function(){ tagExportTxt(); };
   $("#btnAddTag").onclick=function(){
     const inp=$("#addTagName"); inp.value="";
     seg.querySelectorAll("button").forEach(function(x){ const on=x.dataset.kind==="type"; x.classList.toggle("on",on); x.style.background=on?"var(--brand,#FF8E72)":"var(--panel,#fff)"; x.style.color=on?"#fff":"var(--sub,#666)"; });
