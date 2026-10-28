@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>短篇协作版 · 共享工作台</title>
-<script>var APP_VERSION="v39.38";</script>
+<script>var APP_VERSION="v39.39";</script>
 <!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
 <script src="mammoth.browser.min.js"></script>
 <!-- v38.72：JSZip 本地部署（国内镜像下载），用于自研 Word 转换器读取字体颜色/高亮底色（mammoth 不支持） -->
@@ -5615,6 +5615,7 @@ function anlParseReport(md){
     if(!nm) continue;
     var dim=null;
     if(no>=1&&no<=10){ dim=ANL_DIMS[no-1]; }
+    else if(no>=11){ dim={n:no,k:nm,ic:"✨"}; }
     else{ for(var i=0;i<ANL_DIMS.length;i++){ if(nm.indexOf(ANL_DIMS[i].k)>=0){ dim=ANL_DIMS[i]; break; } } }
     if(dim) hits.push({n:dim.n,dim:dim,start:m.index,title:dim.n+". "+dim.k});
   }
