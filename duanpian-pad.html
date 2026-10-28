@@ -2408,7 +2408,7 @@ $("#btnRdAiTags").onclick=()=>openAiTagReview(curEx());
 /* ---------- 上传解析 ---------- */
 function parseText(text){
   // 归一化：统一换行符、去掉行尾空白、压缩连续空行（修复 Word 上传后“每行自动空一行”）
-  const norm = (text||"").replace(/\r\n/g,"\n").replace(/^[ \t\u3000]+/gm,"").replace(/[ \t]+\n/g,"\n").replace(/\n{2,}/g,"\n").trim();
+  const norm = formatText(text);   /* v39.40：与「一键排版」共用同一套归一化，避免两处逻辑不一致 */
   const lines=norm.split("\n");
   const title=(lines[0]||"").trim();
   let cut=lines.length, markerFound=false;
@@ -2420,8 +2420,19 @@ function parseText(text){
   return {title, intro, body:norm, markerFound};
 }
 function formatText(text){
-  // 一键排版：统一换行符、去掉行尾空白、多空行压成单行
-  return (text||"").replace(/\r\n/g,"\n").replace(/^[ \t\u3000]+/gm,"").replace(/[ \t]+\n/g,"\n").replace(/\n{2,}/g,"\n").trim();
+  /* v39.40 一键排版：统一换行符、去掉行首缩进与行尾空白、多空行压成单行。
+     兼容从 Word / 网页复制进来的「看不见的空白」：不间断空格 \u00A0、窄空格 \u2007/\u202F、
+     零宽字符 \u200B\u200C\u200D、BOM \uFEFF、垂直制表 \v、换页 \f、裸 \r、以及 \u2028/\u2029。
+     少了这一步，这些字符会让「空行」看着是空的、实际不空，\n{2,} 匹配不到，点了也清不掉。*/
+  var s = String(text||"");
+  s = s.replace(/\r\n?/g,"\n").replace(/[\u2028\u2029]/g,"\n");                    /* 统一换行符 */
+  s = s.replace(/[\u200B\u200C\u200D\uFEFF]/g,"");                                    /* 零宽字符直接删 */
+  s = s.replace(/[\u00A0\u2007\u202F]/g," ");                                          /* 不间断/窄空格 → 普通空格 */
+  s = s.split("\n").map(function(l){
+    return l.replace(/^[\s\u3000]+/,"").replace(/[\s\u3000]+$/,"");                    /* 逐行顶格 + 去行尾空白 */
+  }).join("\n");
+  s = s.replace(/\n{2,}/g,"\n");                                                          /* 连续空行压成一个换行 */
+  return s.replace(/^[\n\r\u2028\u2029]+|[\n\r\u2028\u2029]+$/g,"");
 }
 function bufToB64(buf){ let bin=""; const bytes=new Uint8Array(buf); const chunk=0x8000; for(let i=0;i<bytes.length;i+=chunk){ bin+=String.fromCharCode.apply(null, bytes.subarray(i,i+chunk)); } return btoa(bin); }
 function b64ToBytes(b64){ const bin=atob(b64); const len=bin.length; const bytes=new Uint8Array(len); for(let i=0;i<len;i++) bytes[i]=bin.charCodeAt(i); return bytes; }
@@ -3500,7 +3511,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v39.38";
+  var APP_VERSION = "v39.40";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
