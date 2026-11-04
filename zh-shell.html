@@ -924,7 +924,7 @@ navCfg = navCfg.filter(function(x){ return ["inbox","timeline","mood","recycle"]
   }
 })();
 
-const APP_VERSION = "v39.41";
+const APP_VERSION = "v39.42";
 // ===== 健壮存储层：localStorage 不可用时自动回退 IndexedDB（防止刷新丢数据）=====
 // 内部状态挂在 window 上，避免跨 <script> 块时 let 的暂时性死区（TDZ）报错
 // —— 存储层 v2：每条记录带写入时间戳，读取/合并时"取最新"，杜绝旧空值覆盖新数据 ——
@@ -3448,7 +3448,7 @@ window.addEventListener("message", function(e){
     if(distState && distState.cloudTs && pendingMig.mk) setModuleTs(pendingMig.mk, distState.cloudTs);
     pendingMig=null; if(distState){ distState.i++; distStep(); }
   }
-  else if(d.type==="readingPlanChanged"){ try{ ensureReadingPlans(); }catch(err){} }
+  else if(d.type==="readingPlanChanged"){ try{ ensureReadingPlans(); }catch(err){} try{ if(typeof scheduleCloudPush==="function") scheduleCloudPush(); }catch(err){} /* v39.41：模块内改动（含删书墓碑）也要排队上传，否则删除只留本机、云端旧数据会复活 */ }
   else if(d.type==="gameRuleChanged" && d.lvRule){   /* v39.07：在游戏人生页里改的等级规则回传外壳，实时同步 */
     try{
       store.game.lvRule=d.lvRule; persist(GAME_KEY, store.game);
