@@ -791,7 +791,7 @@ navCfg = navCfg.filter(function(x){ return x.key!=="duanpian"; });
 // 迁移：v36 起把 灵感收件箱/时间轴/心情日记/回收站 收进「每日待办」与「人生概览」，移除独立侧栏大模块
 navCfg = navCfg.filter(function(x){ return ["inbox","timeline","mood","recycle"].indexOf(x.key)<0; });
 
-const APP_VERSION = "v39.40";
+const APP_VERSION = "v39.41";
 // ===== 健壮存储层：localStorage 不可用时自动回退 IndexedDB（防止刷新丢数据）=====
 // 内部状态挂在 window 上，避免跨 <script> 块时 let 的暂时性死区（TDZ）报错
 // —— 存储层 v2：每条记录带写入时间戳，读取/合并时"取最新"，杜绝旧空值覆盖新数据 ——
@@ -2624,7 +2624,7 @@ const RDPLAN_LSKEY = "yuedu_shouzhang_v1";
 function rdDiffDays(a,b){ const pa=a.split("-").map(Number),pb=b.split("-").map(Number); return Math.round((Date.UTC(pb[0],pb[1]-1,pb[2])-Date.UTC(pa[0],pa[1]-1,pa[2]))/86400000); }
 function ensureReadingPlans(){
   let books=null;
-  try{ const raw=localStorage.getItem(RDPLAN_LSKEY); if(raw){ const st=JSON.parse(raw); books=(st&&Array.isArray(st.books))?st.books:null; } }catch(e){ return; }
+  try{ const raw=localStorage.getItem(RDPLAN_LSKEY); if(raw){ const st=JSON.parse(raw); books=(st&&Array.isArray(st.books))?st.books.filter(function(b){return !(b&&b._deleted);}):null; } }catch(e){ return; }
   if(!books||!books.length) return;
   const today=todayStr();
   let changed=false;
@@ -2988,6 +2988,9 @@ function localDataTs(){
 function normTitle(t){ return (""+(t||"")).trim().toLowerCase().replace(/\s+/g,"").replace(/[《》\[\]()（）·\-_:：'"’‘“”.,。、~！!?？]/g,""); }
 function _recKey(x){
   if(x==null||typeof x!=="object") return null;
+  /* v39.41：书/电影类记录以归一化书名作去重主键（杜绝同本多 id 重复累加）；
+     游戏任务/健康/签到也带 title 但无 author/totalPages/curPage/director，继续按 id，不受影响。 */
+  if(x.title!=null && (""+x.title).trim()!=="" && (x._deleted||x.author!=null||x.totalPages!=null||x.curPage!=null||x.director!=null)) return "t:"+normTitle(x.title);
   if(x.id) return "id:"+x.id;
   if(x.title!=null && (""+x.title).trim()!=="") return "t:"+normTitle(x.title);
   return null;
@@ -3620,7 +3623,7 @@ function tlCollect(){
   }catch(e){}
   try{
     var ys=JSON.parse(localStorage.getItem('yuedu_shouzhang_v1')||'{}');
-    var books=(ys&&ys.books)||[];
+    var books=((ys&&ys.books)||[]).filter(function(b){ return !(b&&b._deleted); });
     books.forEach(function(bk){ if(bk.finishedAt) evs.push({date:String(bk.finishedAt).slice(0,10), ic:"📚", t:"读完《"+(bk.title||"书")+"》"}); if(bk.startAt) evs.push({date:String(bk.startAt).slice(0,10), ic:"📖", t:"开始读《"+(bk.title||"书")+"》"}); });
   }catch(e){}
   try{
