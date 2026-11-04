@@ -604,10 +604,38 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   }
   /* 仅返回未删除的书：墓碑删除（_deleted）的书只在同步里带走删除标记，不再显示 */
   function liveBooks(){ return (state.books||[]).filter(function(b){ return !(b && b._deleted); }); }
-  /* 按书名归一化去重：同一本书（不同 id，常见于多次添加/同步产生）只保留一本，避免重复累加 */
+  /* v39.41：删除/清空时用的时间戳——保证比本机任何一本活书的 _mod 都新，
+     这样合并时墓碑铁定胜出，绝不会被旧副本顶回来（复活）。 */
+  function _nextMod(){
+    var now=Date.now(), mx=0;
+    (state.books||[]).forEach(function(b){ if(!b||b._deleted) return; var m=b._mod||0; if(m>mx && m<=now+86400000) mx=m; });
+    return Math.max(now, mx+1);
+  }
+  /* 按书名归一化去重：同一本书（不同 id，常见于多次添加/同步产生）只保留一本，避免重复累加。
+     v39.41：合并时把对方的引文/读后感/进度/封面等"用户写过的内容"吸收过来，绝不因去重丢数据。 */
   function dedupBooks(){
     var map={};
     function ck(o){ try{ return Object.keys(o).length; }catch(e){ return 0; } }
+    function absorb(keep, drop){
+      if(!keep||!drop||keep._deleted||drop._deleted) return;
+      try{
+        if(drop.quotes && drop.quotes.length){
+          if(!Array.isArray(keep.quotes)) keep.quotes=[];
+          drop.quotes.forEach(function(q){ if(q && keep.quotes.indexOf(q)<0) keep.quotes.push(q); });
+        }
+        if(!keep.feel && drop.feel) keep.feel=drop.feel;
+        if((drop.curPage||0)>(keep.curPage||0)) keep.curPage=drop.curPage;
+        if(!keep.author && drop.author) keep.author=drop.author;
+        if(!keep.totalPages && drop.totalPages) keep.totalPages=drop.totalPages;
+        if(!keep.cover && drop.cover) keep.cover=drop.cover;
+        if(!keep.finishedAt && drop.finishedAt) keep.finishedAt=drop.finishedAt;
+        if(!keep.genre && drop.genre) keep.genre=drop.genre;
+        if(!keep.nation && drop.nation) keep.nation=drop.nation;
+        if(!keep.status && drop.status) keep.status=drop.status;
+        if(!keep.owned && drop.owned) keep.owned=drop.owned;
+        if(!keep.period && drop.period) keep.period=drop.period;
+      }catch(e){}
+    }
     (state.books||[]).forEach(function(b){
       if(!b||typeof b!=="object"){ return; }
       var key = normTitle(b.title) || ("id:"+(b.id||JSON.stringify(b)));
@@ -615,8 +643,9 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
       if(!ex){ map[key]=b; return; }
       if(b._deleted && !ex._deleted){ map[key]=b; return; }        // 删除标记优先
       if(!b._deleted && ex._deleted){ map[key]=b; return; }        // 允许重新添加（活书优先于墓碑）
-      if((b._mod||0) > (ex._mod||0)) map[key]=b;                  // _mod 更新者胜
-      else if((b._mod||0)===(ex._mod||0) && ck(b)>ck(ex)) map[key]=b; // 字段更全者胜
+      if((b._mod||0) > (ex._mod||0)){ absorb(b, ex); map[key]=b; }  // _mod 更新者胜
+      else if((b._mod||0)===(ex._mod||0) && ck(b)>ck(ex)){ absorb(b, ex); map[key]=b; } // 字段更全者胜
+      else absorb(ex, b);
     });
     state.books = Object.keys(map).map(function(k){ return map[k]; });
   }
@@ -627,8 +656,8 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     var DEMO=["百年孤独","活着"];
     DEMO.forEach(function(t){
       var live=(state.books||[]).filter(function(b){ return !b._deleted && (""+(b.title||"")).trim()===t; });
-      if(live.length){ live.forEach(function(b){ b._deleted=true; if(!b._mod) b._mod=Date.now(); }); }
-      else { state.books.push({id:"__del_"+normTitle(t), title:t, _deleted:true, _mod:Date.now()}); } // 本地无对应书也补墓碑，确保云端同名书一并清除
+      if(live.length){ var nm=_nextMod(); live.forEach(function(b){ b._deleted=true; b._mod=nm; }); }
+      else { state.books.push({id:"__del_"+normTitle(t), title:t, _deleted:true, _mod:_nextMod()}); } // 本地无对应书也补墓碑，确保云端同名书一并清除
     });
     localStorage.setItem("yd_clean_demo_v1","1");
     dedupBooks(); save();
@@ -649,7 +678,10 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     return out;
   }
   /* 给每条记录补上修改时间戳（仅首次缺失时），供同步"以最新为准"判断 */
-  function _stampMods(o){ if(!o||typeof o!=="object")return; Object.keys(o).forEach(function(k){ var v=o[k]; if(Array.isArray(v)) v.forEach(function(it){ if(it&&typeof it==="object"&&it._mod==null) it._mod=Date.now(); }); }); }
+  /* 给每条记录补上修改时间戳（仅首次缺失时），供同步"以最新为准"判断。
+     v39.41：老数据补的是"真实添加时间"而非"当前时间"——否则每次保存都把测试期旧书抬成最新，
+     比删除墓碑还新，删除就会被它顶回来（复活）。 */
+  function _stampMods(o){ if(!o||typeof o!=="object")return; Object.keys(o).forEach(function(k){ var v=o[k]; if(Array.isArray(v)) v.forEach(function(it){ if(it&&typeof it==="object"&&it._mod==null) it._mod=it.addedAt||it.createdAt||it.ts||it.startAt||1; }); }); }
   window.addEventListener("message", function(e){
     var d=e.data||{};
     if(d.type==="getSummary"){ try{ parent.postMessage({type:"summary",mod:MOD,payload:summarize()},"*"); }catch(err){ parent.postMessage({type:"summary",mod:MOD,payload:{error:String(err)}},"*"); } }
@@ -995,7 +1027,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   function deleteBook(){
     if(!editingId) return;
     var b=findBook(editingId);
-    if(b){ b._deleted=true; b._mod=Date.now(); }
+    if(b){ b._deleted=true; b._mod=_nextMod(); }
     save(); closeMask("maskBook"); renderNav(); renderList(state.current);
     toast("已删除（将从所有设备同步移除）");
   }
@@ -1380,7 +1412,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     $("btnClearAll").onclick=function(){ if(confirm("确定清空全部书籍数据？不可恢复")){
       /* v39.41：清空不是把数组抹成空——那样云端旧数据下次同步又会全拉回来。
          改成把每本活书转成墓碑（_deleted），随同步推上去，云端才会一起清空、不再复活。 */
-      var now=Date.now(), keep=[];
+      var now=_nextMod(), keep=[];
       (state.books||[]).forEach(function(b){
         if(!b||typeof b!=="object") return;
         if(b._deleted){ keep.push(b); return; }
@@ -1401,7 +1433,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     $("bkFile").onchange=function(){ var f=this.files&&this.files[0]; if(f) importJson(f); this.value=""; };
     $("btnDetailClose").onclick=function(){ closeMask("maskDetail"); };
     $("btnDetailEdit").onclick=function(){ closeMask("maskDetail"); openBook(detailId); };
-    $("btnDetailDelete").onclick=function(){ if(confirm("确定删除这本书？")){ var b=findBook(detailId); if(b){ b._deleted=true; b._mod=Date.now(); } save(); closeMask("maskDetail"); renderNav(); renderList(state.current); } };
+    $("btnDetailDelete").onclick=function(){ if(confirm("确定删除这本书？")){ var b=findBook(detailId); if(b){ b._deleted=true; b._mod=_nextMod(); } save(); closeMask("maskDetail"); renderNav(); renderList(state.current); } };
     // 点遮罩空白处关闭
     document.querySelectorAll(".mask").forEach(function(m){
       m.addEventListener("click", function(e){ if(e.target===m && m.id!=="maskOcr"){ m.classList.remove("on"); } });
