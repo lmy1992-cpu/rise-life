@@ -924,7 +924,7 @@ navCfg = navCfg.filter(function(x){ return ["inbox","timeline","mood","recycle"]
   }
 })();
 
-const APP_VERSION = "v39.40";
+const APP_VERSION = "v39.41";
 // ===== 健壮存储层：localStorage 不可用时自动回退 IndexedDB（防止刷新丢数据）=====
 // 内部状态挂在 window 上，避免跨 <script> 块时 let 的暂时性死区（TDZ）报错
 // —— 存储层 v2：每条记录带写入时间戳，读取/合并时"取最新"，杜绝旧空值覆盖新数据 ——
@@ -1359,7 +1359,7 @@ function fillLifeStats(){
     if(!todoTotalM && rateN){ todoDoneM=0; todoTotalM=0; }
   }
   const todoRate = todoTotalM ? Math.round(todoDoneM/todoTotalM*100) : 0;
-  let books=[]; try{ const o=JSON.parse(localStorage.getItem("yuedu_shouzhang_v1")); books=(o&&o.books)||[]; }catch(e){}
+  let books=[]; try{ const o=JSON.parse(localStorage.getItem("yuedu_shouzhang_v1")); books=((o&&o.books)||[]).filter(b=>!b._deleted); }catch(e){}
   const doneM=books.filter(function(b){ return b.status==="done" && inM(b.finishedAt); }).length;
   const doneAll=books.filter(function(b){ return b.status==="done"; }).length;
   let weights=[]; try{ const o=JSON.parse(localStorage.getItem("jianfei_v1")); weights=(o&&o.weights)||[]; }catch(e){}
@@ -1571,7 +1571,7 @@ function renderReview(){
   const dp=loadDpDone().filter(function(e){ return inR(e.ts); }).length;
 
   /* 4) 阅读进度：读完本数 + 在读书的页数推进 */
-  let books=[]; try{ const o=JSON.parse(localStorage.getItem("yuedu_shouzhang_v1")); books=(o&&o.books)||[]; }catch(e){}
+  let books=[]; try{ const o=JSON.parse(localStorage.getItem("yuedu_shouzhang_v1")); books=((o&&o.books)||[]).filter(b=>!b._deleted); }catch(e){}
   const bDone=books.filter(function(b){ return b.status==="done" && inR(b.finishedAt); }).length;
   const reading=books.filter(function(b){ return b.status==="reading"; });
   let readPct=null;
@@ -1859,7 +1859,7 @@ function renderTodo(){
         '<span>📖 今日阅读 <b>'+ws.tPages+'</b> 页'+(ws.tMin?(' · <b>'+ws.tMin+'</b> 分钟'):'')+'</span>'+
         '<span style="opacity:.75">本周 '+ws.wPages+' 页'+(ws.wMin?(' · '+ws.wMin+' 分钟'):'')+'</span></div>';
       const st=readModuleLS("yuedu");
-      if(st && Array.isArray(st.books) && st.books.some(x=>x&&x.status==="reading"))
+      if(st && Array.isArray(st.books) && st.books.some(x=>x&&!x._deleted&&x.status==="reading"))
         return '<div style="background:#fff7f3;border:1px dashed #f0c4ad;border-radius:12px;padding:9px 14px;margin-bottom:14px;font-size:13px;color:#8a5a3b">💡 想让「📖 今天读多少页」每天自动出现在待办里？去 <b>阅读手帐</b> → 点书的「编辑」→ 勾选「每日阅读计划」</div>';
       return '';
     })()+
@@ -1978,7 +1978,7 @@ function rdBookOf(t){
   const bid=(t&&t.bookId)||(typeof (t&&t.id)==="string"&&t.id.indexOf("rdplan_")===0?t.id.slice(7,t.id.length-11):null);
   if(!bid) return null;
   const st=readModuleLS("yuedu");
-  const books=(st&&Array.isArray(st.books))?st.books:[];
+  const books=(st&&Array.isArray(st.books))?st.books.filter(b=>!b._deleted):[];
   return books.find(x=>x&&x.id===bid)||null;
 }
 function openRdlog(taskId){
@@ -2005,7 +2005,7 @@ function rdCheckin(){
   if(b){
     try{
       const st=readModuleLS("yuedu");
-      const bb=(st.books||[]).find(x=>x.id===b.id);
+      const bb=(st.books||[]).filter(x=>!x._deleted).find(x=>x.id===b.id);
       if(bb){ bb.currentPage=newCur; bb._mod=Date.now(); writeModuleLS("yuedu", st); notifyModuleImport("yuedu", st, true); }
     }catch(e){}
   }
@@ -3295,7 +3295,7 @@ function runGlobalSearch(q){
   // 阅读手帐（localStorage，同步）
   try{
     const raw=localStorage.getItem("yuedu_shouzhang_v1");
-    if(raw){ const o=JSON.parse(raw); (o.books||[]).forEach(function(b){ if((b.title||"").toLowerCase().indexOf(L)>=0) results.push({mod:"yuedu",icon:"📚",label:"阅读手帐",title:b.title,sub:(b.author||"")+(b.status?(" · "+(b.status==="reading"?"在读":b.status==="done"?"读完":"想读")):"")}); }); }
+    if(raw){ const o=JSON.parse(raw); (o.books||[]).forEach(function(b){ if(!b._deleted && (b.title||"").toLowerCase().indexOf(L)>=0) results.push({mod:"yuedu",icon:"📚",label:"阅读手帐",title:b.title,sub:(b.author||"")+(b.status?(" · "+(b.status==="reading"?"在读":b.status==="done"?"读完":"想读")):"")}); }); }
   }catch(e){}
   // 短篇（IndexedDB，异步）
   const req=indexedDB.open("dp_idb_v1");
@@ -3379,7 +3379,7 @@ const RDPLAN_LSKEY = "yuedu_shouzhang_v1";
 function rdDiffDays(a,b){ const pa=a.split("-").map(Number),pb=b.split("-").map(Number); return Math.round((Date.UTC(pb[0],pb[1]-1,pb[2])-Date.UTC(pa[0],pa[1]-1,pa[2]))/86400000); }
 function ensureReadingPlans(){
   let books=null;
-  try{ const raw=localStorage.getItem(RDPLAN_LSKEY); if(raw){ const st=JSON.parse(raw); books=(st&&Array.isArray(st.books))?st.books:null; } }catch(e){ return; }
+  try{ const raw=localStorage.getItem(RDPLAN_LSKEY); if(raw){ const st=JSON.parse(raw); books=(st&&Array.isArray(st.books))?st.books.filter(b=>!b._deleted):null; } }catch(e){ return; }
   if(!books||!books.length) return;
   const today=todayStr();
   let changed=false;
@@ -3751,6 +3751,9 @@ function localDataTs(){
 function normTitle(t){ return (""+(t||"")).trim().toLowerCase().replace(/\s+/g,"").replace(/[《》\[\]()（）·\-_:：'"’‘“”.,。、~！!?？]/g,""); }
 function _recKey(x){
   if(x==null||typeof x!=="object") return null;
+  /* 书/电影类记录：以归一化书名为去重主键（杜绝同本多 id 造成的重复累加）；
+     游戏任务/健康/签到等也带 title 但无 author/totalPages/curPage/director，继续按 id 去重，不受影响。 */
+  if(x.title!=null && (""+x.title).trim()!=="" && (x._deleted||x.author!=null||x.totalPages!=null||x.curPage!=null||x.director!=null)) return "t:"+normTitle(x.title);
   if(x.id) return "id:"+x.id;
   if(x.title!=null && (""+x.title).trim()!=="") return "t:"+normTitle(x.title);
   return null;
@@ -3778,6 +3781,8 @@ function _mergeArr(la, ca, lts, cts){
   }
   (la||[]).forEach(function(x){ put(x,"local"); });
   (ca||[]).forEach(function(x){ put(x,"cloud"); });
+  /* v39.41：墓碑（_deleted）必须保留在数据里，不能在这里过滤掉——它是「删除意图」的唯一载体，
+     要随本机数据存着、随每次上传带给云端，云端旧副本才会被覆盖清除。显示/统计/搜索各自过滤。 */
   return Object.keys(map).map(function(k){ return map[k].val; });
 }
 function _mergeObjObj(la, ca, lts, cts){
@@ -3810,7 +3815,7 @@ function mergeArrById(la, ca, force){
   });
   var out=la.slice(), seen={}; out.forEach(function(x){ if(x&&x.id!=null) seen[x.id]=1; });
   ca.forEach(function(x){ if(x&&x.id!=null && !seen[x.id]) out.push(x); });
-  return out;
+  return out.filter(function(x){ return !(x && typeof x==="object" && x._deleted); });
 }
 /* v37.9：短篇完成数（{ts} 数组，无 id）按时间戳去重合并 */
 function mergeDpDone(la, ca){
@@ -4408,7 +4413,7 @@ function tlCollect(){
   }catch(e){}
   try{
     var ys=JSON.parse(localStorage.getItem('yuedu_shouzhang_v1')||'{}');
-    var books=(ys&&ys.books)||[];
+    var books=((ys&&ys.books)||[]).filter(function(bk){ return !bk._deleted; });
     books.forEach(function(bk){ if(bk.finishedAt) evs.push({date:String(bk.finishedAt).slice(0,10), ic:"📚", t:"读完《"+(bk.title||"书")+"》"}); if(bk.startAt) evs.push({date:String(bk.startAt).slice(0,10), ic:"📖", t:"开始读《"+(bk.title||"书")+"》"}); });
   }catch(e){}
   try{
