@@ -791,7 +791,7 @@ navCfg = navCfg.filter(function(x){ return x.key!=="duanpian"; });
 // 迁移：v36 起把 灵感收件箱/时间轴/心情日记/回收站 收进「每日待办」与「人生概览」，移除独立侧栏大模块
 navCfg = navCfg.filter(function(x){ return ["inbox","timeline","mood","recycle"].indexOf(x.key)<0; });
 
-const APP_VERSION = "v39.41";
+const APP_VERSION = "v39.42";
 // ===== 健壮存储层：localStorage 不可用时自动回退 IndexedDB（防止刷新丢数据）=====
 // 内部状态挂在 window 上，避免跨 <script> 块时 let 的暂时性死区（TDZ）报错
 // —— 存储层 v2：每条记录带写入时间戳，读取/合并时"取最新"，杜绝旧空值覆盖新数据 ——
@@ -2694,7 +2694,7 @@ window.addEventListener("message", function(e){
     if(distState && distState.cloudTs && pendingMig.mk) setModuleTs(pendingMig.mk, distState.cloudTs);
     pendingMig=null; if(distState){ distState.i++; distStep(); }
   }
-  else if(d.type==="readingPlanChanged"){ try{ ensureReadingPlans(); }catch(err){} }
+  else if(d.type==="readingPlanChanged"){ try{ ensureReadingPlans(); }catch(err){} try{ if(typeof scheduleCloudPush==="function") scheduleCloudPush(); }catch(err){} /* v39.41：模块内改动（含删书墓碑）也要排队上传，否则删除只留本机、云端旧数据会复活 */ }
 });
 // 启动后向游戏人生通信帧拉一次摘要，让浮动陪伴宠物全局可见
 window.addEventListener("load", function(){
