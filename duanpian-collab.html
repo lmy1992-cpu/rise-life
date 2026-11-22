@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>短篇协作版 · 共享工作台</title>
-<script>var APP_VERSION="v39.42";</script>
+<script>var APP_VERSION="v39.43";</script>
 <!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
 <script src="mammoth.browser.min.js"></script>
 <!-- v38.72：JSZip 本地部署（国内镜像下载），用于自研 Word 转换器读取字体颜色/高亮底色（mammoth 不支持） -->
@@ -318,6 +318,7 @@
 #tutContent em{font-style:italic}
 #tutContent table{border-collapse:collapse;margin:.5em 0}
 #tutContent td,#tutContent th{border:1px solid var(--line);padding:6px 8px}
+#tutContent.tut-editing{outline:2px solid var(--brand);outline-offset:3px;border-radius:10px;padding:12px;background:var(--card);min-height:220px}
   @media (max-width:600px){
     .reader-head{flex-direction:column}
     .reader-actions{width:100%}
@@ -1569,6 +1570,7 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
     <div class="reader-head">
       <div class="reader-actions">
         <button class="btn soft" id="btnTutEditContent">✎ 编辑</button>
+        <button class="btn soft" id="btnTutRestoreFmt" style="display:none">↩️ 恢复排版</button>
         <button class="btn soft" id="btnTutDownload">⬇️ 下载</button>
         <button class="btn danger" id="btnTutDelete">删除</button>
         <button class="btn ghost" id="btnTutClose">关闭</button>
@@ -1578,9 +1580,6 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
       <div class="reader-wc" id="tutWc"></div>
     </div>
     <div class="reader-body">
-      <div id="tutView">
-        <div class="rd-content" id="tutContent"></div>
-      </div>
       <div id="tutEditContent" style="display:none">
         <div class="field"><label>标题</label><input type="text" id="tutEdTitle" /></div>
         <div class="field"><label>分类</label>
@@ -1592,11 +1591,14 @@ try{ applyCollabTheme(collabThemeGet()); }catch(_){}
             <option value="其他">其他</option>
           </select>
         </div>
-        <div class="field"><label>正文（可用 # / ## / ### 表示一 / 二 / 三级标题；Word 标题样式会自动转成 # 标题）</label><textarea id="tutEdContent" style="min-height:300px"></textarea></div>
+        <div class="field"><label>正文：直接在下方原文里改字 / 删句子即可，居中、加粗、高亮、颜色都会保留</label></div>
         <div class="modal-actions">
           <button class="btn ghost" id="btnTutContentCancel">取消</button>
           <button class="btn primary" id="btnTutContentSave">保存</button>
         </div>
+      </div>
+      <div id="tutView">
+        <div class="rd-content" id="tutContent"></div>
       </div>
     </div>
   </div>
@@ -3926,8 +3928,93 @@ async function renderTutorialReading(){
   if((t.htmlContent||"").trim()){ ce.innerHTML=t.htmlContent; ce.classList.remove("empty"); }
   else if((t.content||"").trim()){ ce.innerHTML=renderTutorialBody(t.content); ce.classList.remove("empty"); }
   else { ce.innerHTML="（无正文预览）"; ce.classList.add("empty"); }
+  const rb=$("#btnTutRestoreFmt"); if(rb) rb.style.display = tutNeedsRestore(t) ? "" : "none";
 }
-function showTutorialReaderView(which){ $("#tutView").style.display = which==="read" ? "" : "none"; $("#tutEditContent").style.display = which==="content" ? "" : "none"; }
+/* v39.43：阅读区与编辑区合二为一——编辑时直接让原文可编辑，格式天然不丢 */
+function showTutorialReaderView(which){
+  const reading=(which==="read");
+  $("#tutEditContent").style.display = reading ? "none" : "";
+  const ce=$("#tutContent");
+  if(ce){ ce.contentEditable = reading ? "false" : "true"; ce.classList.toggle("tut-editing", !reading); }
+}
+/* 编辑后 HTML 的轻量清理：只去掉脚本/事件/危险标签，保留 style（颜色/高亮全靠它）与 class */
+function sanitizeTutHtml(html){
+  let s=String(html||"");
+  s=s.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,"")
+     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,"")
+     .replace(/<(iframe|object|embed|form|input|button|meta|link)\b[^>]*>[\s\S]*?<\/\1>/gi,"")
+     .replace(/<(iframe|object|embed|form|input|button|meta|link)\b[^>]*\/?>/gi,"")
+     .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi,"")
+     .replace(/\s(?:href|src)\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*')/gi,"");
+  return s;
+}
+/* 判断这篇教程的排版是不是已被旧版 bug 打回纯文本（此时才显示「恢复排版」） */
+function tutNeedsRestore(t){
+  const h=(t&&t.htmlContent)||"";
+  return !!(t && (t.fileData||"").trim() && !t._fmtFixed && h.indexOf('class="tut-p"')>=0 &&
+    h.indexOf("<h1")<0 && h.indexOf("<span")<0 && h.indexOf("<img")<0 &&
+    h.indexOf("text-align")<0 && h.indexOf("background")<0 && h.indexOf("<strong")<0);
+}
+/* 从上传时的原始 Word 重新生成带格式 HTML（协作版优先自研保真转换器，其余用 mammoth） */
+async function regenTutorialHtml(t){
+  const buf=b64ToBytes(t.fileData);
+  if(typeof mammothTutHtml==="function"){ try{ const h=await mammothTutHtml(buf); if(h) return h; }catch(e){} }
+  const r=await mammoth.convertToHtml({arrayBuffer:buf, styleMap:[
+    "p[style-name='Heading 1'] => h1:fresh", "p[style-name='标题 1'] => h1:fresh",
+    "p[style-name='Heading 2'] => h2:fresh", "p[style-name='标题 2'] => h2:fresh",
+    "p[style-name='Heading 3'] => h3:fresh", "p[style-name='标题 3'] => h3:fresh",
+    "p[style-name='Heading 4'] => h4:fresh", "p[style-name='标题 4'] => h4:fresh",
+    "p[style-name='Heading 5'] => h5:fresh", "p[style-name='标题 5'] => h5:fresh",
+    "p[style-name='Heading 6'] => h6:fresh", "p[style-name='标题 6'] => h6:fresh"
+  ]});
+  return r.value||"";
+}
+/* 把用户已改好的纯文字套回 Word 生成的 HTML：
+   逐段精确匹配——没动过的段落直接沿用原来的带格式 HTML；改过/新增的段落用普通文字段；
+   删掉的段落不会回来；纯图片块统一保留在末尾，绝不丢图片。 */
+function mergeTutTextIntoHtml(html, curText){
+  const s=String(html||"");
+  const re=/<(p|h[1-6]|table|blockquote)\b[^>]*>[\s\S]*?<\/\1>/gi;
+  const blocks=[]; let m;
+  while((m=re.exec(s))!==null) blocks.push(m[0]);
+  if(!blocks.length) return s;
+  const pool={}, media=[];
+  blocks.forEach(function(b){
+    const t=htmlToPlainText(b);
+    if(!t){ if(/<img|<table/i.test(b)) media.push(b); return; }
+    (pool[t]=pool[t]||[]).push(b);
+  });
+  /* 相似度兜底：只改了几个错别字（或句尾补几个字）的行，找最像的原段落，
+     把改动文字替换进原 HTML 的文本里，行内高亮/加粗/颜色照样保留，不必退化成普通文字段。 */
+  function similarBlock(k){
+    let best=null, bestScore=0;
+    Object.keys(pool).forEach(function(old){
+      if(!pool[old] || !pool[old].length) return;
+      let p=0; while(p<old.length&&p<k.length&&old[p]===k[p]) p++;
+      let s=0; while(s<old.length-p&&s<k.length-p&&old[old.length-1-s]===k[k.length-1-s]) s++;
+      const score=p+s, ratio=score/Math.max(old.length,k.length);
+      if(ratio>=0.6&&score>bestScore){ bestScore=score; best={old:old,p:p,s:s}; }
+    });
+    return best;
+  }
+  const out=String(curText||"").split("\n").map(function(line){
+    const k=line.trim();
+    if(!k) return '<p class="tut-p"><br></p>';
+    const q=pool[k];
+    if(q&&q.length) return q.shift();
+    const sim=similarBlock(k);
+    if(sim){
+      const b=pool[sim.old].shift();
+      const oldMid=sim.old.slice(sim.p, sim.old.length-sim.s);
+      const newMid=k.slice(sim.p, k.length-sim.s);
+      if(oldMid && (b.split(oldMid).length-1)===1) return b.split(oldMid).join(esc(newMid));
+      if(!oldMid && newMid) return b.replace(/(<\/(?:p|h[1-6])>)\s*$/i, esc(newMid)+'$1');
+    }
+    return '<p class="tut-p">'+esc(line)+'</p>';
+  });
+  if(media.length) out.push(media.join(""));
+  return out.length ? out.join("") : s;
+}
 async function openTutorialEditor(id){
   const t=state.tutorials.find(x=>x.id===id); if(!t) return;
   editCur={tutId:t.id};
@@ -3948,20 +4035,31 @@ function tutorialDownload(){
   triggerDownload(blob, name); toast("已开始下载："+name);
 }
 $("#btnTutClose").onclick=()=>$("#maskEditTut").classList.remove("on");
-let _tutEditOrigBody=null; // v38.71：记录打开编辑框时的正文原文，判断用户是否真的改了正文
-$("#btnTutEditContent").onclick=()=>{ const t=curTut(); if(!t) return; $("#tutEdTitle").value=t.title||""; $("#tutEdCat").value=t.category||"其他"; $("#tutEdContent").value=t.content||""; _tutEditOrigBody=t.content||""; showTutorialReaderView("content"); };
-$("#btnTutContentCancel").onclick=()=>{ _tutEditOrigBody=null; showTutorialReaderView("read"); };
+let _tutEditOrigHtml=null; // 打开编辑时的原文 HTML，取消时用它撤销改动
+$("#btnTutEditContent").onclick=()=>{ const t=curTut(); if(!t) return; $("#tutEdTitle").value=t.title||""; $("#tutEdCat").value=t.category||"其他"; _tutEditOrigHtml=$("#tutContent").innerHTML; showTutorialReaderView("content"); };
+$("#btnTutContentCancel").onclick=()=>{ if(_tutEditOrigHtml!=null){ $("#tutContent").innerHTML=_tutEditOrigHtml; _tutEditOrigHtml=null; } showTutorialReaderView("read"); };
+/* v39.43：保存时原样保留编辑后的 HTML（居中/加粗/高亮/颜色全在），不再按纯文本重排 */
 $("#btnTutContentSave").onclick=async()=>{
   const t=curTut(); if(!t) return;
   t.title=$("#tutEdTitle").value.trim()||"未命名";
   t.category=$("#tutEdCat").value||"其他";
-  t.content=$("#tutEdContent").value;
-  // v38.71：正文没改动就保留 Word 原格式 HTML——只改标题/分类不再把加粗标题打回纯文本；
-  // 只有正文真的改了（Word 的 HTML 已经过时）才按文本重新排版，此时可用 **文字** 写加粗
-  const bodyChanged=(t.content!==(_tutEditOrigBody!=null?_tutEditOrigBody:(t.content||"")));
-  if(bodyChanged || !(t.htmlContent||"").trim()) t.htmlContent=renderTutorialBody(t.content);
-  _tutEditOrigBody=null;
-  save(); await renderTutorialReading(); showTutorialReaderView("read"); renderAll(); toast(bodyChanged?"已保存（正文有改动，已按文本排版）":"已保存");
+  const html=sanitizeTutHtml($("#tutContent").innerHTML);
+  t.htmlContent=html;
+  t.content=htmlToPlainText(html);
+  _tutEditOrigHtml=null;
+  save(); await renderTutorialReading(); showTutorialReaderView("read"); renderAll(); toast("已保存（排版已保留）");
+};
+$("#btnTutRestoreFmt").onclick=async()=>{
+  const t=curTut(); if(!t) return;
+  if(!(t.fileData||"").trim() || typeof mammoth==="undefined"){ toast("找不到上传时的原始 Word，无法恢复排版"); return; }
+  if(!confirm("将从你上传的原始 Word 重新生成排版（居中 / 加粗 / 高亮 / 颜色），并保留你现在改好的文字。\n没动过的段落排版会全部恢复，改动过的那几行显示为普通文字，删掉的句子不会回来。\n建议恢复后通读一遍正文。\n\n现在恢复吗？")) return;
+  try{
+    const h=await regenTutorialHtml(t);
+    if(!h){ toast("原始 Word 解析失败，排版未改动"); return; }
+    t.htmlContent=mergeTutTextIntoHtml(h, t.content||"");
+    t._fmtFixed=1;
+    save(); await renderTutorialReading(); renderAll(); toast("排版已恢复，请通读一遍正文确认");
+  }catch(e){ toast("恢复失败："+(e&&e.message?e.message:e)); }
 };
 $("#btnTutDownload").onclick=tutorialDownload;
 $("#btnTutDelete").onclick=()=>{
