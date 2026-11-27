@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>短篇协作版 · 共享工作台</title>
-<script>var APP_VERSION="v39.44";</script>
+<script>var APP_VERSION="v39.45";</script>
 <!-- mammoth 改为本地部署，避免 cdnjs.cloudflare.com 国内被墙 -->
 <script src="mammoth.browser.min.js"></script>
 <!-- v38.72：JSZip 本地部署（国内镜像下载），用于自研 Word 转换器读取字体颜色/高亮底色（mammoth 不支持） -->
@@ -4605,8 +4605,9 @@ function renderMiscKw(box){
     segWrap.ondrop=(e)=>{
       e.preventDefault(); segWrap.style.background="";
       const id=(e.dataTransfer&&e.dataTransfer.getData("text/plain"))||"";
-      const t=cat.items.find(x=>x.id===id);
-      if(t && (t.era||"m")!==era){ t.era=era; save(); renderMisc(); toast(era==="a"?("「"+t.text+"」已移到古代"):("「"+t.text+"」已移到现代")); }
+      const c=kwCatGet(); const t=(c&&Array.isArray(c.items))?c.items.find(x=>x.id===id):null;   /* v39.45：按 id 从当前 state 取，不用渲染时捕获的旧 cat */
+      if(t && (t.era||"m")!==era){ t.era=era; t._eraTs=Date.now(); save(); renderMisc(); toast(era==="a"?("「"+t.text+"」已移到古代"):("「"+t.text+"」已移到现代")); }
+      else if(!t){ renderMisc(); toast("词库刚同步过，请再操作一次"); }
     };
     const arr=list.filter(it=>(it.era||"m")===era);
     if(!arr.length){
@@ -4617,10 +4618,16 @@ function renderMiscKw(box){
     arr.forEach(it=>{
       const tag=document.createElement("span"); tag.className="kw-tag"; tag.textContent=it.text;
       tag.draggable=true; tag.title="点一下切到"+(era==="m"?"古代":"现代")+"；也可拖到另一边";
-      tag.onclick=()=>{ it.era=(era==="m")?"a":"m"; save(); renderMisc(); toast((era==="m")?("「"+it.text+"」已移到古代"):("「"+it.text+"」已移到现代")); };
+      tag.onclick=()=>{   /* v39.45：按 id 取当前对象，避免同步后改到孤儿引用 */
+        const c=kwCatGet(); const t=(c&&Array.isArray(c.items))?c.items.find(x=>x.id===it.id):null;
+        if(!t){ renderMisc(); toast("词库刚同步过，请再点一次"); return; }
+        const to=((t.era||"m")==="m")?"a":"m";
+        t.era=to; t._eraTs=Date.now();
+        save(); renderMisc(); toast("「"+t.text+"」已移到"+(to==="a"?"古代":"现代"));
+      };
       tag.ondragstart=(e)=>{ try{ e.dataTransfer.setData("text/plain",it.id); e.dataTransfer.effectAllowed="move"; }catch(_){} };
       const x=document.createElement("i"); x.className="kw-tag-x"; x.textContent="✕"; x.title="删除这个词";
-      x.onclick=(e)=>{ e.stopPropagation(); const c=kwCatGet(); if(!c) return; const ii=c.items.indexOf(it); if(ii>=0){ c.items.splice(ii,1); save(); renderMisc(); } };
+      x.onclick=(e)=>{ e.stopPropagation(); const c=kwCatGet(); if(!c||!Array.isArray(c.items)) return; const ii=c.items.findIndex(x=>x.id===it.id); if(ii>=0){ c.items.splice(ii,1); save(); renderMisc(); } };   /* v39.45：按 id 找，同步后也能删掉 */
       tag.appendChild(x);
       segWrap.appendChild(tag);
     });
@@ -5020,7 +5027,7 @@ $("#btnAiInstrDefault").onclick=()=>{ $("#aiInstruction").value=defaultAiInstruc
 $$(".mask").forEach(m=>{ if(m.id==="maskLogin") return; m.addEventListener("click",e=>{ if(e.target===m) m.classList.remove("on"); }); });   // v39.00：登录弹窗不参加「点空白关闭」——误点遮罩会关掉登录窗且再无入口，卡进未登录死角
 
 /* ---------- 渲染总入口 ---------- */
-function renderAll(){ renderExamples(); renderTutorials(); renderMaterials(); renderBrainstorms(); renderSubEmails(); }
+function renderAll(){ renderExamples(); renderTutorials(); renderMaterials(); renderBrainstorms(); renderSubEmails(); if(typeof renderMisc==="function"){ try{ renderMisc(); }catch(e){ console.warn("renderMisc fail",e); } } }   /* v39.45：同步后杂项区也必须重绘，否则词墙 DOM 绑着旧 state 的孤儿对象，点词改不动 */
 
 /* ---------- 七、想法拓展 ---------- */
 let ideaSel={examples:new Set(),intros:new Set(),materials:new Set(),brainstorms:new Set(),misc:new Set(),tags:new Set(),crawl:new Set()};
