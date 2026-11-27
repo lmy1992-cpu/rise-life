@@ -3694,7 +3694,7 @@ $("#btnAiInstrDefault").onclick=()=>{ $("#aiInstruction").value=defaultAiInstruc
 $$(".mask").forEach(m=>m.addEventListener("click",e=>{ if(e.target===m) m.classList.remove("on"); }));
 
 /* ---------- 渲染总入口 ---------- */
-function renderAll(){ renderExamples(); renderTutorials(); renderMaterials(); renderBrainstorms(); }
+function renderAll(){ renderExamples(); renderTutorials(); renderMaterials(); renderBrainstorms(); if(typeof renderMisc==="function"){ try{ renderMisc(); }catch(e){ console.warn("renderMisc fail",e); } } }   /* v39.45：同步后杂项区也必须重绘 */
 
 /* ---------- 七、想法拓展 ---------- */
 let ideaSel={examples:new Set(),intros:new Set(),materials:new Set(),brainstorms:new Set(),misc:new Set(),tags:new Set(),crawl:new Set()};
@@ -4009,7 +4009,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v39.44";
+  var APP_VERSION = "v39.45";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
