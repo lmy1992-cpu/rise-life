@@ -855,16 +855,29 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 .dup-empty{padding:26px 12px;text-align:center;color:var(--sub);font-size:13.5px;line-height:1.8}
 .dup-loading{padding:26px 12px;text-align:center;color:var(--brand);font-size:13.5px}
 @media (max-width:600px){ .dup-col{flex:1 1 100%} .dup-gmeta{margin-left:0} }
+.dup-risk{margin:0 0 10px;padding:9px 11px;border:1px solid #ffc7a8;background:#fff6f0;border-radius:9px;font-size:12.5px;line-height:1.75;color:#8a431f}
+.dup-flags{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 7px}
+.dup-fl{font-size:11.5px;line-height:1.5;border-radius:6px;padding:2px 7px;border:1px solid var(--line);background:var(--soft);color:var(--ink2)}
+.dup-fl.anl{background:#fff1e9;border-color:#ffc7a8;color:#b4531f;font-weight:700}
+.dup-fl.tag{background:#fff7e6;border-color:#ffe0a3;color:#8a5a12;font-weight:600}
+.dup-fl.intro{background:#fff0f3;border-color:#ffd0da;color:#a34462}
+.dup-fl.none{color:var(--sub);background:transparent;border-style:dashed}
+.dup-col.hasvalue{border-color:#ffc7a8;box-shadow:inset 3px 0 0 var(--brand)}
+.dup-suggest{font-size:11.5px;font-weight:700;margin:0 0 6px;padding:2px 7px;border-radius:6px;display:inline-block}
+.dup-suggest.keep{background:#fff1e9;color:#b4531f}
+.dup-suggest.del{background:var(--soft);color:var(--sub)}
+.dup-del.warn{color:#c0392b}
 </style>
 <div class="mask" id="maskDup">
   <div class="modal" style="max-width:880px">
     <h3>🔍 例文重复检查</h3>
-    <div class="sub" style="line-height:1.7">按<b>正文内容</b>逐篇比对，所以「同一故事、只换了人名/标题」也能查出来。<br>⚠️ 只在你这台设备上算，<b>不上传、不调用 AI、绝不自动删除</b>；宁可多列，由你判断。勾选后点底部删除才会生效。</div>
+    <div class="sub" style="line-height:1.7">按<b>正文内容</b>逐篇比对，所以「同一故事、只换了人名/标题」也能查出来。<br>⚠️ 只在你这台设备上算，<b>不上传、不调用 AI、绝不自动删除</b>；宁可多列，由你判断。勾选后点底部删除才会生效。<br>每篇都标了「有没有拆过文 / 加了元素 / 写了引文」，<b>优先删标「✅ 建议删这篇」的空白篇</b>；勾到有内容的会再提醒一次。</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0 8px">
       <span id="dupSummary" style="font-size:12.5px;color:var(--sub)"></span>
       <span class="spacer" style="flex:1"></span>
       <button class="btn sm" id="btnDupRescan">🔄 重新检查</button>
     </div>
+    <div id="dupRiskNote" class="dup-risk" style="display:none"></div>
     <div class="dup-wrap" id="dupResults"></div>
     <div class="modal-actions" style="align-items:center">
       <span id="dupSafeTip" style="font-size:11.5px;color:var(--sub);margin-right:auto"></span>
@@ -1986,16 +1999,39 @@ function dupCommonSpan(normA,inter){
   if(cur.length>best.length) best=cur;
   return best;
 }
-/* 返回 {groups:[{cover,jac,inter,span,items:[{id,title,fileName,norm,createdAt}]}], scanned:N}
+/* v39.46：算每篇的「附加成果」——已拆文报告数 / 元素标签名 / 引文条数，用来防止误删有内容的那篇。
+   ctx 可传入 state（便于测试）；缺省时安全回退到全局 state；三份工作台没有 analyses，自动不算拆文。 */
+function dupFlags(e, ctx){
+  var S=(ctx&&typeof ctx==="object")?ctx:((typeof state!=="undefined"&&state)?state:{});
+  var out={anl:0,tagNames:[],intros:0,valuable:false};
+  try{ var an=Array.isArray(S.analyses)?S.analyses:[];
+    out.anl=an.filter(function(a){ return a && String(a.srcId)===String(e.id); }).length; }catch(_){}
+  try{ var tg=Array.isArray(S.tags)?S.tags:[];
+    (Array.isArray(e.tags)?e.tags:[]).forEach(function(id){
+      var t=tg.find(function(x){ return x && String(x.id)===String(id); });
+      if(t && t.name && out.tagNames.indexOf(String(t.name))<0) out.tagNames.push(String(t.name));
+    }); }catch(_){}
+  try{ var ins=Array.isArray(S.intros)?S.intros:[];
+    out.intros=ins.filter(function(it){ return it && String(it.exampleId)===String(e.id); }).length; }catch(_){}
+  out.valuable=(out.anl>0||out.tagNames.length>0||out.intros>0);
+  return out;
+}
+function dupFlagsOf(id){
+  try{ var S=(typeof state!=="undefined"&&state)?state:{};
+    var e=(Array.isArray(S.examples)?S.examples:[]).find(function(x){ return x && String(x.id)===String(id); });
+    return e?dupFlags(e,S):{anl:0,tagNames:[],intros:0,valuable:false};
+  }catch(_){ return {anl:0,tagNames:[],intros:0,valuable:false}; }
+}
+/* 返回 {groups:[{cover,jac,inter,span,items:[{id,title,fileName,norm,createdAt,flags}]}], scanned:N}
    判定：正文汉字>=60、共同 5-gram>=20、较小篇覆盖率>=0.62、且最长连续共同片段>=30 字 —— 最后一关排除「同题材套话」误报 */
-function dupScanExamples(examples){
+function dupScanExamples(examples, ctx){
   var docs=[];
   (examples||[]).forEach(function(e){
     if(!e || e._deleted) return;
     var norm=dupNorm(e.content!=null?e.content:(e.text||""));
     if(norm.length<60) return;
     docs.push({id:String(e.id), title:String(e.title||"未命名"), fileName:String(e.fileName||""),
-      createdAt:e.createdAt, norm:norm, grams:dupGrams(norm,5)});
+      createdAt:e.createdAt, norm:norm, grams:dupGrams(norm,5), flags:dupFlags(e, ctx)});
   });
   if(docs.length<2) return {groups:[], scanned:docs.length};
   var inv=new Map(), CAP=40;
@@ -2050,10 +2086,14 @@ function dupScanExamples(examples){
   return {groups:groups, scanned:docs.length};
 }
 function dupUpdateCount(){
-  var n=0;
-  try{ n=document.querySelectorAll("#dupResults input[data-del]:checked").length; }catch(e){}
+  var n=0, v=0;
+  try{ document.querySelectorAll("#dupResults input[data-del]:checked").forEach(function(x){ n++; if(x.getAttribute("data-valuable")==="1") v++; }); }catch(e){}
   var b=document.getElementById("btnDupApply");
-  if(b && !b._armed){ b.textContent="🗑 删除选中（"+n+" 篇）"; b.disabled=(n===0); }
+  if(b && b._dupRisk){   /* 勾选一变，之前的风险确认立刻作废 */
+    clearTimeout(b._dupTimer); delete b._dupRisk; b.classList.remove("armed");
+    var rk=document.getElementById("dupRiskNote"); if(rk) rk.style.display="none";
+  }
+  if(b && !b._armed){ b.textContent = v? ("⚠️ 删除选中（"+n+" 篇，含 "+v+" 篇有内容）") : ("🗑 删除选中（"+n+" 篇）"); b.disabled=(n===0); }
 }
 function dupRenderGroups(r){
   var box=document.getElementById("dupResults"); if(!box) return;
@@ -2067,15 +2107,36 @@ function dupRenderGroups(r){
   r.groups.forEach(function(g,gi){
     var pct=Math.round(g.cover*100);
     var level=pct>=88?"几乎相同（很可能只是改了名字）":(pct>=72?"高度重叠":"部分相似，请仔细看");
+    var fls=g.items.map(function(d){ return d.flags||dupFlagsOf(d.id); });
+    var keepN=fls.filter(function(f){ return f&&f.valuable; }).length;
+    var canSuggest=(keepN>0 && keepN<g.items.length);   /* 组里既有有内容的、又有空白的，才给建议 */
     html+='<div class="dup-group">';
     html+='<div class="dup-gh"><span class="dup-badge">#'+(gi+1)+' · 相似度 '+pct+'%</span><span class="dup-level">'+level+'</span><span class="dup-gmeta">共同 '+g.inter+' 处 · '+g.items.length+' 篇</span></div>';
     html+='<div class="dup-span">📎 共同内容（节选）：「'+esc(g.span.slice(0,90))+(g.span.length>90?"…":"")+'」</div>';
     html+='<div class="dup-cols">';
-    g.items.forEach(function(d){
-      html+='<div class="dup-col"><h4>'+esc(d.title)+'</h4>'+
+    g.items.forEach(function(d,di){
+      var f=fls[di]||{anl:0,tagNames:[],intros:0,valuable:false};
+      var tips=[];
+      if(f.anl>0) tips.push("已拆文 "+f.anl+" 篇");
+      if(f.tagNames.length) tips.push("元素 "+f.tagNames.length+" 个");
+      if(f.intros>0) tips.push("引文 "+f.intros+" 条");
+      var ftxt=tips.join("、")||"无附加内容";
+      var badges="";
+      if(f.valuable){
+        if(f.anl>0) badges+='<span class="dup-fl anl">✂️ 已拆文 '+f.anl+' 篇</span>';
+        if(f.tagNames.length) badges+='<span class="dup-fl tag" title="'+esc(f.tagNames.join("、"))+'">🏷️ 元素 '+f.tagNames.length+' 个：'+esc(f.tagNames.slice(0,6).join("、"))+(f.tagNames.length>6?"…":"")+'</span>';
+        if(f.intros>0) badges+='<span class="dup-fl intro">📝 引文 '+f.intros+' 条</span>';
+      }else{
+        badges='<span class="dup-fl none">○ 无拆文 · 无元素 · 无引文</span>';
+      }
+      var suggest="";
+      if(canSuggest) suggest=f.valuable?'<span class="dup-suggest keep">⚠️ 有内容，建议保留</span>':'<span class="dup-suggest del">✅ 建议删这篇（空白）</span>';
+      html+='<div class="dup-col'+(f.valuable?" hasvalue":"")+'">'+suggest+
+        '<h4>'+esc(d.title)+'</h4>'+
+        '<div class="dup-flags">'+badges+'</div>'+
         '<div class="dup-meta">'+esc(d.fileName||"无文件名")+' · 正文 '+d.norm.length+' 字'+(d.createdAt?(' · 添加 '+esc(fmtDate(d.createdAt))):"")+'</div>'+
         '<div class="dup-prev">'+esc(d.norm.slice(0,110))+(d.norm.length>110?"…":"")+'</div>'+
-        '<label class="dup-del"><input type="checkbox" data-del="'+esc(d.id)+'"> 删除这一篇</label></div>';
+        '<label class="dup-del'+(f.valuable?" warn":"")+'"><input type="checkbox" data-del="'+esc(d.id)+'" data-valuable="'+(f.valuable?"1":"0")+'" data-title="'+esc(d.title)+'" data-flagtxt="'+esc(ftxt)+'"> 删除这一篇'+(f.valuable?"（⚠️ 有内容）":"")+'</label></div>';
     });
     html+='</div></div>';
   });
@@ -2090,36 +2151,61 @@ function dupOpenCheck(){
   if(box) box.innerHTML='<div class="dup-loading">🔍 正在逐篇比对正文，请稍候…</div>';
   var s=document.getElementById("dupSummary"); if(s) s.textContent="";
   var b=document.getElementById("btnDupApply");
-  if(b){ b._armed=false; b.classList.remove("armed"); b.disabled=true; b.textContent="🗑 删除选中（0 篇）"; }
+  if(b){ b._armed=false; delete b._dupRisk; clearTimeout(b._dupTimer); b.classList.remove("armed"); b.disabled=true; b.textContent="🗑 删除选中（0 篇）"; }
+  var rk=document.getElementById("dupRiskNote"); if(rk) rk.style.display="none";
   var tip=document.getElementById("dupSafeTip");
   if(tip) tip.textContent=(typeof trashPush==="function")?"删除后会进回收站，可找回":"删除后无法找回，请先确认";
   setTimeout(function(){
-    try{ dupRenderGroups(dupScanExamples((state&&state.examples)||[])); }
+    try{ dupRenderGroups(dupScanExamples((state&&state.examples)||[], state)); }
     catch(e){ if(box) box.innerHTML='<div class="dup-empty">检查时出错：'+esc((e&&e.message)||String(e))+'</div>'; }
   },30);
 }
 /* 删除：只按用户勾选的 id 集合 filter（绝不按索引连续 splice），复用现有回收站 / save() / renderAll() 链路 */
-function dupApplyDelete(btn){
-  var ids=[];
-  try{ document.querySelectorAll("#dupResults input[data-del]:checked").forEach(function(x){ ids.push(x.getAttribute("data-del")); }); }catch(e){}
-  if(!ids.length){ toast("请先勾选要删除的例文"); return; }
-  armDelete(btn, function(){
-    var set=new Set(ids);
-    var exs=(state&&state.examples)||[];
-    if(typeof trashPush==="function"){
-      exs.forEach(function(e){
-        if(set.has(e.id)) trashPush("example", e.title||"未命名例文", {ex:e, intros:(state.intros||[]).filter(function(it){ return it.exampleId===e.id; })});
-      });
-    }
-    state.examples=exs.filter(function(x){ return !set.has(x.id); });
-    state.intros=(state.intros||[]).filter(function(it){ return !set.has(it.exampleId); });
-    save();
-    var m=document.getElementById("maskDup"); if(m) m.classList.remove("on");
-    renderAll();
-    toast("已删除 "+ids.length+" 篇重复例文"+(typeof trashPush==="function"?"（回收站可找回）":""));
-  });
+function dupDoDelete(ids){
+  var set=new Set(ids);
+  var exs=(state&&state.examples)||[];
+  if(typeof trashPush==="function"){
+    exs.forEach(function(e){
+      if(set.has(e.id)) trashPush("example", e.title||"未命名例文", {ex:e, intros:(state.intros||[]).filter(function(it){ return it.exampleId===e.id; })});
+    });
+  }
+  state.examples=exs.filter(function(x){ return !set.has(x.id); });
+  state.intros=(state.intros||[]).filter(function(it){ return !set.has(it.exampleId); });
+  save();
+  var m=document.getElementById("maskDup"); if(m) m.classList.remove("on");
+  renderAll();
+  toast("已删除 "+ids.length+" 篇重复例文"+(typeof trashPush==="function"?"（回收站可找回）":""));
 }
-/* ===== /v39.44 例文重复检查 ===== */
+/* v39.46：勾到「已拆文 / 有元素 / 有引文」的篇时，先在弹窗里把风险摊开，再点一次才真删。
+   不用原生 confirm（有些环境会拦截），全部内联完成。全空白篇保持原来的 armDelete 二次确认。 */
+function dupApplyDelete(btn){
+  var ids=[], valuable=[];
+  try{ document.querySelectorAll("#dupResults input[data-del]:checked").forEach(function(x){
+    ids.push(x.getAttribute("data-del"));
+    if(x.getAttribute("data-valuable")==="1") valuable.push({t:x.getAttribute("data-title")||"未命名", f:x.getAttribute("data-flagtxt")||"有内容"});
+  }); }catch(e){}
+  if(!ids.length){ toast("请先勾选要删除的例文"); return; }
+  var risk=document.getElementById("dupRiskNote");
+  if(valuable.length){
+    if(!btn._dupRisk){
+      var lines=valuable.slice(0,6).map(function(v){ return "· 《"+esc(v.t)+"》："+esc(v.f); }).join("<br>");
+      if(valuable.length>6) lines+="<br>· ……还有 "+(valuable.length-6)+" 篇";
+      if(risk){ risk.innerHTML='<b>⚠️ 你勾选的 '+ids.length+' 篇里，有 '+valuable.length+' 篇带着工作成果：</b><br>'+lines+'<br>删掉例文后，这些元素和引文会一起移除'+(typeof trashPush==="function"?"（回收站可找回）":"（这里删了找不回来）")+'；拆文报告仍留在拆文库，但会失去关联的例文。<br><b>建议只勾「✅ 建议删这篇」的空白篇。</b>'; risk.style.display="block"; }
+      btn._dupRisk=true; btn._dupOrig=btn.textContent;
+      btn.textContent="⚠️ 仍要删除？再点一次确认";
+      btn.classList.add("armed");
+      clearTimeout(btn._dupTimer);
+      btn._dupTimer=setTimeout(function(){ delete btn._dupRisk; btn.classList.remove("armed"); btn.textContent=btn._dupOrig||"🗑 删除选中"; if(risk) risk.style.display="none"; }, 8000);
+      return;
+    }
+    clearTimeout(btn._dupTimer); delete btn._dupRisk; btn.classList.remove("armed");
+    if(risk) risk.style.display="none";
+    dupDoDelete(ids); return;
+  }
+  if(risk) risk.style.display="none";
+  armDelete(btn, function(){ dupDoDelete(ids); });
+}
+/* ===== /v39.46 例文重复检查 ===== */
 
 function renderExamples(){
   const g=$("#examplesGrid"); g.innerHTML="";
@@ -3811,7 +3897,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v39.45";
+  var APP_VERSION = "v39.46";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
