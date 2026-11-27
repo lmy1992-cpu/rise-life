@@ -664,6 +664,7 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
         <input type="text" id="exSearch" placeholder="🔍 搜索例文标题 / 文件名" style="min-width:160px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px;margin-right:8px" />
         <button class="btn sm btnFilter" id="btnFilterExamples">⚲ 元素筛选</button>
         <button class="btn primary" id="btnUploadExample">+ 上传例文（可批量）</button>
+        <button class="btn sm" id="btnCheckDupEx" title="扫描例文正文，找出内容重复的篇目（名字改了也能查出来），由你决定删哪篇" style="border-color:var(--brand);color:var(--brand);font-weight:600">🔍 查重复</button>
         <input type="file" id="fileExample" class="hidden-file" accept=".docx,.txt" multiple />
       </div>
       <div class="grid" id="examplesGrid"></div>
@@ -825,7 +826,42 @@ html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   </main>
 </div>
 
-<!-- 上传例文弹窗 -->
+<style id="dupCss">
+.dup-wrap{max-height:68vh;overflow:auto;padding:2px}
+.dup-group{border:1px solid var(--line);border-radius:12px;padding:12px;margin:0 0 12px;background:var(--card)}
+.dup-gh{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}
+.dup-badge{background:var(--brand);color:#fff;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700}
+.dup-level{font-size:12.5px;color:var(--ink);font-weight:600}
+.dup-gmeta{font-size:11.5px;color:var(--sub);margin-left:auto}
+.dup-span{background:var(--soft);border-left:3px solid var(--brand);padding:7px 10px;font-size:12.5px;line-height:1.6;color:var(--ink2);margin-bottom:10px;max-height:76px;overflow:auto;word-break:break-all}
+.dup-cols{display:flex;gap:10px;flex-wrap:wrap}
+.dup-col{flex:1 1 240px;min-width:0;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--panel)}
+.dup-col h4{margin:0 0 6px;font-size:14px;color:var(--ink);word-break:break-all}
+.dup-meta{font-size:11.5px;color:var(--sub);margin-bottom:6px;word-break:break-all}
+.dup-prev{font-size:12.5px;line-height:1.65;max-height:92px;overflow:auto;white-space:pre-wrap;color:var(--ink2);word-break:break-all}
+.dup-del{display:flex;align-items:center;gap:6px;margin-top:9px;font-size:13px;color:var(--danger);cursor:pointer;font-weight:600}
+.dup-empty{padding:26px 12px;text-align:center;color:var(--sub);font-size:13.5px;line-height:1.8}
+.dup-loading{padding:26px 12px;text-align:center;color:var(--brand);font-size:13.5px}
+@media (max-width:600px){ .dup-col{flex:1 1 100%} .dup-gmeta{margin-left:0} }
+</style>
+<div class="mask" id="maskDup">
+  <div class="modal" style="max-width:880px">
+    <h3>🔍 例文重复检查</h3>
+    <div class="sub" style="line-height:1.7">按<b>正文内容</b>逐篇比对，所以「同一故事、只换了人名/标题」也能查出来。<br>⚠️ 只在你这台设备上算，<b>不上传、不调用 AI、绝不自动删除</b>；宁可多列，由你判断。勾选后点底部删除才会生效。</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0 8px">
+      <span id="dupSummary" style="font-size:12.5px;color:var(--sub)"></span>
+      <span class="spacer" style="flex:1"></span>
+      <button class="btn sm" id="btnDupRescan">🔄 重新检查</button>
+    </div>
+    <div class="dup-wrap" id="dupResults"></div>
+    <div class="modal-actions" style="align-items:center">
+      <span id="dupSafeTip" style="font-size:11.5px;color:var(--sub);margin-right:auto"></span>
+      <button class="btn danger" id="btnDupApply" disabled>🗑 删除选中（0 篇）</button>
+      <button class="btn" id="btnDupClose">关闭</button>
+    </div>
+  </div>
+</div>
+    <!-- 上传例文弹窗 -->
 <!-- 上传预审清单 -->
 <style>
 #maskUploadPreview .up-prev-list{max-height:52vh;overflow:auto;margin:10px 0;border:1px solid #eee;border-radius:10px}
@@ -1945,6 +1981,163 @@ function matchesSearch(e){
   const kw=exSearchKeyword;
   return ((e.title||"").toLowerCase().includes(kw)) || ((e.fileName||"").toLowerCase().includes(kw));
 }
+/* ===== v39.44 例文重复检查：按正文比对，名字/标题不同也能识别 ===== */
+/* 纯本地计算，不联网、不调 AI、不改动数据；只有用户勾选并二次确认才调用 save() */
+function dupNorm(t){
+  return String(t==null?"":t)
+    .replace(/[\s\u00A0\u3000]/g,"")
+    .replace(/[^\u4e00-\u9fa5]/g,"");
+}
+function dupGrams(norm,k){
+  var s=new Set(); k=k||5;
+  for(var i=0;i+k<=norm.length;i++) s.add(norm.substr(i,k));
+  return s;
+}
+/* 两篇里最长的一段连续共同内容：用交集 5-gram 在 A 上标记连续区 */
+function dupCommonSpan(normA,inter){
+  var k=5,best="",cur="";
+  for(var i=0;i+k<=normA.length;i++){
+    if(inter.has(normA.substr(i,k))){ cur = cur ? (cur+normA.charAt(i+k-1)) : normA.substr(i,k); }
+    else { if(cur.length>best.length) best=cur; cur=""; }
+  }
+  if(cur.length>best.length) best=cur;
+  return best;
+}
+/* 返回 {groups:[{cover,jac,inter,span,items:[{id,title,fileName,norm,createdAt}]}], scanned:N}
+   判定：正文汉字>=60、共同 5-gram>=20、较小篇覆盖率>=0.62、且最长连续共同片段>=30 字 —— 最后一关排除「同题材套话」误报 */
+function dupScanExamples(examples){
+  var docs=[];
+  (examples||[]).forEach(function(e){
+    if(!e || e._deleted) return;
+    var norm=dupNorm(e.content!=null?e.content:(e.text||""));
+    if(norm.length<60) return;
+    docs.push({id:String(e.id), title:String(e.title||"未命名"), fileName:String(e.fileName||""),
+      createdAt:e.createdAt, norm:norm, grams:dupGrams(norm,5)});
+  });
+  if(docs.length<2) return {groups:[], scanned:docs.length};
+  var inv=new Map(), CAP=40;
+  docs.forEach(function(d,di){
+    d.grams.forEach(function(g){
+      var a=inv.get(g);
+      if(!a){ a=[]; inv.set(g,a); }
+      if(a.length<=CAP) a.push(di);
+    });
+  });
+  var shared=new Map();
+  inv.forEach(function(a){
+    if(a.length<2 || a.length>CAP) return;
+    for(var x=0;x<a.length;x++) for(var y=x+1;y<a.length;y++){
+      var key=a[x]+","+a[y];
+      shared.set(key,(shared.get(key)||0)+1);
+    }
+  });
+  var pairs=[];
+  shared.forEach(function(cnt,key){
+    if(cnt<8) return;
+    var p=key.split(","), i=+p[0], j=+p[1];
+    var A=docs[i], B=docs[j];
+    if(!A||!B) return;
+    var small=A.grams.size<=B.grams.size?A.grams:B.grams;
+    var big=A.grams.size<=B.grams.size?B.grams:A.grams;
+    var inter=new Set(), n=0;
+    small.forEach(function(g){ if(big.has(g)){ n++; inter.add(g); } });
+    var minS=Math.min(A.grams.size,B.grams.size);
+    if(minS<30 || n<20) return;
+    var cover=n/minS, jac=n/(A.grams.size+B.grams.size-n);
+    if(cover<0.62) return;
+    var span=dupCommonSpan(A.norm,inter);
+    if(span.length<30) return;
+    pairs.push({a:i,b:j,cover:cover,jac:jac,inter:n,span:span});
+  });
+  /* 连通分量：A~B、B~C 合并成「同一故事」的一组 */
+  var parent=docs.map(function(_,i){ return i; });
+  function find(x){ while(parent[x]!==x){ parent[x]=parent[parent[x]]; x=parent[x]; } return x; }
+  function uni(x,y){ var rx=find(x),ry=find(y); if(rx!==ry) parent[ry]=rx; }
+  pairs.forEach(function(p){ uni(p.a,p.b); });
+  var buckets=new Map();
+  pairs.forEach(function(p){ var r=find(p.a); if(!buckets.has(r)) buckets.set(r,[]); buckets.get(r).push(p); });
+  var groups=[];
+  buckets.forEach(function(ps){
+    var ids=new Set(); ps.forEach(function(p){ ids.add(p.a); ids.add(p.b); });
+    var best=ps.slice().sort(function(x,y){ return y.cover-x.cover; })[0];
+    var items=[]; ids.forEach(function(k){ items.push(docs[k]); });
+    groups.push({cover:best.cover,jac:best.jac,inter:best.inter,span:best.span,items:items});
+  });
+  groups.sort(function(a,b){ return b.cover-a.cover; });
+  return {groups:groups, scanned:docs.length};
+}
+function dupUpdateCount(){
+  var n=0;
+  try{ n=document.querySelectorAll("#dupResults input[data-del]:checked").length; }catch(e){}
+  var b=document.getElementById("btnDupApply");
+  if(b && !b._armed){ b.textContent="🗑 删除选中（"+n+" 篇）"; b.disabled=(n===0); }
+}
+function dupRenderGroups(r){
+  var box=document.getElementById("dupResults"); if(!box) return;
+  var sum=document.getElementById("dupSummary");
+  if(sum) sum.textContent="共比对 "+r.scanned+" 篇 · 发现 "+r.groups.length+" 组疑似重复";
+  if(!r.groups.length){
+    box.innerHTML='<div class="dup-empty">✅ 没发现明显重复的例文。<br>判定比较严格：只有正文大段相同才会列出，避免把同题材的不同故事误报。你可以点「重新检查」再扫一次。</div>';
+    dupUpdateCount(); return;
+  }
+  var html="";
+  r.groups.forEach(function(g,gi){
+    var pct=Math.round(g.cover*100);
+    var level=pct>=88?"几乎相同（很可能只是改了名字）":(pct>=72?"高度重叠":"部分相似，请仔细看");
+    html+='<div class="dup-group">';
+    html+='<div class="dup-gh"><span class="dup-badge">#'+(gi+1)+' · 相似度 '+pct+'%</span><span class="dup-level">'+level+'</span><span class="dup-gmeta">共同 '+g.inter+' 处 · '+g.items.length+' 篇</span></div>';
+    html+='<div class="dup-span">📎 共同内容（节选）：「'+esc(g.span.slice(0,90))+(g.span.length>90?"…":"")+'」</div>';
+    html+='<div class="dup-cols">';
+    g.items.forEach(function(d){
+      html+='<div class="dup-col"><h4>'+esc(d.title)+'</h4>'+
+        '<div class="dup-meta">'+esc(d.fileName||"无文件名")+' · 正文 '+d.norm.length+' 字'+(d.createdAt?(' · 添加 '+esc(fmtDate(d.createdAt))):"")+'</div>'+
+        '<div class="dup-prev">'+esc(d.norm.slice(0,110))+(d.norm.length>110?"…":"")+'</div>'+
+        '<label class="dup-del"><input type="checkbox" data-del="'+esc(d.id)+'"> 删除这一篇</label></div>';
+    });
+    html+='</div></div>';
+  });
+  box.innerHTML=html;
+  box.onchange=function(ev){ if(ev.target && ev.target.getAttribute && ev.target.getAttribute("data-del")!=null) dupUpdateCount(); };
+  dupUpdateCount();
+}
+function dupOpenCheck(){
+  var m=document.getElementById("maskDup"); if(!m) return;
+  m.classList.add("on");
+  var box=document.getElementById("dupResults");
+  if(box) box.innerHTML='<div class="dup-loading">🔍 正在逐篇比对正文，请稍候…</div>';
+  var s=document.getElementById("dupSummary"); if(s) s.textContent="";
+  var b=document.getElementById("btnDupApply");
+  if(b){ b._armed=false; b.classList.remove("armed"); b.disabled=true; b.textContent="🗑 删除选中（0 篇）"; }
+  var tip=document.getElementById("dupSafeTip");
+  if(tip) tip.textContent=(typeof trashPush==="function")?"删除后会进回收站，可找回":"删除后无法找回，请先确认";
+  setTimeout(function(){
+    try{ dupRenderGroups(dupScanExamples((state&&state.examples)||[])); }
+    catch(e){ if(box) box.innerHTML='<div class="dup-empty">检查时出错：'+esc((e&&e.message)||String(e))+'</div>'; }
+  },30);
+}
+/* 删除：只按用户勾选的 id 集合 filter（绝不按索引连续 splice），复用现有回收站 / save() / renderAll() 链路 */
+function dupApplyDelete(btn){
+  var ids=[];
+  try{ document.querySelectorAll("#dupResults input[data-del]:checked").forEach(function(x){ ids.push(x.getAttribute("data-del")); }); }catch(e){}
+  if(!ids.length){ toast("请先勾选要删除的例文"); return; }
+  armDelete(btn, function(){
+    var set=new Set(ids);
+    var exs=(state&&state.examples)||[];
+    if(typeof trashPush==="function"){
+      exs.forEach(function(e){
+        if(set.has(e.id)) trashPush("example", e.title||"未命名例文", {ex:e, intros:(state.intros||[]).filter(function(it){ return it.exampleId===e.id; })});
+      });
+    }
+    state.examples=exs.filter(function(x){ return !set.has(x.id); });
+    state.intros=(state.intros||[]).filter(function(it){ return !set.has(it.exampleId); });
+    save();
+    var m=document.getElementById("maskDup"); if(m) m.classList.remove("on");
+    renderAll();
+    toast("已删除 "+ids.length+" 篇重复例文"+(typeof trashPush==="function"?"（回收站可找回）":""));
+  });
+}
+/* ===== /v39.44 例文重复检查 ===== */
+
 function renderExamples(){
   const g=$("#examplesGrid"); g.innerHTML="";
   const _all=state.examples.filter(e=>matchesTags(e.tags)&&matchesSearch(e)).slice().reverse();
@@ -2464,6 +2657,10 @@ function onFilesPicked(ev, target){
   openUploadPreview(files);
 }
 $("#btnUploadExample").onclick=()=>{ uploadTarget="examples"; $("#fileExample").click(); };
+$("#btnCheckDupEx").onclick=dupOpenCheck;
+$("#btnDupRescan").onclick=dupOpenCheck;
+$("#btnDupClose").onclick=function(){ var m=document.getElementById("maskDup"); if(m) m.classList.remove("on"); };
+$("#btnDupApply").onclick=function(){ dupApplyDelete(this); };
 $("#btnUploadTutorial").onclick=()=>{ uploadTarget="tutorials"; $("#fileTutorial").click(); };
 $("#fileExample").onchange=(ev)=>onFilesPicked(ev,"examples");
 $("#fileTutorial").onchange=(ev)=>onFilesPicked(ev,"tutorials");
@@ -3812,7 +4009,7 @@ function hardRefresh(){
 </script>
 <script>
 (function(){
-  var APP_VERSION = "v39.43";
+  var APP_VERSION = "v39.44";
   function addBadge(){
     try{
       if(document.getElementById('appVerBadge')) return;
